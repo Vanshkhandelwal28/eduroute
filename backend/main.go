@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -46,6 +47,7 @@ type apiEnvelope struct {
 }
 
 func main() {
+	godotenv.Load()
 	db, err := openDB()
 	if err != nil {
 		log.Fatal(err)
@@ -182,6 +184,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/auth/otp/send", s.sendOTP)
 	mux.HandleFunc("/api/auth/otp/verify", s.verifyOTP)
 	mux.HandleFunc("/api/profile/dashboard", s.profileDashboard)
+	mux.HandleFunc("/api/goals", s.goals)
 	mux.HandleFunc("/api/", s.api)
 	return cors(mux)
 }

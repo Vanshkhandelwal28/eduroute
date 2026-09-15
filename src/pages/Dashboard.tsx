@@ -1,15 +1,50 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
+import type { ReactNode } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlayCircle, Clock, Star, Users, Trophy, ArrowRight, ShieldCheck, Code2 } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { COURSES } from '../data/mockData';
 import { Course } from '../types';
 import { getCurrentUser, getDisplayFirstName } from '../utils/userProfile';
 
 export const Dashboard = () => {
   const navigate = useNavigate();
+  const [showGoalModal, setShowGoalModal] = useState(false);
   const currentUser = getCurrentUser();
-  const enrolledCourses = COURSES.filter(c => currentUser.enrolledCourses.includes(c.id));
+
+const [goal, setGoal] = useState(500);
+const [points, setPoints] = useState(340);
+
+useEffect(() => {
+  const loadGoal = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/goals', {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('eduroute:auth-token')}`,
+        },
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+
+      if (data.goal) {
+        setGoal(Number(data.goal));
+      }
+
+      if (data.points !== undefined) {
+        setPoints(Number(data.points));
+      }
+    } catch (error) {
+      console.error('Failed to load goal:', error);
+    }
+  };
+
+  loadGoal();
+}, []);
+
+const enrolledCourses = COURSES.filter(c => currentUser.enrolledCourses.includes(c.id));
   const recommendedCourses = COURSES.filter(c => !currentUser.enrolledCourses.includes(c.id));
 
   return (
@@ -69,16 +104,27 @@ export const Dashboard = () => {
                 </div>
                 <div>
                   <div className="text-sm font-bold uppercase tracking-widest opacity-80">Points earned</div>
-                  <div className="text-3xl font-black">340 / 500</div>
+                  <div className="text-3xl font-black">
+  {points} / {goal}
+</div>
                 </div>
               </div>
               <div className="h-3 w-full max-w-sm rounded-full bg-white/20">
-                <div className="h-full w-[68%] rounded-full bg-white shadow-xl"></div>
+                <div
+  className="h-full rounded-full bg-white shadow-xl transition-all duration-500"
+  style={{
+    width: `${Math.min(100, Math.round((points / goal) * 100))}%`,
+  }}
+></div>
               </div>
             </div>
-            <button className="flex items-center gap-3 rounded-[24px] bg-white px-10 py-5 font-black text-indigo-600 shadow-xl transition-transform hover:scale-105 active:scale-95">
-              Set New Goal <ArrowRight className="h-6 w-6" />
-            </button>
+            <button
+  type="button"
+onClick={() => navigate('/set-goal')}
+  className="flex items-center gap-3 rounded-[24px] bg-white px-10 py-5 font-black text-indigo-600 shadow-xl transition-transform hover:scale-105 active:scale-95"
+>
+  Set New Goal <ArrowRight className="h-6 w-6" />
+</button>
           </div>
         </div>
       </section>

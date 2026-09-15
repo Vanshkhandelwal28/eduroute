@@ -1,9 +1,17 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { PlayCircle, Clock, Star, Users, Trophy, ArrowRight, ShieldCheck } from 'lucide-react';
 import { COURSES, MOCK_USER } from '../../../Eduroute_/data/mockData';
 import { Course } from '../../../Eduroute_/types';
 
 export const Dashboard = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [goal, setGoal] = useState(500);
+  const [showGoalMessage, setShowGoalMessage] = useState(false);
+
   const enrolledCourses = COURSES.filter(c => MOCK_USER.enrolledCourses.includes(c.id));
   const recommendedCourses = COURSES.filter(c => !MOCK_USER.enrolledCourses.includes(c.id));
 
@@ -63,7 +71,16 @@ export const Dashboard = () => {
                 </div>
                 <div>
                   <div className="text-sm font-bold uppercase tracking-widest opacity-80">Points earned</div>
-                  <div className="text-3xl font-black">340 / 500</div>
+                  <div className="text-3xl font-black">
+  340 / {goal}
+</div>
+                  <button
+  type="button"
+  onClick={() => navigate('/set-goal')}
+  className="flex items-center gap-3 rounded-[24px] bg-white px-10 py-5 font-black text-indigo-600 shadow-xl transition-transform hover:scale-105 active:scale-95"
+>
+  Set New Goal <ArrowRight className="h-6 w-6" />
+</button>
                 </div>
               </div>
               <div className="h-3 w-full max-w-sm rounded-full bg-white/20">

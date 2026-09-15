@@ -128,3 +128,11 @@ export const apiFetchVerificationDocument = async (verificationId: string) => {
   }
   return response.blob();
 };
+export const apiGetGoal = () =>
+  apiRequest<{ data: { goal: number } }>('/goals');
+
+export const apiSetGoal = (goal: number) =>
+  apiRequest<{ data: { goal: number }; message: string }>('/goals', {
+    method: 'PUT',
+    body: JSON.stringify({ goal }),
+  });

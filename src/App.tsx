@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'r
 import { isAdminSessionActive } from './utils/adminSession';
 import { getAuthUser, isAuthenticated } from './utils/rbacAuth';
 import { ThemeToggle } from './components/ThemeToggle';
-
+const SetGoal = lazy(() => import('./pages/SetGoal').then((module) => ({ default: module.SetGoal })));
 const ProtectedRoute = ({ children }: { children: ReactElement }) => {
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
@@ -105,6 +105,14 @@ export function App() {
           <Route path="/course-manager" element={<AdminSessionRoute><CourseManager /></AdminSessionRoute>} />
 
           <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+          <Route
+  path="/set-goal"
+  element={
+    <RoleRoute role="student">
+      <SetGoal />
+    </RoleRoute>
+  }
+/>
             <Route path="/dashboard" element={<RoleRoute role="student"><Dashboard /></RoleRoute>} />
             <Route path="/courses" element={<RoleRoute role="student"><MyCourses /></RoleRoute>} />
             <Route path="/browse" element={<RoleRoute role="student"><BrowseCourses /></RoleRoute>} />
