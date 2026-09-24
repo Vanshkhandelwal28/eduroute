@@ -296,6 +296,32 @@ export const Login = () => {
                           onClick={() => {
                             setRole(opt.id);
                             setRoleOpen(false);
+                            setError('');
+                            // Auto-fill demo credentials for non-student roles (same as deploy-preview-67)
+                            if (opt.id === 'industry') {
+                              setFormData({
+                                email: INDUSTRY_DEMO_CREDENTIALS.email,
+                                password: INDUSTRY_DEMO_CREDENTIALS.password,
+                              });
+                            } else if (opt.id === 'faculty') {
+                              setFormData({
+                                email: FACULTY_DEMO_CREDENTIALS.email,
+                                password: FACULTY_DEMO_CREDENTIALS.password,
+                              });
+                            } else if (opt.id === 'college') {
+                              setFormData({
+                                email: COLLEGE_DEMO_CREDENTIALS.email,
+                                password: COLLEGE_DEMO_CREDENTIALS.password,
+                              });
+                            } else if (opt.id === 'admin') {
+                              setFormData({
+                                email: LOCAL_STAFF.email,
+                                password: LOCAL_STAFF.password,
+                              });
+                            } else {
+                              // Student: leave empty for manual entry
+                              setFormData({ email: '', password: '' });
+                            }
                           }}
                           className={`flex w-full items-center gap-2 px-4 py-2.5 text-sm transition ${active ? (isDark ? 'bg-violet-600/30 text-violet-200' : 'bg-violet-100 text-violet-800') : (isDark ? 'text-slate-300 hover:bg-white/5' : 'text-slate-700 hover:bg-slate-50')}`}
                         >
