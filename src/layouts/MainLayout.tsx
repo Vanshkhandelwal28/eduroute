@@ -145,7 +145,7 @@ export const MainLayout = () => {
       try {
         localStorage.setItem(SIDEBAR_KEY, next ? '1' : '0');
         window.dispatchEvent(
-          new CustomEvent('eduroute:sidebar-collapsed', { detail: { collapsed: next }),
+          new CustomEvent('eduroute:sidebar-collapsed', { detail: { collapsed: next } }),
         );
       } catch {
         /* ignore */
