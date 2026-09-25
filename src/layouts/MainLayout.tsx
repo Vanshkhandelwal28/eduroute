@@ -22,6 +22,7 @@ import {
   FileText,
   Bell,
   BarChart3,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -41,6 +42,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: 'Roadmaps', path: '/roadmaps', icon: Map },
       { name: 'Assessments', path: '/assessments', icon: ClipboardCheck },
       { name: 'AI Buddy', path: '/buddy', icon: MessageSquare },
+      { name: 'AI Course', path: '/ai-course-designer', icon: Sparkles },
     ],
   },
   {
@@ -143,7 +145,7 @@ export const MainLayout = () => {
       try {
         localStorage.setItem(SIDEBAR_KEY, next ? '1' : '0');
         window.dispatchEvent(
-          new CustomEvent('eduroute:sidebar-collapsed', { detail: { collapsed: next } }),
+          new CustomEvent('eduroute:sidebar-collapsed', { detail: { collapsed: next }),
         );
       } catch {
         /* ignore */
