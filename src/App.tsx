@@ -124,7 +124,7 @@ const DigitalPortfolio = lazy(() =>
   import('./pages/Portfolio/DigitalPortfolio').then((module) => ({ default: module.DigitalPortfolio ?? module.default })),
 );
 const IndustryWorkspace = lazy(() =>
-  import('./pages/Industry/IndustryWorkspace').then((module) => ({ default: module.IndustryWorkspace })),
+  import('./pages/Industry/IndustryShell').then((module) => ({ default: module.IndustryShell })),
 );
 const FacultyWorkspace = lazy(() =>
   import('./pages/Faculty/FacultyWorkspace').then((module) => ({ default: module.FacultyWorkspace })),
