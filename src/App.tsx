@@ -144,6 +144,9 @@ const CurriculumGapMapper = lazy(() =>
 const DistrictTrainingPlan = lazy(() =>
   import('./pages/Admin/DistrictTrainingPlan').then((module) => ({ default: module.DistrictTrainingPlan })),
 );
+const AiCourseDesigner = lazy(() =>
+  import('./pages/CourseDesigner/AiCourseDesigner').then((module) => ({ default: module.AiCourseDesigner })),
+);
 
 const DASHBOARD_ROUTES = [
   '/dashboard',
@@ -171,6 +174,7 @@ const DASHBOARD_ROUTES = [
   '/college',
   '/faculty',
   '/demand-intelligence',
+  '/ai-course-designer',
 ];
 
 const AUTH_HIDE_GLOBAL_TOGGLE = [
@@ -294,6 +298,7 @@ export function App() {
             <Route path="/skill-profile" element={<RoleRoute role="student"><SkillProfile /></RoleRoute>} />
             <Route path="/portfolio" element={<RoleRoute role="student"><DigitalPortfolio /></RoleRoute>} />
             <Route path="/demand-intelligence" element={<RoleRoute role="student"><DemandIntelligence /></RoleRoute>} />
+            <Route path="/ai-course-designer" element={<RoleRoute role="student"><AiCourseDesigner /></RoleRoute>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

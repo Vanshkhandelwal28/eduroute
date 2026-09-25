@@ -6,7 +6,6 @@ import {
   ExternalLink,
   FileText,
   Loader2,
-  Plus,
   Sparkles,
   Trash2,
   Youtube,
@@ -16,7 +15,7 @@ import {
 } from 'lucide-react';
 import { StarfieldBackground } from '../../components/StarfieldBackground';
 import { getAuthUser } from '../../utils/rbacAuth';
-import { readOnboardingProfile } from '../../utils/onboardingStore';
+import { readOnboarding } from '../../utils/onboardingStore';
 import {
   DURATION_PRESETS,
   INTEREST_PRESETS,
@@ -41,7 +40,7 @@ const FIELD_FROM_TRACK: Record<string, string> = {
 
 export function AiCourseDesigner() {
   const user = getAuthUser();
-  const profile = useMemo(() => readOnboardingProfile(), []);
+  const profile = useMemo(() => readOnboarding(), []);
   const defaultField =
     profile.interests?.[0] && FIELD_FROM_TRACK[profile.interests[0]]
       ? FIELD_FROM_TRACK[profile.interests[0]]
