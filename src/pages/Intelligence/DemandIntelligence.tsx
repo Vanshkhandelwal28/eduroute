@@ -1,13 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Activity,
   ArrowDownRight,
   ArrowUpRight,
+  BadgeCheck,
   Briefcase,
+  ClipboardCheck,
   Filter,
   MapPin,
+  MessageSquare,
   Sparkles,
+  Star,
   Target,
   TrendingUp,
   Zap,
@@ -28,6 +32,7 @@ import {
   type SectorKey,
   type WindowKey,
 } from './demandIntelligenceData';
+import { validationSummary } from '../../utils/employerValidationStore';
 
 const EMERGING_COLORS: Record<string, string> = {
   AI: 'bg-violet-500/15 text-violet-700 ring-violet-300/50 dark:text-violet-300 dark:ring-violet-500/40',
@@ -40,6 +45,14 @@ export function DemandIntelligence() {
   const [district, setDistrict] = useState<DistrictKey | 'all'>('all');
   const [experience, setExperience] = useState<ExperienceKey>('all');
   const [timeWindow, setTimeWindow] = useState<WindowKey>('90d');
+  const [vSummary, setVSummary] = useState(() => validationSummary());
+
+  useEffect(() => {
+    const refresh = () => setVSummary(validationSummary());
+    refresh();
+    window.addEventListener('eduroute:employer-validation-updated', refresh);
+    return () => window.removeEventListener('eduroute:employer-validation-updated', refresh);
+  }, []);
 
   const filtered = useMemo(
     () => filterSignals(JOB_SIGNALS, { sector, district, experience, window: timeWindow }),
@@ -75,7 +88,7 @@ export function DemandIntelligence() {
             <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">Demand Intelligence</h1>
             <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
               Live job-posting signals by role, skill, location and proficiency — Maharashtra focus. Align
-              training capacity with what industry is hiring.
+              training capacity with what industry is hiring. Employer surveys feed this view.
             </p>
           </div>
           <div className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 px-3 py-2 text-xs font-bold shadow-[var(--shadow-card)] backdrop-blur-sm">
@@ -83,6 +96,82 @@ export function DemandIntelligence() {
             Mock signals · {filtered.length} postings
           </div>
         </motion.div>
+
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.04 }}
+          className="rounded-2xl border border-emerald-500/30 bg-[var(--bg-card)]/90 p-4 shadow-[var(--shadow-card)] backdrop-blur-sm"
+        >
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-300">
+              <ClipboardCheck className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold">Employer validation results</h2>
+              <p className="text-xs text-[var(--text-muted)]">
+                From Industry workspace · surveys & course ratings close the loop with training providers
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {[
+              { label: 'Course ratings', value: vSummary.ratingsCount, sub: vSummary.avgRating ? `avg ${vSummary.avgRating}/5` : '—' },
+              { label: 'Skills tagged', value: vSummary.skillsCount, sub: `${vSummary.mustHave} must · ${vSummary.nice} nice` },
+              { label: 'Curriculum OK', value: vSummary.approved, sub: 'approved' },
+              { label: 'Curriculum no', value: vSummary.rejected, sub: 'rejected' },
+              { label: 'Surveys', value: vSummary.surveysCount, sub: vSummary.avgSurveyRelevance ? `relevance ${vSummary.avgSurveyRelevance}/5` : '—' },
+              { label: 'Job-ready signal', value: vSummary.avgRating || '—', sub: 'avg rating' },
+            ].map((k) => (
+              <div
+                key={k.label}
+                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-3 py-2.5"
+              >
+                <p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">{k.label}</p>
+                <p className="text-xl font-black">{k.value}</p>
+                <p className="text-[10px] text-[var(--text-muted)]">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+          {vSummary.recentRatings.length > 0 && (
+            <ul className="mt-3 space-y-1.5 border-t border-[var(--border-default)] pt-3">
+              {vSummary.recentRatings.slice(0, 3).map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center gap-2 text-xs">
+                  <Star className="h-3 w-3 text-amber-500" />
+                  <span className="font-bold">{r.courseName}</span>
+                  <span className="font-black text-amber-600 dark:text-amber-400">{r.rating}/5</span>
+                  <span className="text-[var(--text-muted)]">{r.company}</span>
+                  {r.comment && <span className="text-[var(--text-secondary)]">— {r.comment}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {vSummary.recentDecisions.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {vSummary.recentDecisions.slice(0, 3).map((d) => (
+                <li key={d.id} className="flex flex-wrap items-center gap-2 text-xs">
+                  <BadgeCheck className="h-3 w-3 text-emerald-500" />
+                  <span className="font-bold">{d.title}</span>
+                  <span
+                    className={
+                      d.decision === 'approved'
+                        ? 'font-black text-emerald-600 dark:text-emerald-400'
+                        : 'font-black text-rose-600 dark:text-rose-400'
+                    }
+                  >
+                    {d.decision}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {vSummary.ratingsCount === 0 && vSummary.surveysCount === 0 && (
+            <p className="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]">
+              <MessageSquare className="h-3.5 w-3.5" />
+              No employer input yet — Industry role → Employer validation tab to rate courses & submit surveys.
+            </p>
+          )}
+        </motion.section>
 
         <motion.section
           initial={{ opacity: 0, y: 10 }}
@@ -389,21 +478,13 @@ export function DemandIntelligence() {
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-sm text-[var(--text-muted)]">
-                      No postings match the selected filters.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
+            {filtered.length === 0 && (
+              <p className="py-6 text-center text-sm text-[var(--text-muted)]">No postings match these filters.</p>
+            )}
           </div>
         </section>
-
-        <p className="pb-4 text-center text-[10px] text-[var(--text-muted)]">
-          EDUROUTE · Demand Intelligence · SIH26134 mock labour-market signals (Maharashtra)
-        </p>
       </div>
     </div>
   );
