@@ -141,6 +141,9 @@ const DemandIntelligence = lazy(() =>
 const CurriculumGapMapper = lazy(() =>
   import('./pages/Admin/CurriculumGapMapper').then((module) => ({ default: module.CurriculumGapMapper })),
 );
+const DistrictTrainingPlan = lazy(() =>
+  import('./pages/Admin/DistrictTrainingPlan').then((module) => ({ default: module.DistrictTrainingPlan })),
+);
 
 const DASHBOARD_ROUTES = [
   '/dashboard',
@@ -260,6 +263,7 @@ export function App() {
             <Route path="/admin/verified" element={<AdminDashboard />} />
             <Route path="/admin/courses" element={<CourseManager />} />
             <Route path="/admin/curriculum-gaps" element={<CurriculumGapMapper />} />
+            <Route path="/admin/district-plans" element={<DistrictTrainingPlan />} />
             <Route path="/admin/partners" element={<AdminDashboard />} />
             <Route path="/admin/reports" element={<AdminDashboard />} />
             <Route path="/admin/settings" element={<AdminDashboard />} />
