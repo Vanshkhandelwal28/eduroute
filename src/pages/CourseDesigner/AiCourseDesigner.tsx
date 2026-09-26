@@ -143,14 +143,30 @@ export function AiCourseDesigner() {
     setBusy(true);
     setPhase('analysing_profile');
     try {
+      const urlSkills = (searchParams.get('skills') || '')
+        .split(/[,|]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const knownSkills = [
+        ...urlSkills,
+        ...(profile.customSkills || []),
+        ...(profile.cvSkills || []),
+      ].filter(Boolean);
+      const role =
+        searchParams.get('role')?.trim() ||
+        profile.customRole?.trim() ||
+        field.trim() ||
+        'Engineer';
       const course = await generateAiCourse(
         {
           durationDays: days,
           interests,
           customInterest: custom,
-          field: field.trim() || 'General',
+          field: field.trim() || role || 'General',
           skillGaps: profile.missingSkills || [],
           userId: user?.email || user?.id || 'demo-student',
+          role,
+          knownSkills: Array.from(new Set(knownSkills)).slice(0, 20),
         },
         setPhase,
       );
@@ -188,7 +204,12 @@ export function AiCourseDesigner() {
     } else if (title) {
       setCustomInterest(title);
     }
-    // Topic-sized duration from learning path (not always 15d)
+    const skillsQ = searchParams.get('skills')?.trim();
+    if (skillsQ && !/custom|role core/i.test(skillsQ)) {
+      setCustomInterest((prev) => prev || skillsQ.split(',')[0].trim());
+    }
+    const roleQ = searchParams.get('role')?.trim();
+    if (roleQ) setField(roleQ);
     const daysParam = Number(searchParams.get('days') || 0);
     const hoursParam = Number(searchParams.get('hours') || 0);
     let courseDays = daysParam;
@@ -298,7 +319,7 @@ export function AiCourseDesigner() {
             Design your mixed course
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Duration comes from your path step size when opened via Continue. Topics auto-tick at ~55% watched.
+            Duration and topics come from your path step + CV skills. Videos match concrete skills (e.g. Golang), not generic labels.
           </p>
         </motion.div>
 
@@ -314,17 +335,17 @@ export function AiCourseDesigner() {
               </div>
               <div>
                 <h2 className="text-sm font-bold">Course inputs</h2>
-                <p className="text-[11px] text-[var(--text-muted)]">Duration follows topic size from path</p>
+                <p className="text-[11px] text-[var(--text-muted)]">Role + CV skills drive topic titles & videos</p>
               </div>
             </div>
 
             <label className="block text-xs font-bold uppercase text-[var(--text-muted)]">
-              Your field
+              Your field / role
               <input
                 className={`${selectCls} mt-1 w-full`}
                 value={field}
                 onChange={(e) => setField(e.target.value)}
-                placeholder="e.g. Software Engineering"
+                placeholder="e.g. SDE 2"
               />
             </label>
 
@@ -373,7 +394,6 @@ export function AiCourseDesigner() {
               )}
               <p className="mt-1 text-[10px] text-[var(--text-muted)]">
                 Active: <span className="font-bold text-[var(--text-secondary)]">{days} days</span>
-                {' '}(path steps set this automatically)
               </p>
             </div>
 
@@ -396,21 +416,15 @@ export function AiCourseDesigner() {
                 ))}
               </div>
               <label className="mt-3 block text-xs font-bold text-[var(--text-muted)]">
-                Custom (your field)
+                Custom focus
                 <input
                   className={`${selectCls} mt-1 w-full`}
-                  placeholder="e.g. Embedded C, GIS, FinTech APIs"
+                  placeholder="e.g. Golang concurrency"
                   value={customInterest}
                   onChange={(e) => setCustomInterest(e.target.value)}
                 />
               </label>
             </div>
-
-            {profile.missingSkills?.length > 0 && (
-              <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
-                Skill gaps from onboarding: {profile.missingSkills.slice(0, 6).join(', ')}
-              </p>
-            )}
 
             {error && (
               <p className="text-xs font-bold text-rose-600 dark:text-rose-400" role="alert">
@@ -484,9 +498,7 @@ export function AiCourseDesigner() {
               <div className="flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)]/50 p-8 text-center">
                 <BookOpen className="mb-3 h-10 w-10 text-[var(--text-muted)]" />
                 <p className="font-bold">No course yet</p>
-                <p className="mt-1 max-w-sm text-sm text-[var(--text-muted)]">
-                  Choose duration + interests and hit Generate.
-                </p>
+                <p className="mt-1 max-w-sm text-sm text-[var(--text-muted)]">Generate to build skill-matched topics + videos.</p>
               </div>
             ) : (
               <motion.div key={active.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -501,7 +513,6 @@ export function AiCourseDesigner() {
                           Min watch {minWatchLabel}
                         </span>
                         <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">{active.topics.length} topics</span>
-                        <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-indigo-700 dark:text-indigo-300">{certLevel}</span>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -511,7 +522,7 @@ export function AiCourseDesigner() {
                         className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-default)] px-3 py-2 text-xs font-bold"
                       >
                         <Pencil className="h-3.5 w-3.5" />
-                        {editingId === active.id ? 'Done editing' : 'Edit topics'}
+                        {editingId === active.id ? 'Done' : 'Edit'}
                       </button>
                       <button
                         type="button"
@@ -522,7 +533,7 @@ export function AiCourseDesigner() {
                         }`}
                       >
                         <Download className="h-3.5 w-3.5" />
-                        Download certificate
+                        Certificate
                       </button>
                     </div>
                   </div>
