@@ -10,8 +10,8 @@ export function saveCustomCareer(opts: {
   missingSkills?: string[];
 }) {
   const role = opts.role.trim().slice(0, 80);
-  const skills = (opts.skills || []).map((s) => s.trim()).filter(Boolean).slice(0, 40);
-  const cvSkills = (opts.cvSkills || []).map((s) => s.trim()).filter(Boolean).slice(0, 40);
+  const skills = (opts.skills || []).map((s) => s.trim()).filter(Boolean).slice(0, 50);
+  const cvSkills = (opts.cvSkills || []).map((s) => s.trim()).filter(Boolean).slice(0, 50);
   const missing = (opts.missingSkills || []).map((s) => s.trim()).filter(Boolean).slice(0, 30);
   writeOnboarding({
     interests: ['custom' as any],
@@ -25,36 +25,133 @@ export function saveCustomCareer(opts: {
   } as OnboardingProfile);
 }
 
-/** Heuristic skill extraction from plain text (CV paste / .txt upload) */
-export function extractSkillsFromText(text: string): string[] {
-  if (!text || text.length < 8) return [];
-  const lower = text.toLowerCase();
-  const BANK = [
-    'javascript', 'typescript', 'python', 'java', 'golang', 'go', 'rust', 'c++', 'c#',
-    'react', 'next.js', 'node.js', 'express', 'nestjs', 'django', 'flask',
-    'rest api', 'restapi', 'graphql', 'jwt', 'oauth', 'microservices',
-    'docker', 'kubernetes', 'aws', 'linux', 'git', 'ci/cd', 'redis', 'mongodb',
-    'postgresql', 'mysql', 'sql', 'system design', 'backend', 'frontend',
-  ];
+const SKILL_BANK: { pattern: RegExp; label: string }[] = [
+  { pattern: /\bjavascript\b|\bjs\b(?!\w)/i, label: 'JavaScript' },
+  { pattern: /\btypescript\b|\bts\b(?!\w)/i, label: 'TypeScript' },
+  { pattern: /\bpython\b/i, label: 'Python' },
+  { pattern: /\bjava\b(?!\s*script)/i, label: 'Java' },
+  { pattern: /\bgolang\b|\bgo\b(?:\s*lang)?\b/i, label: 'Golang' },
+  { pattern: /\brust\b/i, label: 'Rust' },
+  { pattern: /\bc\+\+\b|\bcpp\b/i, label: 'C++' },
+  { pattern: /\bc#\b|\bcsharp\b|\.net\b/i, label: 'C# / .NET' },
+  { pattern: /\bkotlin\b/i, label: 'Kotlin' },
+  { pattern: /\bswift\b/i, label: 'Swift' },
+  { pattern: /\bruby\b/i, label: 'Ruby' },
+  { pattern: /\bphp\b/i, label: 'PHP' },
+  { pattern: /\bscala\b/i, label: 'Scala' },
+  { pattern: /\bshell\b|\bbash\b/i, label: 'Shell / Bash' },
+  { pattern: /\breact(?:\.?js)?\b/i, label: 'React' },
+  { pattern: /\bnext\.?js\b/i, label: 'Next.js' },
+  { pattern: /\bvue(?:\.?js)?\b/i, label: 'Vue' },
+  { pattern: /\bangular\b/i, label: 'Angular' },
+  { pattern: /\bhtml5?\b/i, label: 'HTML' },
+  { pattern: /\bcss3?\b/i, label: 'CSS' },
+  { pattern: /\btailwind\b/i, label: 'Tailwind CSS' },
+  { pattern: /\bredux\b/i, label: 'Redux' },
+  { pattern: /\bnode(?:\.?js)?\b/i, label: 'Node.js' },
+  { pattern: /\bexpress(?:\.?js)?\b/i, label: 'Express' },
+  { pattern: /\bnest(?:\.?js)?\b/i, label: 'NestJS' },
+  { pattern: /\bdjango\b/i, label: 'Django' },
+  { pattern: /\bflask\b/i, label: 'Flask' },
+  { pattern: /\bfastapi\b/i, label: 'FastAPI' },
+  { pattern: /\bspring\s*boot\b|\bspring\b/i, label: 'Spring Boot' },
+  { pattern: /\brest\s*apis?\b|\brestful\b|\brestapi\b/i, label: 'REST API' },
+  { pattern: /\bgraphql\b/i, label: 'GraphQL' },
+  { pattern: /\bgrpc\b/i, label: 'gRPC' },
+  { pattern: /\bjwt\b/i, label: 'JWT' },
+  { pattern: /\boauth2?\b/i, label: 'OAuth' },
+  { pattern: /\bmicroservices?\b/i, label: 'Microservices' },
+  { pattern: /\bbackend\b/i, label: 'Backend' },
+  { pattern: /\bfrontend\b/i, label: 'Frontend' },
+  { pattern: /\bfull[- ]?stack\b/i, label: 'Full-stack' },
+  { pattern: /\bpostgresql\b|\bpostgres\b/i, label: 'PostgreSQL' },
+  { pattern: /\bmysql\b/i, label: 'MySQL' },
+  { pattern: /\bmongodb\b|\bmongo\b/i, label: 'MongoDB' },
+  { pattern: /\bredis\b/i, label: 'Redis' },
+  { pattern: /\belasticsearch\b/i, label: 'Elasticsearch' },
+  { pattern: /\bcassandra\b/i, label: 'Cassandra' },
+  { pattern: /\bdynamodb\b/i, label: 'DynamoDB' },
+  { pattern: /\bsql\b/i, label: 'SQL' },
+  { pattern: /\bnosql\b/i, label: 'NoSQL' },
+  { pattern: /\bdocker\b/i, label: 'Docker' },
+  { pattern: /\bkubernetes\b|\bk8s\b/i, label: 'Kubernetes' },
+  { pattern: /\baws\b|amazon web services/i, label: 'AWS' },
+  { pattern: /\bazure\b/i, label: 'Azure' },
+  { pattern: /\bgcp\b|google cloud/i, label: 'GCP' },
+  { pattern: /\bterraform\b/i, label: 'Terraform' },
+  { pattern: /\bansible\b/i, label: 'Ansible' },
+  { pattern: /\bci\s*\/\s*cd\b|\bcicd\b|jenkins|github actions|gitlab ci/i, label: 'CI/CD' },
+  { pattern: /\blinux\b/i, label: 'Linux' },
+  { pattern: /\bkafka\b/i, label: 'Kafka' },
+  { pattern: /\brabbitmq\b/i, label: 'RabbitMQ' },
+  { pattern: /\bsystem\s*design\b/i, label: 'System Design' },
+  { pattern: /\bdata\s*structures?\b|\bdsa\b/i, label: 'DSA' },
+  { pattern: /\balgorithms?\b/i, label: 'Algorithms' },
+  { pattern: /\bagile\b|\bscrum\b/i, label: 'Agile / Scrum' },
+  { pattern: /\bgit\b/i, label: 'Git' },
+  { pattern: /\bunit\s*test/i, label: 'Unit Testing' },
+  { pattern: /\bjest\b/i, label: 'Jest' },
+  { pattern: /\bcypress\b/i, label: 'Cypress' },
+  { pattern: /\bmachine\s*learning\b/i, label: 'Machine Learning' },
+  { pattern: /\btensorflow\b/i, label: 'TensorFlow' },
+  { pattern: /\bpytorch\b/i, label: 'PyTorch' },
+  { pattern: /\bpandas\b/i, label: 'Pandas' },
+  { pattern: /\bpower\s*bi\b/i, label: 'Power BI' },
+  { pattern: /\btableau\b/i, label: 'Tableau' },
+];
+
+function extractFromSkillSections(text: string): string[] {
   const found: string[] = [];
-  for (const skill of BANK) {
-    const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\s+/g, '\\s+');
-    const re = new RegExp('\\b' + escaped + '\\b', 'i');
-    if (re.test(lower)) {
-      const label =
-        skill === 'go' ? 'Golang' : skill === 'restapi' ? 'REST API' : skill;
-      if (!found.some((f) => f.toLowerCase() === label.toLowerCase())) found.push(label);
-    }
+  const sectionRe =
+    /(?:^|\n)\s*(?:technical\s+)?(?:skills?|tech(?:nical)?\s*stack|technologies|tools|languages?|frameworks?|libraries|competencies|expertise)\s*[:\-–]?\s*([\s\S]{0,800}?)(?=\n\s*[A-Z][A-Za-z &/]{2,40}\s*[:\-–]?\s*\n|\n\s*\n\s*[A-Z]|$)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = sectionRe.exec(text)) !== null) {
+    const block = m[1] || '';
+    block
+      .split(/[,|•·;\/\n\r]+|\s{2,}/)
+      .map((s) => s.replace(/^[\-\*●◦]\s*/, '').trim())
+      .filter((s) => s.length > 1 && s.length < 45 && !/^(and|or|with|using|etc)$/i.test(s))
+      .forEach((s) => {
+        if (!found.some((f) => f.toLowerCase() === s.toLowerCase())) found.push(s);
+      });
   }
-  const skillsLine = text.match(/skills?\s*[:|-]\s*([^\n]+)/i);
-  if (skillsLine) {
-    skillsLine[1]
-      .split(/[,|/•·;]/)
+  const lineRe = /(?:skills?|tech\s*stack|technologies|tools)\s*[:\-–]\s*([^\n]+)/gi;
+  while ((m = lineRe.exec(text)) !== null) {
+    m[1]
+      .split(/[,|•·;\/]/)
       .map((s) => s.trim())
       .filter((s) => s.length > 1 && s.length < 40)
       .forEach((s) => {
         if (!found.some((f) => f.toLowerCase() === s.toLowerCase())) found.push(s);
       });
   }
-  return found.slice(0, 30);
+  return found;
+}
+
+export function extractSkillsFromText(text: string): string[] {
+  if (!text || text.length < 3) return [];
+  const found: string[] = [];
+  const add = (label: string) => {
+    const t = label.trim();
+    if (!t || t.length > 45) return;
+    if (!found.some((f) => f.toLowerCase() === t.toLowerCase())) found.push(t);
+  };
+  for (const { pattern, label } of SKILL_BANK) {
+    if (pattern.test(text)) add(label);
+  }
+  extractFromSkillSections(text).forEach(add);
+  if (text.length < 400 && /[,|]/.test(text)) {
+    text
+      .split(/[,|;\n]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 1 && s.length < 40)
+      .forEach(add);
+  }
+  return found.slice(0, 50);
+}
+
+export function hoursToCourseDays(hours: number): number {
+  const h = Math.max(4, Number(hours) || 8);
+  const days = Math.round(h / 2.5);
+  return Math.min(90, Math.max(5, days));
 }
