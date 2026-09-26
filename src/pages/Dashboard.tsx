@@ -5,23 +5,19 @@ import {
   Flame,
   Star,
   Trophy,
-  Play,
-  Clock,
-  BarChart2,
   ArrowRight,
   ShieldCheck,
   Sparkles,
   Target,
   Briefcase,
   FileText,
+  TrendingUp,
 } from 'lucide-react';
 import { COURSES } from '../data/mockData';
-import { Course } from '../types';
 import { getCurrentUser, getDisplayFirstName } from '../utils/userProfile';
 import { getNextStepPlan, readOnboarding } from '../utils/onboardingStore';
 import {
   readApplications,
-  statusBadgeClass,
   type InternshipApplication,
 } from '../utils/internshipApplications';
 
@@ -168,6 +164,34 @@ export const Dashboard = () => {
             </div>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-fuchsia-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-md">Start designing <ArrowRight className="h-4 w-4" /></span>
+        </div>
+      </Link>
+
+      <Link
+        to="/trend-analyse"
+        className="group relative mb-2 block overflow-hidden rounded-[var(--radius-xl)] border border-cyan-200/70 bg-gradient-to-br from-cyan-50 via-sky-50 to-indigo-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-cyan-500/25 dark:from-cyan-950/40 dark:via-sky-950/30 dark:to-indigo-950/30 sm:p-6"
+      >
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-indigo-600 text-white shadow-md">
+              <TrendingUp className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-600 dark:text-cyan-400">
+                Gemini · Market vs you
+              </p>
+              <h2 className="text-base font-bold text-[var(--text-primary)] sm:text-lg">
+                Trend Analyse — skill gaps vs market demand
+              </h2>
+              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
+                Compare real market trends with your skill profile. See demand vs current skills, gaps, and
+                charts (refresh every 7 days).
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-md">
+            Open analysis <ArrowRight className="h-4 w-4" />
+          </span>
         </div>
       </Link>
 
