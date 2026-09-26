@@ -1,10 +1,12 @@
 /**
  * Course achievements after final assessment pass.
- * Skills + certificate metadata for Profile & Portfolio.
+ * Skills + certificate metadata + score badge for Profile & Portfolio.
  */
 
 import type { AiDesignedCourse } from './aiCourseStore';
 import { levelFromDurationDays, makeCertId, formatCertDate } from './courseProgressStore';
+
+export type CertBadge = 'gold' | 'silver' | 'bronze';
 
 export type CourseAchievement = {
   courseId: string;
@@ -16,9 +18,29 @@ export type CourseAchievement = {
   certId: string;
   completedAt: string;
   percent: number;
+  badge: CertBadge;
 };
 
 const KEY = 'eduroute:course-achievements-v1';
+
+/** Badge from assessment percent (pass is ≥60%). */
+export function badgeFromPercent(percent: number): CertBadge {
+  if (percent >= 85) return 'gold';
+  if (percent >= 75) return 'silver';
+  return 'bronze'; // 60–74
+}
+
+export function badgeLabel(badge: CertBadge): string {
+  if (badge === 'gold') return 'GOLD';
+  if (badge === 'silver') return 'SILVER';
+  return 'BRONZE';
+}
+
+export function badgeRangeLabel(badge: CertBadge): string {
+  if (badge === 'gold') return '85–100%';
+  if (badge === 'silver') return '75–85%';
+  return '60–74%';
+}
 
 function readAll(): Record<string, CourseAchievement> {
   if (typeof window === 'undefined') return {};
@@ -68,8 +90,9 @@ export function recordCourseAchievement(
   const skills = skillsFromCourse(course);
   const level = levelFromDurationDays(course.durationDays);
   const durationLabel = minWatchLabel
-    ? `${course.durationDays} days · min watch ${minWatchLabel}`
+    ? `${course.durationDays} days`
     : `${course.durationDays} days`;
+  const bestPercent = Math.max(percent, prev?.percent || 0);
   const next: CourseAchievement = {
     courseId: course.id,
     courseTitle: course.title,
@@ -79,7 +102,8 @@ export function recordCourseAchievement(
     durationLabel,
     certId: prev?.certId || makeCertId(),
     completedAt: prev?.completedAt || formatCertDate(),
-    percent: Math.max(percent, prev?.percent || 0),
+    percent: bestPercent,
+    badge: badgeFromPercent(bestPercent),
   };
   map[course.id] = next;
   writeAll(map);
