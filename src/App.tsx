@@ -138,11 +138,17 @@ const PlacementDashboard = lazy(() =>
 const DemandIntelligence = lazy(() =>
   import('./pages/Intelligence/DemandIntelligence').then((module) => ({ default: module.DemandIntelligence })),
 );
+const TrendAnalyse = lazy(() =>
+  import('./pages/Intelligence/TrendAnalyse').then((module) => ({ default: module.TrendAnalyse })),
+);
 const CurriculumGapMapper = lazy(() =>
   import('./pages/Admin/CurriculumGapMapper').then((module) => ({ default: module.CurriculumGapMapper })),
 );
 const DistrictTrainingPlan = lazy(() =>
   import('./pages/Admin/DistrictTrainingPlan').then((module) => ({ default: module.DistrictTrainingPlan })),
+);
+const AdminMarketTrends = lazy(() =>
+  import('./pages/Admin/AdminMarketTrends').then((module) => ({ default: module.AdminMarketTrends })),
 );
 const AiCourseDesigner = lazy(() =>
   import('./pages/CourseDesigner/AiCourseDesigner').then((module) => ({ default: module.AiCourseDesigner })),
@@ -174,6 +180,7 @@ const DASHBOARD_ROUTES = [
   '/college',
   '/faculty',
   '/demand-intelligence',
+  '/trend-analyse',
   '/ai-course-designer',
 ];
 
@@ -268,6 +275,7 @@ export function App() {
             <Route path="/admin/courses" element={<CourseManager />} />
             <Route path="/admin/curriculum-gaps" element={<CurriculumGapMapper />} />
             <Route path="/admin/district-plans" element={<DistrictTrainingPlan />} />
+            <Route path="/admin/market-trends" element={<AdminMarketTrends />} />
             <Route path="/admin/partners" element={<AdminDashboard />} />
             <Route path="/admin/reports" element={<AdminDashboard />} />
             <Route path="/admin/settings" element={<AdminDashboard />} />
@@ -298,6 +306,7 @@ export function App() {
             <Route path="/skill-profile" element={<RoleRoute role="student"><SkillProfile /></RoleRoute>} />
             <Route path="/portfolio" element={<RoleRoute role="student"><DigitalPortfolio /></RoleRoute>} />
             <Route path="/demand-intelligence" element={<RoleRoute role="student"><DemandIntelligence /></RoleRoute>} />
+            <Route path="/trend-analyse" element={<RoleRoute role="student"><TrendAnalyse /></RoleRoute>} />
             <Route path="/ai-course-designer" element={<RoleRoute role="student"><AiCourseDesigner /></RoleRoute>} />
           </Route>
 
