@@ -2,6 +2,8 @@ import { getSupabase, isSupabaseConfigured, type ProfileRow } from '../lib/supab
 import { saveAuthSession, type AuthUser, type UserRole } from './rbacAuth';
 import { saveUserProfile } from './userProfile';
 
+export type { ProfileRow };
+
 const USERNAME_RE = /^[a-z0-9_]{3,24}$/;
 
 export function slugifyUsername(input: string): string {
@@ -39,7 +41,6 @@ function toAuthUser(row: ProfileRow, role?: UserRole): AuthUser {
   };
 }
 
-/** Sign up with email/password → Supabase Auth + profiles row. */
 export async function supabaseSignUp(payload: {
   name: string;
   email: string;
@@ -64,7 +65,6 @@ export async function supabaseSignUp(payload: {
   if (error) throw new Error(error.message);
   if (!data.user) throw new Error('Signup failed — no user returned');
 
-  // Trigger may insert profile; upsert for certainty
   const { error: upsertErr } = await sb.from('profiles').upsert(
     {
       id: data.user.id,
@@ -85,7 +85,6 @@ export async function supabaseSignUp(payload: {
     { onConflict: 'id' },
   );
   if (upsertErr) {
-    // Non-fatal if trigger already created row
     console.warn('[supabaseSignUp] profile upsert', upsertErr.message);
   }
 
@@ -113,7 +112,6 @@ export async function supabaseSignUp(payload: {
   return { token, user, username };
 }
 
-/** Login with email/password (student). */
 export async function supabaseSignIn(payload: {
   email: string;
   password: string;
@@ -192,7 +190,6 @@ export async function fetchPublicProfile(username: string): Promise<ProfileRow |
   return data as ProfileRow;
 }
 
-/** Sync lean public_data from local stores (call after onboarding / path updates). */
 export async function syncMyPublicData(partial: Record<string, unknown>): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
