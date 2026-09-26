@@ -65,6 +65,11 @@ export function LivingLearningPath() {
     return Math.round((done / nodes.length) * 100);
   }, [nodes]);
 
+  const completedCount = useMemo(
+    () => nodes.filter((n) => n.status === 'completed').length,
+    [nodes],
+  );
+
   return (
     <section className="relative overflow-hidden rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -76,10 +81,18 @@ export function LivingLearningPath() {
           </h2>
           <p className="mt-1 text-[11px] text-[var(--text-muted)]">
             {source === 'ai' ? 'AI-designed for your career' : source === 'template' ? 'Career template path' : 'Saved path for your account'}
+            {completedCount > 0 && ` · ${completedCount} steps already covered by your CV skills`}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-indigo-500/15 px-3 py-1 text-xs font-bold text-indigo-300">{progressPct}% Complete</span>
+          <span className="rounded-full bg-indigo-500/15 px-3 py-1 text-xs font-bold text-indigo-300">
+            {progressPct}% complete
+            {completedCount > 0 && (
+              <span className="ml-1 font-medium text-indigo-200/80">
+                · {completedCount}/{nodes.length}
+              </span>
+            )}
+          </span>
           <button
             type="button"
             disabled={loading}
@@ -153,7 +166,7 @@ export function LivingLearningPath() {
           </div>
 
           <p className="mt-4 text-center text-[11px] text-[var(--text-muted)]">
-            Tip: click a node for details · Continue opens the matching course or AI designer
+            Tip: click a node for details · Green check = skill you already have from CV/onboarding
           </p>
         </>
       )}
