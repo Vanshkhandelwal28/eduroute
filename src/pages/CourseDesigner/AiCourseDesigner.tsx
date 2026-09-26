@@ -161,9 +161,9 @@ export function AiCourseDesigner() {
     refresh();
   };
 
+  // Persist only; UI refresh comes from throttled course-progress-updated event
   const onVideoProgress = useCallback((courseId: string, topicId: string, ratio: number) => {
     recordWatchProgress(courseId, topicId, ratio);
-    setProgressTick((n) => n + 1);
   }, []);
 
   const selectCls =
@@ -463,7 +463,6 @@ export function AiCourseDesigner() {
                       onManualToggle={() => {
                         const cur = getTopicProgress(active.id, t.id);
                         setTopicCompleted(active.id, t.id, !cur.completed);
-                        setProgressTick((n) => n + 1);
                       }}
                       progressTick={progressTick}
                     />
