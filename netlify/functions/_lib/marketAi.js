@@ -1,6 +1,6 @@
 /**
  * Gemini-only helpers for market trends (does not change Buddy/Groq defaults).
- * Default model: gemini-2.5-flash (gemini-1.5-flash is retired / NOT_FOUND).
+ * Default: gemini-3.8-flash — 1.5 / 2.5 flash are blocked or retired for many new API keys.
  */
 function env(name) {
   try {
@@ -12,12 +12,17 @@ function env(name) {
 
 /** Preferred models — first available wins. Override with GEMINI_MODEL on Netlify. */
 const MODEL_CANDIDATES = [
+  'gemini-3.8-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
   'gemini-2.5-flash',
   'gemini-2.0-flash',
-  'gemini-3.5-flash',
-  'gemini-3.6-flash',
   'gemini-flash-latest',
 ];
+
+/** Models known to fail for new AI Studio keys — never prefer these as sole default. */
+const RETIRED_OR_BLOCKED = /gemini-1\.5|gemini-pro$|gemini-2\.5-flash$|gemini-2\.0-flash$/i;
 
 async function callGeminiOnce({ apiKey, model, messages, temperature }) {
   const prompt = messages
@@ -54,11 +59,12 @@ async function callGeminiOnce({ apiKey, model, messages, temperature }) {
 }
 
 function isModelNotFound(err) {
-  const s = String(err && (err.body || err.message) || '');
+  const s = String((err && (err.body || err.message)) || '');
   return (
     (err && err.status === 404) ||
     s.includes('NOT_FOUND') ||
     s.includes('is not found') ||
+    s.includes('no longer available') ||
     s.includes('not supported for generateContent')
   );
 }
@@ -92,10 +98,10 @@ async function callGemini({ apiKey, model, messages, temperature }) {
 async function generateWithGemini(messages, temperature) {
   const apiKey = env('GEMINI_API_KEY');
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set in Netlify env');
-  // Ignore retired names if still set in Netlify env
-  let model = env('GEMINI_MODEL') || 'gemini-2.5-flash';
-  if (/gemini-1\.5/i.test(model) || /gemini-pro/i.test(model)) {
-    model = 'gemini-2.5-flash';
+  let model = (env('GEMINI_MODEL') || 'gemini-3.8-flash').trim();
+  // Map blocked/retired env values to current default
+  if (RETIRED_OR_BLOCKED.test(model) || /gemini-1\.5/i.test(model)) {
+    model = 'gemini-3.8-flash';
   }
   return callGemini({
     apiKey: apiKey,
