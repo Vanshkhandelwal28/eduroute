@@ -1,7 +1,6 @@
 /**
- * Client cache for Gemini market trends + student trend analysis.
- * Admin refresh anytime; student personal analysis refresh every 7 days.
- * Placeholder seed is shown until admin clicks Refresh (then real Gemini data).
+ * Client cache for market trends + student trend analysis.
+ * Admin refresh anytime (optional region/state); student analysis every 7 days.
  */
 
 export type MarketSkill = {
@@ -43,16 +42,48 @@ export type StudentAnalysis = {
   provider?: string;
 };
 
+/** India + major states/UTs for market scope selector */
+export const MARKET_REGIONS = [
+  'India (All)',
+  'Maharashtra',
+  'Karnataka',
+  'Tamil Nadu',
+  'Telangana',
+  'Andhra Pradesh',
+  'Delhi NCR',
+  'Uttar Pradesh',
+  'Gujarat',
+  'Rajasthan',
+  'West Bengal',
+  'Kerala',
+  'Madhya Pradesh',
+  'Haryana',
+  'Punjab',
+  'Bihar',
+  'Odisha',
+  'Assam',
+  'Jharkhand',
+  'Chhattisgarh',
+  'Uttarakhand',
+  'Himachal Pradesh',
+  'Goa',
+  'Jammu & Kashmir',
+  'Puducherry',
+  'Chandigarh',
+] as const;
+
+export type MarketRegion = (typeof MARKET_REGIONS)[number] | string;
+
 const MARKET_KEY = 'eduroute:market-trends-v1';
 const ANALYSIS_KEY = 'eduroute:student-trend-analysis-v1';
+const REGION_KEY = 'eduroute:market-region-v1';
 const STUDENT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** Placeholder until admin refreshes with Gemini on Netlify. */
 export const SEED_MARKET: MarketSnapshot = {
   updatedAt: '2026-09-01T00:00:00.000Z',
   region: 'India / Maharashtra',
   summary:
-    'Placeholder market snapshot (not live AI). Admin: open Market Trends → Refresh to load current demand via Gemini. Students will then see that data in Trend Analyse.',
+    'Placeholder market snapshot (not live AI). Admin: select region → Refresh to load current demand via AI. Students will then see that data in Trend Analyse.',
   risingSkills: [
     { skill: 'React / Next.js', demandScore: 88, trend: 'rising', note: 'Frontend hiring strong' },
     { skill: 'Python / AI basics', demandScore: 86, trend: 'rising', note: 'GenAI + automation' },
@@ -75,18 +106,31 @@ export const SEED_MARKET: MarketSnapshot = {
     { role: 'Cybersecurity junior', openingsIndex: 65, avgSalaryLpa: 7 },
   ],
   emergingTech: ['GenAI apps', 'Edge computing', 'Platform engineering'],
-  sourcesNote: 'Seed data only — replace with Gemini refresh after deploy.',
+  sourcesNote: 'Seed data only — replace with AI refresh after deploy.',
   provider: 'seed',
   isSeed: true,
 };
 
+export function readPreferredRegion(): string {
+  try {
+    return localStorage.getItem(REGION_KEY) || 'Maharashtra';
+  } catch {
+    return 'Maharashtra';
+  }
+}
+
+export function writePreferredRegion(region: string) {
+  try {
+    localStorage.setItem(REGION_KEY, region);
+  } catch {
+    /* */
+  }
+}
+
 export function readMarketSnapshot(): MarketSnapshot | null {
   try {
     const raw = localStorage.getItem(MARKET_KEY);
-    if (!raw) {
-      // Show seed so UI is not empty; first admin Gemini refresh overwrites.
-      return SEED_MARKET;
-    }
+    if (!raw) return SEED_MARKET;
     return JSON.parse(raw) as MarketSnapshot;
   } catch {
     return SEED_MARKET;
@@ -122,7 +166,6 @@ export function writeStudentAnalysis(data: StudentAnalysis) {
   }
 }
 
-/** Days until student may refresh again (0 = allowed now). */
 export function studentRefreshDaysLeft(): number {
   const a = readStudentAnalysis();
   if (!a?.generatedAt) return 0;
@@ -135,18 +178,24 @@ export function canStudentRefresh(): boolean {
   return studentRefreshDaysLeft() === 0;
 }
 
-export async function apiRefreshMarket(): Promise<{ ok: boolean; market?: MarketSnapshot; error?: string }> {
+export async function apiRefreshMarket(
+  region?: string,
+): Promise<{ ok: boolean; market?: MarketSnapshot; error?: string; provider?: string }> {
+  const scope = (region || readPreferredRegion() || 'India (All)').trim();
   const res = await fetch('/api/market-trends', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'refresh_market' }),
+    body: JSON.stringify({ action: 'refresh_market', region: scope }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
     return { ok: false, error: data.error || `HTTP ${res.status}` };
   }
-  if (data.market) writeMarketSnapshot(data.market);
-  return { ok: true, market: data.market };
+  if (data.market) {
+    writeMarketSnapshot(data.market);
+    if (data.market.region) writePreferredRegion(String(data.market.region).split('/')[0].trim() || scope);
+  }
+  return { ok: true, market: data.market, provider: data.provider };
 }
 
 export async function apiAnalyzeStudent(payload: {
@@ -155,11 +204,16 @@ export async function apiAnalyzeStudent(payload: {
   gaps: string[];
   field: string;
   interests: string[];
+  region?: string;
 }): Promise<{ ok: boolean; analysis?: StudentAnalysis; error?: string }> {
   const res = await fetch('/api/market-trends', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'analyze_student', ...payload }),
+    body: JSON.stringify({
+      action: 'analyze_student',
+      ...payload,
+      region: payload.region || readPreferredRegion(),
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
@@ -174,7 +228,6 @@ export function monthDueForRefresh(lastUpdated?: string | null): boolean {
   if (!lastUpdated) return true;
   const d = new Date(lastUpdated);
   if (Number.isNaN(d.getTime())) return true;
-  // Treat seed as always "due" so admin is nudged to refresh
   if (lastUpdated.startsWith('2026-09-01')) return true;
   const next = new Date(d);
   next.setMonth(next.getMonth() + 1);

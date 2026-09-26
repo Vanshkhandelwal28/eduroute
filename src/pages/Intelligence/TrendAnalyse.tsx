@@ -35,6 +35,8 @@ import {
   readOnboarding,
   type InterestTrack,
 } from '../../utils/onboardingStore';
+import { matchStudentToMarket, readJobs } from '../../utils/marketEngineStore';
+import { normalizeSkillList } from '../../utils/skillNormalize';
 
 function strengthsFromOnboarding() {
   const o = readOnboarding();
@@ -61,9 +63,11 @@ export function TrendAnalyse() {
     const onUp = () => reload();
     window.addEventListener('eduroute:market-trends-updated', onUp);
     window.addEventListener('eduroute:student-trend-updated', onUp);
+    window.addEventListener('eduroute:mt-jobs-updated', onUp);
     return () => {
       window.removeEventListener('eduroute:market-trends-updated', onUp);
       window.removeEventListener('eduroute:student-trend-updated', onUp);
+      window.removeEventListener('eduroute:mt-jobs-updated', onUp);
     };
   }, [reload]);
 
@@ -73,7 +77,12 @@ export function TrendAnalyse() {
       : 'Software Engineering';
   const strengths = strengthsFromOnboarding();
   const gaps = onboarding.missingSkills || [];
-  const allSkills = [...new Set([...strengths, ...gaps])];
+  const allSkills = normalizeSkillList([...new Set([...strengths, ...gaps])]);
+
+  const localMatch = useMemo(
+    () => matchStudentToMarket(allSkills, readJobs(), market),
+    [allSkills, market],
+  );
 
   const runAnalysis = async () => {
     if (!canRefresh && analysis) {
@@ -97,7 +106,7 @@ export function TrendAnalyse() {
       }
       setAnalysis(res.analysis || readStudentAnalysis());
       setMarket(readMarketSnapshot());
-      setMsg('Trend analysis updated via Gemini AI.');
+      setMsg('Trend analysis updated (AI + local job match).');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Network error');
     } finally {
@@ -122,22 +131,30 @@ export function TrendAnalyse() {
         student: s.studentLevel,
       }));
     }
-    return [];
-  }, [analysis]);
+    // Fallback bars from local match demand
+    return localMatch.priority.slice(0, 6).map((p) => ({
+      skill: p.skill.length > 14 ? p.skill.slice(0, 12) + '…' : p.skill,
+      full: p.skill,
+      market: Math.min(100, Math.round(p.demandPct * 2)),
+      student: allSkills.includes(p.skill) ? 70 : 25,
+    }));
+  }, [analysis, localMatch, allSkills]);
+
+  const displayScore = analysis?.matchScore ?? localMatch.matchScore;
 
   return (
     <div className="er-page mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-600 dark:text-cyan-400">
-            Skill gaps · Market vs you
+            Skill Market Trends · Match & gaps
           </p>
           <h1 className="mt-1 text-2xl font-black tracking-tight text-[var(--text-primary)] md:text-3xl">
-            Trend Analyse
+            Skill Trend Analysis
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Real market demand (admin Gemini snapshot) compared to your onboarding skill profile.
-            Refresh personal analysis at most once every 7 days.
+            Compare your interests, skills, and career goal with job-market demand. Charts show demand %; data source
+            and collection date are listed below.
           </p>
         </div>
         <button
@@ -148,7 +165,7 @@ export function TrendAnalyse() {
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           {busy
-            ? 'Calling Gemini…'
+            ? 'Analyzing…'
             : !analysis
               ? 'Generate analysis'
               : canRefresh
@@ -176,7 +193,7 @@ export function TrendAnalyse() {
             <Link to="/onboarding" className="font-bold underline">
               skill quiz
             </Link>{' '}
-            so Gemini can compare your real profile to market demand.
+            so we can compare your real profile to market demand.
           </div>
         </div>
       )}
@@ -185,7 +202,7 @@ export function TrendAnalyse() {
         <div className="er-card p-4">
           <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Match score</p>
           <p className="mt-1 text-3xl font-black text-[var(--text-primary)]">
-            {analysis?.matchScore != null ? `${analysis.matchScore}%` : '—'}
+            {displayScore != null ? `${displayScore}%` : '—'}
           </p>
         </div>
         <div className="er-card p-4">
@@ -193,19 +210,84 @@ export function TrendAnalyse() {
           <p className="mt-1 text-lg font-bold text-[var(--text-primary)]">{field}</p>
         </div>
         <div className="er-card p-4">
-          <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Market snapshot</p>
+          <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Data as of</p>
           <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-            {market?.updatedAt
-              ? new Date(market.updatedAt).toLocaleDateString()
-              : 'Admin has not refreshed yet'}
+            {new Date(localMatch.dataAsOf).toLocaleString()}
           </p>
+          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{localMatch.sourceNote.slice(0, 80)}…</p>
         </div>
+      </div>
+
+      {/* Matched → Gaps → Priority → Roadmap */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
+          <h2 className="mb-2 text-sm font-black uppercase text-emerald-600 dark:text-emerald-400">Matched skills</h2>
+          {localMatch.matched.length ? (
+            <div className="flex flex-wrap gap-2">
+              {localMatch.matched.map((s) => (
+                <span
+                  key={s}
+                  className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-200"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--text-muted)]">No strong matches yet — complete onboarding or expand skills.</p>
+          )}
+        </div>
+        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
+          <h2 className="mb-2 text-sm font-black uppercase text-amber-600 dark:text-amber-400">Skill gaps</h2>
+          {localMatch.gaps.length ? (
+            <div className="flex flex-wrap gap-2">
+              {localMatch.gaps.map((s) => (
+                <span
+                  key={s}
+                  className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-900 dark:text-amber-200"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--text-muted)]">No major gaps against current job demand sample.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
+        <h2 className="mb-3 text-sm font-black uppercase text-[var(--text-muted)]">
+          Priority skills → learning recommendations
+        </h2>
+        <ul className="space-y-3">
+          {localMatch.recommendations.map((r) => (
+            <li
+              key={r.skill}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-default)] px-3 py-2 text-sm"
+            >
+              <div>
+                <span className="font-bold">{r.skill}</span>
+                <p className="text-xs text-[var(--text-secondary)]">{r.action}</p>
+              </div>
+              <Link
+                to={r.roadmapTo}
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white"
+              >
+                Open path <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {localMatch.priority[0]?.reason && (
+          <p className="mt-2 text-[11px] text-[var(--text-muted)]">{localMatch.priority[0].reason}</p>
+        )}
       </div>
 
       {analysis?.summary && (
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase text-violet-600 dark:text-violet-400">
-            <Sparkles className="h-3.5 w-3.5" /> Gemini summary
+            <Sparkles className="h-3.5 w-3.5" /> AI summary
           </div>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{analysis.summary}</p>
         </div>
@@ -233,7 +315,7 @@ export function TrendAnalyse() {
             </ResponsiveContainer>
           </div>
           <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-            Bars come from Gemini analysis of your profile + live market snapshot (not hardcoded).
+            Source: admin market snapshot + curated public jobs. Collection / snapshot date shown in “Data as of”.
           </p>
         </div>
       )}
@@ -241,33 +323,35 @@ export function TrendAnalyse() {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
-            <TrendingUp className="h-4 w-4" /> Market trend (admin)
+            <TrendingUp className="h-4 w-4" /> In-demand / rising (admin)
           </h2>
-          {market?.summary ? (
-            <>
-              <p className="text-sm text-[var(--text-secondary)]">{market.summary}</p>
-              {market.risingSkills && market.risingSkills.length > 0 && (
-                <ul className="mt-3 space-y-2">
-                  {market.risingSkills.slice(0, 6).map((s) => (
-                    <li key={s.skill} className="flex justify-between text-sm">
-                      <span className="font-semibold">{s.skill}</span>
-                      <span className="text-[var(--text-muted)]">{s.demandScore}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
+          {market?.risingSkills?.length ? (
+            <ul className="mt-1 space-y-2">
+              {market.risingSkills.slice(0, 6).map((s) => (
+                <li key={s.skill} className="flex justify-between text-sm">
+                  <span className="font-semibold">{s.skill}</span>
+                  <span className="text-[var(--text-muted)]">{s.demandScore}</span>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <p className="text-sm text-[var(--text-muted)]">
-              No admin market snapshot yet. Ask admin to open <strong>Market Trends</strong> and refresh with
-              Gemini.
-            </p>
+            <p className="text-sm text-[var(--text-muted)]">Admin has not refreshed AI trends yet.</p>
+          )}
+          {market?.decliningSkills && market.decliningSkills.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-bold uppercase text-rose-600 dark:text-rose-400">Declining</p>
+              <ul className="mt-1 space-y-1 text-sm text-[var(--text-secondary)]">
+                {market.decliningSkills.slice(0, 4).map((s) => (
+                  <li key={s.skill}>{s.skill}</li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
 
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
-            <Target className="h-4 w-4" /> Your skill gaps
+            <Target className="h-4 w-4" /> AI skill gaps
           </h2>
           {analysis?.skillGaps && analysis.skillGaps.length > 0 ? (
             <ul className="space-y-3">
@@ -284,36 +368,14 @@ export function TrendAnalyse() {
                 </li>
               ))}
             </ul>
-          ) : gaps.length > 0 ? (
-            <ul className="list-inside list-disc text-sm text-[var(--text-secondary)]">
-              {gaps.map((g) => (
-                <li key={g}>{g}</li>
-              ))}
-            </ul>
           ) : (
-            <p className="text-sm text-[var(--text-muted)]">
-              Generate analysis to see Gemini skill-gap recommendations.
-            </p>
+            <p className="text-sm text-[var(--text-muted)]">Generate AI analysis for narrative gap recommendations.</p>
           )}
         </div>
       </div>
 
-      {analysis?.recommendations && analysis.recommendations.length > 0 && (
-        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
-          <h2 className="mb-2 text-sm font-black uppercase text-[var(--text-muted)]">Recommendations</h2>
-          <ul className="list-inside list-disc space-y-1 text-sm text-[var(--text-secondary)]">
-            {analysis.recommendations.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <div className="flex flex-wrap gap-3">
-        <Link
-          to="/skill-profile"
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)]"
-        >
+        <Link to="/skill-profile" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
           Open skill profile <ArrowRight className="h-4 w-4" />
         </Link>
         <Link
@@ -321,6 +383,9 @@ export function TrendAnalyse() {
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-fuchsia-600 dark:text-fuchsia-400"
         >
           Design mixed course <ArrowRight className="h-4 w-4" />
+        </Link>
+        <Link to="/roadmaps" className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+          Learning roadmaps <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     </div>
