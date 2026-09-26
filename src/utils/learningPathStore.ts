@@ -25,6 +25,21 @@ export type PathNode = {
   href?: string;
 };
 
+/** Build designer URL so Continue learning pre-fills + can auto-generate */
+export function designerHref(opts: {
+  interest: string;
+  title: string;
+  nodeId: string;
+  auto?: boolean;
+}): string {
+  const q = new URLSearchParams();
+  q.set('interest', opts.interest);
+  q.set('title', opts.title);
+  q.set('nodeId', opts.nodeId);
+  if (opts.auto !== false) q.set('auto', '1');
+  return `/ai-course-designer?${q.toString()}`;
+}
+
 const STORE_PREFIX = 'eduroute:learning-path-v2:';
 
 function storageKey(email?: string | null) {
@@ -38,7 +53,6 @@ const TRACK_LABEL: Record<InterestTrack, string> = {
   data_analyst: 'Data Analytics',
 };
 
-/** Fallback paths when AI is offline — keyed by career track from signup/onboarding */
 const TEMPLATES: Record<InterestTrack, Omit<PathNode, 'status'>[]> = {
   software: [
     {
@@ -107,9 +121,7 @@ const TEMPLATES: Record<InterestTrack, Omit<PathNode, 'status'>[]> = {
       short: 'Projects',
       hours: 16,
       skills: ['Full-stack', 'Git', 'Deploy'],
-      resources: [
-        { label: 'Ship one end-to-end app', kind: 'Project', mins: 180 },
-      ],
+      resources: [{ label: 'Ship one end-to-end app', kind: 'Project', mins: 180 }],
       href: '/ai-course-designer?interest=Full-stack&title=Portfolio%20Projects',
     },
   ],
@@ -268,9 +280,7 @@ function applyProgress(
   const done = new Set(completedIds);
   let currentSet = false;
   return base.map((n) => {
-    if (done.has(n.id)) {
-      return { ...n, status: 'completed' as const };
-    }
+    if (done.has(n.id)) return { ...n, status: 'completed' as const };
     if (!currentSet) {
       currentSet = true;
       return { ...n, status: 'current' as const };
@@ -356,23 +366,14 @@ function tryParseNodes(text: string): Omit<PathNode, 'status'>[] | null {
             mins: Number(r.mins) || 30,
           }))
         : [{ label: `${title} intro`, kind: 'Video', mins: 30 }];
-      const interest = encodeURIComponent(skills[0] || short);
-      const titleQ = encodeURIComponent(title);
+      const id = String(t.id || `step-${i + 1}`).replace(/[^a-z0-9-_]/gi, '-').toLowerCase();
       let href = String(t.href || '');
       if (!href.startsWith('/')) {
         if (/dsa|algorithm|structure/i.test(title)) href = '/dsa-sheet';
         else if (/assessment|quiz/i.test(title)) href = '/assessments';
-        else href = `/ai-course-designer?interest=${interest}&title=${titleQ}`;
+        else href = designerHref({ interest: skills[0] || short, title, nodeId: id, auto: true });
       }
-      return {
-        id: String(t.id || `step-${i + 1}`).replace(/[^a-z0-9-_]/gi, '-').toLowerCase(),
-        title,
-        short,
-        hours: Math.max(2, Number(t.hours) || 8),
-        skills,
-        resources,
-        href,
-      };
+      return { id, title, short, hours: Math.max(2, Number(t.hours) || 8), skills, resources, href };
     });
   } catch {
     return null;
@@ -396,10 +397,6 @@ async function callBuddy(message: string): Promise<string | null> {
   }
 }
 
-/**
- * Resolve path for current user: cache → AI → career template.
- * Pass forceRefresh to regenerate from AI.
- */
 export async function resolveLearningPath(opts?: {
   forceRefresh?: boolean;
 }): Promise<{ nodes: PathNode[]; source: 'cache' | 'ai' | 'template'; track: string }> {
@@ -445,11 +442,29 @@ export async function resolveLearningPath(opts?: {
 }
 
 export function continueHrefForNode(node: PathNode): string {
-  if (node.href) return node.href;
-  if (/dsa|algorithm|structure/i.test(node.title)) return '/dsa-sheet';
-  const interest = encodeURIComponent(node.skills[0] || node.short);
-  const title = encodeURIComponent(node.title);
-  return `/ai-course-designer?interest=${interest}&title=${title}`;
+  if (node.href?.startsWith('/dsa-sheet') || /dsa|algorithm|structure/i.test(node.title)) {
+    return node.href?.startsWith('/dsa-sheet') ? node.href : '/dsa-sheet';
+  }
+  if (node.href?.includes('/ai-course-designer')) {
+    try {
+      const u = new URL(node.href, 'https://eduroute.local');
+      if (!u.searchParams.get('nodeId')) u.searchParams.set('nodeId', node.id);
+      if (!u.searchParams.get('auto')) u.searchParams.set('auto', '1');
+      if (!u.searchParams.get('interest')) {
+        u.searchParams.set('interest', node.skills[0] || node.short);
+      }
+      if (!u.searchParams.get('title')) u.searchParams.set('title', node.title);
+      return `/ai-course-designer?${u.searchParams.toString()}`;
+    } catch {
+      /* fall through */
+    }
+  }
+  return designerHref({
+    interest: node.skills[0] || node.short,
+    title: node.title,
+    nodeId: node.id,
+    auto: true,
+  });
 }
 
 export function careerLabelForUser(): string {
