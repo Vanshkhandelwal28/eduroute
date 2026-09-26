@@ -18,6 +18,7 @@ import {
   type QuizResult,
 } from '../utils/courseQuizGenerator';
 import { saveAssessmentResult } from '../utils/courseAssessmentStore';
+import { recordCourseAchievement } from '../utils/courseAchievementsStore';
 
 type Phase = 'loading' | 'ready' | 'running' | 'result' | 'error';
 
@@ -108,10 +109,11 @@ export function CourseFinalAssessment({ open, onClose, course, userId, onPassed 
         total: res.total,
         gapTopics: res.gapTopics,
       });
-      setPhase('result');
+      // Persist skills + cert metadata for Profile & Portfolio when passed
       if (res.passed) {
-        // slight delay so user sees score, then parent can open cert
+        recordCourseAchievement(course, res.percent);
       }
+      setPhase('result');
     } finally {
       setSubmitting(false);
     }
@@ -358,7 +360,9 @@ export function CourseFinalAssessment({ open, onClose, course, userId, onPassed 
                   {result.score} / {result.total} correct · Pass mark {config.passPercent}%
                 </p>
                 <p className="mt-2 text-sm font-bold text-[var(--text-primary)]">
-                  {result.passed ? 'You passed! Certificate unlocked.' : 'Not yet — revise the gaps below and retry.'}
+                  {result.passed
+                    ? 'You passed! Certificate unlocked — skills added to Profile & Portfolio.'
+                    : 'Not yet — revise the gaps below and retry.'}
                 </p>
               </div>
 
