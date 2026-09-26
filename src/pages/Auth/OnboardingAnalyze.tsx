@@ -283,11 +283,11 @@ export const OnboardingAnalyze = () => {
                     >
                       <div className="flex items-start gap-3">
                         {opt.icon ? iconFor(opt.icon as any) : <Wand2 className="h-8 w-8 text-violet-500" />}
-                        <div>
-                          <p className="font-bold">{opt.label}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-[var(--text-primary)]">{opt.title}</p>
                           <p className="mt-1 text-xs text-[var(--text-muted)]">{opt.description}</p>
                         </div>
-                        {on && <Check className="ml-auto h-5 w-5 text-indigo-400" />}
+                        {on && <Check className="ml-auto h-5 w-5 shrink-0 text-indigo-400" />}
                       </div>
                     </button>
                   );
@@ -388,7 +388,7 @@ export const OnboardingAnalyze = () => {
               />
               <div className="mt-4 rounded-2xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)] p-4">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase text-[var(--text-muted)]">
-                  <FileUp className="h-4 w-4" /> Upload CV (optional)
+                  <FileUp className="h-4 w-4" /> Upload CV (optional) — AI will extract skills
                 </p>
                 <input
                   type="file"
@@ -396,27 +396,33 @@ export const OnboardingAnalyze = () => {
                   className="mt-2 block w-full text-sm"
                   onChange={(e) => void onCvFile(e.target.files?.[0] || null)}
                 />
+                {pathStatus && (
+                  <p className="mt-2 flex items-center gap-2 text-xs font-semibold text-indigo-400">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {pathStatus}
+                  </p>
+                )}
                 {cvFileName && (
                   <p className="mt-2 text-xs text-[var(--text-secondary)]">
                     {cvFileName}
-                    {cvSkills.length > 0 && ` · ${cvSkills.length} skill(s): ${cvSkills.slice(0, 12).join(', ')}${cvSkills.length > 12 ? '…' : ''}`}
+                    {cvSkills.length > 0 &&
+                      ` · ${cvSkills.length} skill(s) from AI: ${cvSkills.slice(0, 12).join(', ')}${
+                        cvSkills.length > 12 ? '…' : ''
+                      }`}
                   </p>
                 )}
                 {cvSkills.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {cvSkills.map((s) => (
-                      <span key={s} className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                      <span
+                        key={s}
+                        className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"
+                      >
                         {s}
                       </span>
                     ))}
                   </div>
                 )}
               </div>
-              {pathStatus && (
-                <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-indigo-400">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> {pathStatus}
-                </p>
-              )}
               {customError && <p className="mt-2 text-xs font-bold text-rose-500">{customError}</p>}
               <div className="mt-6 flex justify-between">
                 <button type="button" onClick={() => setStep('custom_role')} className="text-sm font-bold">
