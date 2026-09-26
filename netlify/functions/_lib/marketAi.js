@@ -10,7 +10,6 @@ function env(name) {
   }
 }
 
-/** Preferred Gemini models — first available wins. */
 const GEMINI_MODELS = [
   'gemini-3.8-flash',
   'gemini-3.6-flash',
@@ -46,7 +45,7 @@ async function callGeminiOnce({ apiKey, model, messages, temperature }) {
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: temperature == null ? 0.4 : temperature,
+          temperature: temperature == null ? 0.3 : temperature,
           responseMimeType: 'application/json',
         },
       }),
@@ -110,19 +109,22 @@ async function callGeminiWithFallback({ apiKey, model, messages, temperature }) 
   throw lastErr || new Error('Gemini: no working model');
 }
 
-async function callGroqOnce({ apiKey, model, messages, temperature }) {
+async function callGroqOnce({ apiKey, model, messages, temperature, forceJson }) {
+  const body = {
+    model: model,
+    messages: messages,
+    temperature: temperature == null ? 0.3 : temperature,
+  };
+  if (forceJson !== false) {
+    body.response_format = { type: 'json_object' };
+  }
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: 'Bearer ' + apiKey,
     },
-    body: JSON.stringify({
-      model: model,
-      messages: messages,
-      temperature: temperature == null ? 0.4 : temperature,
-      response_format: { type: 'json_object' },
-    }),
+    body: JSON.stringify(body),
   });
   const text = await response.text();
   if (!response.ok) {
@@ -145,34 +147,46 @@ async function callGroqWithFallback({ apiKey, messages, temperature }) {
 
   let lastErr;
   for (let i = 0; i < list.length; i++) {
+    const m = list[i];
     try {
-      return {
-        text: await callGroqOnce({
-          apiKey: apiKey,
-          model: list[i],
-          messages: messages,
-          temperature: temperature,
-        }),
-        provider: 'groq',
-        model: list[i],
-      };
+      const text = await callGroqOnce({
+        apiKey: apiKey,
+        model: m,
+        messages: messages,
+        temperature: temperature,
+        forceJson: true,
+      });
+      return { text: text, provider: 'groq', model: m };
     } catch (e) {
       lastErr = e;
       const msg = String((e && (e.body || e.message)) || '');
+      // Some models reject response_format — retry without it
+      if (/response_format|json_object|not supported/i.test(msg)) {
+        try {
+          const text2 = await callGroqOnce({
+            apiKey: apiKey,
+            model: m,
+            messages: messages,
+            temperature: temperature,
+            forceJson: false,
+          });
+          return { text: text2, provider: 'groq', model: m };
+        } catch (e2) {
+          lastErr = e2;
+        }
+      }
       const skip =
         (e && e.status === 404) ||
         /model_not_found|does not exist|do not have access/i.test(msg);
       if (skip) continue;
-      throw e;
+      if (e && (e.status === 429 || e.status === 503)) continue;
+      // try next model
+      continue;
     }
   }
   throw lastErr || new Error('Groq: no working model');
 }
 
-/**
- * Prefer Gemini; on overload/404 try other Gemini models; then Groq.
- * Returns plain text (JSON string). Attaches .provider on the result via wrapper.
- */
 async function generateMarketAi(messages, temperature) {
   const geminiKey = env('GEMINI_API_KEY');
   const groqKey = env('GROQ_API_KEY');
@@ -181,15 +195,17 @@ async function generateMarketAi(messages, temperature) {
     let model = (env('GEMINI_MODEL') || 'gemini-3.8-flash').trim();
     if (RETIRED_OR_BLOCKED.test(model)) model = 'gemini-3.8-flash';
     try {
-      const res = await callGeminiWithFallback({
+      return await callGeminiWithFallback({
         apiKey: geminiKey,
         model: model,
         messages: messages,
         temperature: temperature,
       });
-      return res;
     } catch (geminiErr) {
-      console.warn('Gemini failed for market AI, trying Groq:', String(geminiErr && geminiErr.message).slice(0, 200));
+      console.warn(
+        'Gemini failed for market AI, trying Groq:',
+        String(geminiErr && geminiErr.message).slice(0, 200),
+      );
       if (!groqKey) throw geminiErr;
     }
   }
@@ -205,21 +221,61 @@ async function generateMarketAi(messages, temperature) {
   throw new Error('No GEMINI_API_KEY or GROQ_API_KEY configured in Netlify');
 }
 
-/** Back-compat: returns text only */
 async function generateWithGemini(messages, temperature) {
   const res = await generateMarketAi(messages, temperature);
   return typeof res === 'string' ? res : res.text;
 }
 
+/** Extract first complete JSON object from model text (handles markdown / prose). */
 function extractJsonObject(text) {
   if (!text) return null;
-  const cleaned = String(text)
+  let cleaned = String(text)
     .replace(/```json\s*/gi, '')
-    .replace(/```/g, '')
+    .replace(/```\s*/g, '')
     .trim();
+
+  // Direct parse
   try {
     return JSON.parse(cleaned);
   } catch (_) {}
+
+  // Find outermost { ... } by brace matching
+  const start = cleaned.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (inStr) {
+      if (esc) {
+        esc = false;
+      } else if (ch === '\\') {
+        esc = true;
+      } else if (ch === '"') {
+        inStr = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        const slice = cleaned.slice(start, i + 1);
+        try {
+          return JSON.parse(slice);
+        } catch (_) {
+          break;
+        }
+      }
+    }
+  }
+
+  // Last resort: greedy regex
   const m = cleaned.match(/\{[\s\S]*\}/);
   if (m) {
     try {
