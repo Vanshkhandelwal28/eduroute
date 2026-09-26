@@ -6,6 +6,7 @@ import {
   Briefcase,
   CheckCircle2,
   Code2,
+  Download,
   FolderGit2,
   GraduationCap,
   Share2,
@@ -22,6 +23,12 @@ import {
 import { getAuthUser } from '../../utils/rbacAuth';
 import { getDisplayFirstName, getStoredUserProfile } from '../../utils/userProfile';
 import { readApplications, readCompletions, type InternshipApplication } from '../../utils/internshipApplications';
+import {
+  listCourseAchievements,
+  getAllEarnedCourseSkills,
+  type CourseAchievement,
+} from '../../utils/courseAchievementsStore';
+import { CourseCertificate } from '../../components/CourseCertificate';
 
 type PortfolioProject = {
   id: string;
@@ -30,14 +37,6 @@ type PortfolioProject = {
   tags: string[];
   link?: string;
   verified?: boolean;
-};
-
-type PortfolioCert = {
-  id: string;
-  title: string;
-  issuer: string;
-  date: string;
-  verified: boolean;
 };
 
 const DEMO_PROJECTS: PortfolioProject[] = [
@@ -64,23 +63,6 @@ const DEMO_PROJECTS: PortfolioProject[] = [
   },
 ];
 
-const DEMO_CERTS: PortfolioCert[] = [
-  {
-    id: 'c1',
-    title: 'Frontend Fundamentals',
-    issuer: 'EduRoute',
-    date: '2026-08',
-    verified: true,
-  },
-  {
-    id: 'c2',
-    title: 'Git & GitHub Essentials',
-    issuer: 'EduRoute',
-    date: '2026-07',
-    verified: true,
-  },
-];
-
 const DEMO_ACHIEVEMENTS = [
   { id: 'a1', title: '7-Day Streak', icon: '🔥', detail: 'Consistent daily learning' },
   { id: 'a2', title: 'First Internship Completed', icon: '🎓', detail: 'Pipeline finished with mentor feedback' },
@@ -97,19 +79,27 @@ export const DigitalPortfolio = () => {
 
   const [onboarding, setOnboarding] = useState<OnboardingProfile>(() => readOnboarding());
   const [apps, setApps] = useState<InternshipApplication[]>(() => readApplications());
+  const [achievements, setAchievements] = useState<CourseAchievement[]>(() => listCourseAchievements());
+  const [certOpen, setCertOpen] = useState(false);
+  const [certData, setCertData] = useState<CourseAchievement | null>(null);
 
   useEffect(() => {
     const refresh = () => {
       setOnboarding(readOnboarding());
       setApps(readApplications());
+      setAchievements(listCourseAchievements());
     };
     window.addEventListener('focus', refresh);
     window.addEventListener('storage', refresh);
     window.addEventListener('eduroute:applications-updated', refresh);
+    window.addEventListener('eduroute:course-achievements-updated', refresh);
+    window.addEventListener('eduroute:course-assessment-updated', refresh);
     return () => {
       window.removeEventListener('focus', refresh);
       window.removeEventListener('storage', refresh);
       window.removeEventListener('eduroute:applications-updated', refresh);
+      window.removeEventListener('eduroute:course-achievements-updated', refresh);
+      window.removeEventListener('eduroute:course-assessment-updated', refresh);
     };
   }, []);
 
@@ -120,6 +110,11 @@ export const DigitalPortfolio = () => {
         .map((a) => a.skill),
     [onboarding.gapAnswers],
   );
+  const courseSkills = useMemo(() => getAllEarnedCourseSkills(), [achievements]);
+  const allSkills = useMemo(() => {
+    const set = new Set([...strengths, ...courseSkills]);
+    return Array.from(set);
+  }, [strengths, courseSkills]);
   const gaps = onboarding.missingSkills || [];
   const interests = (onboarding.interests || []).map(interestLabel);
   const completions = useMemo(() => readCompletions(), [apps]);
@@ -130,15 +125,15 @@ export const DigitalPortfolio = () => {
     if (fullName) score += 15;
     if (email) score += 10;
     if (onboarding.completedAt) score += 20;
-    if (strengths.length) score += 15;
+    if (allSkills.length) score += 15;
     if (completions.length) score += 15;
-    if (DEMO_CERTS.length) score += 10;
+    if (achievements.length) score += 10;
     if (DEMO_PROJECTS.length) score += 15;
     return Math.min(100, score);
-  }, [fullName, email, onboarding.completedAt, strengths.length, completions.length]);
+  }, [fullName, email, onboarding.completedAt, allSkills.length, completions.length, achievements.length]);
 
   const handleShare = async () => {
-    const text = `${fullName} — EduRoute Digital Portfolio\nSkills: ${strengths.slice(0, 5).join(', ') || 'In progress'}\n${window.location.href}`;
+    const text = `${fullName} — EduRoute Digital Portfolio\nSkills: ${allSkills.slice(0, 5).join(', ') || 'In progress'}\n${window.location.href}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: 'EduRoute Portfolio', text });
@@ -149,6 +144,11 @@ export const DigitalPortfolio = () => {
     } catch {
       /* user cancelled */
     }
+  };
+
+  const openCert = (a: CourseAchievement) => {
+    setCertData(a);
+    setCertOpen(true);
   };
 
   return (
@@ -200,7 +200,6 @@ export const DigitalPortfolio = () => {
           </div>
         </div>
 
-        {/* Completeness */}
         <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-800/40">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="font-bold text-slate-800 dark:text-slate-100">Portfolio completeness</span>
@@ -218,7 +217,7 @@ export const DigitalPortfolio = () => {
         </div>
       </motion.section>
 
-      {/* Skills */}
+      {/* Skills — onboarding + course-earned */}
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-4 flex items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
@@ -228,25 +227,54 @@ export const DigitalPortfolio = () => {
             Full gap analysis →
           </Link>
         </div>
-        {!onboarding.completedAt ? (
+
+        {courseSkills.length > 0 && (
+          <div className="mb-4">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-violet-600 dark:text-violet-300">
+              Skills gained through courses
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {courseSkills.map((s) => (
+                <span
+                  key={`course-${s}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-800 dark:bg-violet-500/15 dark:text-violet-200"
+                >
+                  <Award className="h-3.5 w-3.5" /> {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!onboarding.completedAt && courseSkills.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center dark:border-slate-700">
-            <p className="text-sm text-slate-500">Complete skill check to unlock verified skills.</p>
-            <Link
-              to="/onboarding"
-              className="mt-3 inline-flex rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white"
-            >
-              Start skill check
-            </Link>
+            <p className="text-sm text-slate-500">
+              Complete skill check or pass a course assessment to unlock verified skills.
+            </p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Link
+                to="/onboarding"
+                className="inline-flex rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white"
+              >
+                Start skill check
+              </Link>
+              <Link
+                to="/ai-course-designer"
+                className="inline-flex rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200"
+              >
+                AI Course Designer
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-600">Strengths</p>
               <div className="flex flex-wrap gap-2">
-                {strengths.length === 0 ? (
+                {allSkills.length === 0 ? (
                   <span className="text-sm text-slate-400">None marked yet</span>
                 ) : (
-                  strengths.map((s) => (
+                  allSkills.map((s) => (
                     <span
                       key={s}
                       className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"
@@ -275,6 +303,47 @@ export const DigitalPortfolio = () => {
               </div>
             </div>
           </div>
+        )}
+      </section>
+
+      {/* Course certificates */}
+      <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
+            <Award className="h-5 w-5 text-indigo-600" /> Course certificates
+          </h2>
+          <Link to="/ai-course-designer" className="text-xs font-bold text-indigo-600 hover:underline">
+            Designer →
+          </Link>
+        </div>
+        {achievements.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Pass a final assessment (60%+) on an AI course to earn a certificate here.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {achievements.map((a) => (
+              <li
+                key={a.courseId}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 px-4 py-3 dark:border-slate-800"
+              >
+                <div className="min-w-0">
+                  <div className="font-bold text-slate-900 dark:text-white">{a.courseTitle}</div>
+                  <div className="text-xs text-slate-500">
+                    {a.level} · {a.durationLabel} · {a.completedAt}
+                    {a.skills.length > 0 ? ` · ${a.skills.slice(0, 4).join(', ')}` : ''}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openCert(a)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download certificate
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
@@ -327,7 +396,6 @@ export const DigitalPortfolio = () => {
         )}
       </section>
 
-      {/* Projects + Certs */}
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
@@ -364,36 +432,18 @@ export const DigitalPortfolio = () => {
         <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
-              <Award className="h-5 w-5 text-indigo-600" /> Certifications
+              <Award className="h-5 w-5 text-indigo-600" /> Other certifications
             </h2>
             <Link to="/certifications" className="text-xs font-bold text-indigo-600 hover:underline">
               Browse →
             </Link>
           </div>
-          <ul className="space-y-3">
-            {DEMO_CERTS.map((c) => (
-              <li
-                key={c.id}
-                className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 dark:border-slate-800"
-              >
-                <div>
-                  <div className="font-bold text-slate-900 dark:text-white">{c.title}</div>
-                  <div className="text-xs text-slate-500">
-                    {c.issuer} · {c.date}
-                  </div>
-                </div>
-                {c.verified && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
-                    <Shield className="h-3 w-3" /> Verified
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
+          <p className="text-sm text-slate-500">
+            Course certificates from AI Designer appear above. Browse external certs from the catalog.
+          </p>
         </section>
       </div>
 
-      {/* Achievements */}
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
           <Trophy className="h-5 w-5 text-amber-500" /> Achievements
@@ -412,7 +462,6 @@ export const DigitalPortfolio = () => {
         </div>
       </section>
 
-      {/* Quick links */}
       <div className="flex flex-wrap gap-3">
         <Link
           to="/profile"
@@ -433,6 +482,25 @@ export const DigitalPortfolio = () => {
           <Sparkles className="h-4 w-4" /> Skill gap analysis
         </Link>
       </div>
+
+      {certData && (
+        <CourseCertificate
+          open={certOpen}
+          onClose={() => {
+            setCertOpen(false);
+            setCertData(null);
+          }}
+          data={{
+            studentName: fullName,
+            courseName: certData.courseTitle,
+            skills: certData.skills,
+            level: certData.level,
+            durationLabel: certData.durationLabel,
+            completionDate: certData.completedAt,
+            certId: certData.certId,
+          }}
+        />
+      )}
     </div>
   );
 };

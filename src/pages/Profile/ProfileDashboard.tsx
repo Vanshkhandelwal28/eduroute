@@ -7,8 +7,8 @@ import {
   Sparkles,
   Target,
   Trophy,
-  Info,
   ArrowRight,
+  Download,
 } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { getProfileDashboardData } from '../../services/profileDashboardApi';
@@ -17,16 +17,20 @@ import { getAuthToken, getAuthUser, saveAuthSession } from '../../utils/rbacAuth
 import { getStoredUserProfile, saveUserProfile } from '../../utils/userProfile';
 import { readOnboarding } from '../../utils/onboardingStore';
 import { readCompletions } from '../../utils/internshipApplications';
+import {
+  listCourseAchievements,
+  getAllEarnedCourseSkills,
+  type CourseAchievement,
+} from '../../utils/courseAchievementsStore';
 import { BuildCvCta } from '../../components/BuildCvCta';
 import { LivingLearningPath } from '../../components/LivingLearningPath';
+import { CourseCertificate } from '../../components/CourseCertificate';
 
 const difficultyColors = {
   easy: '#22c55e',
   medium: '#f59e0b',
   hard: '#ef4444',
 };
-
-const levelTitles = ['Beginner', 'Explorer', 'Advanced', 'Expert', 'Pro'];
 
 const statsMeta = [
   { key: 'totalProblems', label: 'Total Solved', icon: Target, description: 'All accepted problems.' },
@@ -44,6 +48,22 @@ export const ProfileDashboard = () => {
   const onboarding = useMemo(() => readOnboarding(), []);
   const skillGapCount = onboarding.missingSkills?.length || 0;
   const completions = useMemo(() => readCompletions(), []);
+  const [achievements, setAchievements] = useState<CourseAchievement[]>(() => listCourseAchievements());
+  const courseSkills = useMemo(() => getAllEarnedCourseSkills(), [achievements]);
+  const [certOpen, setCertOpen] = useState(false);
+  const [certData, setCertData] = useState<CourseAchievement | null>(null);
+
+  useEffect(() => {
+    const refreshAchievements = () => setAchievements(listCourseAchievements());
+    window.addEventListener('eduroute:course-achievements-updated', refreshAchievements);
+    window.addEventListener('eduroute:course-assessment-updated', refreshAchievements);
+    window.addEventListener('focus', refreshAchievements);
+    return () => {
+      window.removeEventListener('eduroute:course-achievements-updated', refreshAchievements);
+      window.removeEventListener('eduroute:course-assessment-updated', refreshAchievements);
+      window.removeEventListener('focus', refreshAchievements);
+    };
+  }, []);
 
   useEffect(() => {
     const authUser = getAuthUser();
@@ -156,6 +176,11 @@ export const ProfileDashboard = () => {
     setIsEditing(false);
   };
 
+  const openCert = (a: CourseAchievement) => {
+    setCertData(a);
+    setCertOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] p-4 text-[var(--text-primary)] md:p-8">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -224,6 +249,84 @@ export const ProfileDashboard = () => {
             <span className="font-semibold text-[var(--accent)]">View strengths, skill gaps & recommended next steps</span>
             <ArrowRight className="h-4 w-4 shrink-0 text-[var(--accent)]" />
           </Link>
+        </section>
+
+        {/* Skills gained through courses */}
+        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
+              <Sparkles className="h-5 w-5 text-violet-500" /> Skills gained through courses
+            </h2>
+            <Link to="/ai-course-designer" className="text-xs font-bold text-[var(--accent)] hover:underline">
+              AI Course Designer →
+            </Link>
+          </div>
+          {courseSkills.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">
+              Pass a final assessment (60%+) on a designed course to show skills here.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {courseSkills.map((s) => (
+                <span
+                  key={s}
+                  className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-3 py-1.5 text-xs font-bold text-violet-800 dark:text-violet-200"
+                >
+                  <Award className="h-3.5 w-3.5" /> {s}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Course certificates with download */}
+        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
+              <Award className="h-5 w-5 text-indigo-500" /> Course certificates
+            </h2>
+            <span className="text-xs text-[var(--text-muted)]">{achievements.length} earned</span>
+          </div>
+          {achievements.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">
+              Complete ~95% of a course, pass the AI final quiz, then download certificates here.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {achievements.map((a) => (
+                <li
+                  key={a.courseId}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-bold text-[var(--text-primary)]">{a.courseTitle}</div>
+                    <div className="text-xs text-[var(--text-secondary)]">
+                      {a.level} · {a.durationLabel} · Score {a.percent}% · {a.completedAt}
+                    </div>
+                    {a.skills.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {a.skills.slice(0, 5).map((s) => (
+                          <span
+                            key={s}
+                            className="rounded-full bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-bold text-[var(--text-secondary)]"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openCert(a)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download certificate
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <BuildCvCta />
@@ -357,6 +460,25 @@ export const ProfileDashboard = () => {
           )}
         </section>
       </div>
+
+      {certData && (
+        <CourseCertificate
+          open={certOpen}
+          onClose={() => {
+            setCertOpen(false);
+            setCertData(null);
+          }}
+          data={{
+            studentName: profileData.fullName,
+            courseName: certData.courseTitle,
+            skills: certData.skills,
+            level: certData.level,
+            durationLabel: certData.durationLabel,
+            completionDate: certData.completedAt,
+            certId: certData.certId,
+          }}
+        />
+      )}
     </div>
   );
 };
