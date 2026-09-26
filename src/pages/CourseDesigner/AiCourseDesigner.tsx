@@ -12,8 +12,12 @@ import {
   Wand2,
   CheckCircle2,
   Pencil,
+  Download,
+  Award,
 } from 'lucide-react';
 import { StarfieldBackground } from '../../components/StarfieldBackground';
+import { YouTubeCoursePlayer } from '../../components/YouTubeCoursePlayer';
+import { CourseCertificate } from '../../components/CourseCertificate';
 import { getAuthUser } from '../../utils/rbacAuth';
 import { readOnboarding } from '../../utils/onboardingStore';
 import {
@@ -31,6 +35,14 @@ import {
   phaseLabel,
   type GeneratePhase,
 } from '../../utils/aiCourseGenerator';
+import {
+  courseCompletionStats,
+  getTopicProgress,
+  levelFromDurationDays,
+  recordWatchProgress,
+  setTopicCompleted,
+  formatCertDate,
+} from '../../utils/courseProgressStore';
 
 const FIELD_FROM_TRACK: Record<string, string> = {
   software: 'Software Engineering',
@@ -44,9 +56,7 @@ export function AiCourseDesigner() {
   const defaultField =
     profile.interests?.[0] && FIELD_FROM_TRACK[profile.interests[0]]
       ? FIELD_FROM_TRACK[profile.interests[0]]
-      : user?.name
-        ? 'Software Engineering'
-        : 'Software Engineering';
+      : 'Software Engineering';
 
   const [duration, setDuration] = useState<number>(15);
   const [customDays, setCustomDays] = useState('');
@@ -60,6 +70,9 @@ export function AiCourseDesigner() {
   const [courses, setCourses] = useState<AiDesignedCourse[]>(() => readAiCourses());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [playingTopicId, setPlayingTopicId] = useState<string | null>(null);
+  const [progressTick, setProgressTick] = useState(0);
+  const [certOpen, setCertOpen] = useState(false);
 
   const refresh = useCallback(() => {
     const list = readAiCourses();
@@ -73,10 +86,25 @@ export function AiCourseDesigner() {
     return () => window.removeEventListener('eduroute:ai-courses-updated', onUp);
   }, [refresh]);
 
+  useEffect(() => {
+    const onProg = () => setProgressTick((n) => n + 1);
+    window.addEventListener('eduroute:course-progress-updated', onProg);
+    return () => window.removeEventListener('eduroute:course-progress-updated', onProg);
+  }, []);
+
   const active = courses.find((c) => c.id === activeId) || courses[0] || null;
   const days = useCustomDays
     ? Math.min(365, Math.max(1, Number(customDays) || 1))
     : duration;
+
+  const stats = useMemo(() => {
+    if (!active) return { done: 0, total: 0, percent: 0, allDone: false };
+    return courseCompletionStats(
+      active.id,
+      active.topics.map((t) => t.id),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, progressTick]);
 
   const toggleInterest = (name: string) => {
     setSelected((prev) =>
@@ -133,8 +161,19 @@ export function AiCourseDesigner() {
     refresh();
   };
 
+  const onVideoProgress = useCallback((courseId: string, topicId: string, ratio: number) => {
+    recordWatchProgress(courseId, topicId, ratio);
+    setProgressTick((n) => n + 1);
+  }, []);
+
   const selectCls =
     'rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-indigo-500/40';
+
+  const studentName = user?.name || 'Student';
+  const certLevel = active ? levelFromDurationDays(active.durationDays) : 'Beginner';
+  const certSkills = active?.interests?.length
+    ? active.interests
+    : active?.topics.flatMap((t) => t.skills).filter(Boolean).slice(0, 6) || [];
 
   return (
     <div className="relative min-h-full overflow-hidden text-[var(--text-primary)]">
@@ -152,13 +191,12 @@ export function AiCourseDesigner() {
             Design your mixed course
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Pick duration and interests. We blend your signup field, skill gaps, and industry demand into
-            a day-by-day roadmap with YouTube + docs — then you can edit topics.
+            Pick duration and interests. Watch lessons in-page — topics auto-tick at ~55% watched.
+            Finish the course to unlock your certificate.
           </p>
         </motion.div>
 
         <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
-          {/* Builder panel */}
           <motion.section
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -227,6 +265,13 @@ export function AiCourseDesigner() {
                   onChange={(e) => setCustomDays(e.target.value)}
                 />
               )}
+              <p className="mt-1 text-[10px] text-[var(--text-muted)]">
+                Level on certificate:{' '}
+                <span className="font-bold text-[var(--text-secondary)]">
+                  {levelFromDurationDays(days)}
+                </span>{' '}
+                (≤15d Beginner · ≤60d Intermediate · else Advanced)
+              </p>
             </div>
 
             <div>
@@ -292,59 +337,13 @@ export function AiCourseDesigner() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                     {phaseLabel(phase)}
                   </div>
-                  <div className="mt-3 space-y-1.5">
-                    {(
-                      [
-                        'analysing_profile',
-                        'mapping_demand',
-                        'building_outline',
-                        'attaching_resources',
-                        'finalising',
-                      ] as GeneratePhase[]
-                    ).map((p) => {
-                      const order = [
-                        'analysing_profile',
-                        'mapping_demand',
-                        'building_outline',
-                        'attaching_resources',
-                        'finalising',
-                        'done',
-                      ];
-                      const done =
-                        order.indexOf(phase) > order.indexOf(p) || phase === 'done';
-                      const current = phase === p;
-                      return (
-                        <div
-                          key={p}
-                          className={`flex items-center gap-2 text-[11px] font-semibold ${
-                            done
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : current
-                                ? 'text-violet-700 dark:text-violet-200'
-                                : 'text-[var(--text-muted)]'
-                          }`}
-                        >
-                          {done ? (
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                          ) : current ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <span className="h-3.5 w-3.5 rounded-full border border-current opacity-40" />
-                          )}
-                          {phaseLabel(p)}
-                        </div>
-                      );
-                    })}
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
             {courses.length > 0 && (
               <div className="border-t border-[var(--border-default)] pt-3">
-                <p className="mb-2 text-[10px] font-black uppercase text-[var(--text-muted)]">
-                  Saved courses
-                </p>
+                <p className="mb-2 text-[10px] font-black uppercase text-[var(--text-muted)]">Saved courses</p>
                 <ul className="max-h-40 space-y-1 overflow-y-auto">
                   {courses.map((c) => (
                     <li key={c.id} className="flex items-center gap-1">
@@ -377,57 +376,75 @@ export function AiCourseDesigner() {
             )}
           </motion.section>
 
-          {/* Course view */}
           <section className="min-w-0">
             {!active ? (
               <div className="flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)]/50 p-8 text-center">
                 <BookOpen className="mb-3 h-10 w-10 text-[var(--text-muted)]" />
                 <p className="font-bold">No course yet</p>
                 <p className="mt-1 max-w-sm text-sm text-[var(--text-muted)]">
-                  Choose duration + interests and hit Generate. AI will build a roadmap with YT + docs.
+                  Choose duration + interests and hit Generate. Watch videos here to auto-complete topics.
                 </p>
               </div>
             ) : (
-              <motion.div
-                key={active.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-4"
-              >
+              <motion.div key={active.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                 <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <h2 className="text-xl font-black">{active.title}</h2>
                       <p className="mt-1 text-sm text-[var(--text-secondary)]">{active.summary}</p>
                       <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase text-[var(--text-muted)]">
-                        <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
-                          {active.durationDays} days
-                        </span>
-                        <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
-                          {active.totalHours}h total
-                        </span>
-                        <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
-                          {active.topics.length} topics
-                        </span>
-                        <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
-                          {active.field}
-                        </span>
+                        <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">{active.durationDays} days</span>
+                        <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">{active.totalHours}h total</span>
+                        <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">{active.topics.length} topics</span>
+                        <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-indigo-700 dark:text-indigo-300">{certLevel}</span>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(editingId === active.id ? null : active.id)}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-default)] px-3 py-2 text-xs font-bold"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      {editingId === active.id ? 'Done editing' : 'Edit topics'}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(editingId === active.id ? null : active.id)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-default)] px-3 py-2 text-xs font-bold"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        {editingId === active.id ? 'Done editing' : 'Edit topics'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!stats.allDone}
+                        onClick={() => setCertOpen(true)}
+                        title={stats.allDone ? 'Download your certificate' : `Complete all topics (${stats.done}/${stats.total}) to unlock`}
+                        className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white ${
+                          stats.allDone ? 'bg-emerald-600 hover:bg-emerald-500' : 'cursor-not-allowed bg-slate-400 opacity-70'
+                        }`}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Download certificate
+                      </button>
+                    </div>
                   </div>
-                  {active.demandHints?.length > 0 && (
-                    <p className="mt-3 text-[11px] text-[var(--text-muted)]">
-                      Demand signals: {active.demandHints.join(' · ')}
+
+                  <div className="mt-4">
+                    <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Award className="h-3.5 w-3.5" />
+                        Course progress
+                      </span>
+                      <span className="tabular-nums text-indigo-600 dark:text-indigo-300">
+                        {stats.percent}% · {stats.done}/{stats.total} topics
+                      </span>
+                    </div>
+                    <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+                      <motion.div
+                        className="h-full rounded-full bg-gradient-to-r from-violet-600 to-indigo-500"
+                        initial={false}
+                        animate={{ width: `${stats.percent}%` }}
+                        transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">
+                      Watch ~55%+ of each lesson video to auto-tick the topic. Playback speed is available on the player.
                     </p>
-                  )}
+                  </div>
                 </div>
 
                 <ul className="space-y-3">
@@ -436,21 +453,42 @@ export function AiCourseDesigner() {
                       key={t.id}
                       topic={t}
                       index={idx}
+                      courseId={active.id}
                       editing={editingId === active.id}
+                      playing={playingTopicId === t.id}
+                      onPlay={() => setPlayingTopicId(playingTopicId === t.id ? null : t.id)}
                       onDelete={() => removeTopic(active.id, t.id)}
                       onHours={(h) => updateTopicHours(active.id, t.id, h)}
+                      onVideoProgress={(ratio) => onVideoProgress(active.id, t.id, ratio)}
+                      onManualToggle={() => {
+                        const cur = getTopicProgress(active.id, t.id);
+                        setTopicCompleted(active.id, t.id, !cur.completed);
+                        setProgressTick((n) => n + 1);
+                      }}
+                      progressTick={progressTick}
                     />
                   ))}
                 </ul>
-
-                {active.topics.length === 0 && (
-                  <p className="text-sm text-[var(--text-muted)]">All topics removed — generate again or undo by regenerating.</p>
-                )}
               </motion.div>
             )}
           </section>
         </div>
       </div>
+
+      {active && (
+        <CourseCertificate
+          open={certOpen}
+          onClose={() => setCertOpen(false)}
+          data={{
+            studentName,
+            courseName: active.title,
+            skills: certSkills,
+            level: certLevel,
+            durationLabel: `${active.durationDays} days · ${active.totalHours}h`,
+            completionDate: formatCertDate(),
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -458,28 +496,69 @@ export function AiCourseDesigner() {
 function TopicCard({
   topic,
   index,
+  courseId,
   editing,
+  playing,
+  onPlay,
   onDelete,
   onHours,
+  onVideoProgress,
+  onManualToggle,
+  progressTick,
 }: {
   topic: CourseTopic;
   index: number;
+  courseId: string;
   editing: boolean;
+  playing: boolean;
+  onPlay: () => void;
   onDelete: () => void;
   onHours: (h: number) => void;
+  onVideoProgress: (ratio: number) => void;
+  onManualToggle: () => void;
+  progressTick: number;
 }) {
+  const prog = useMemo(
+    () => getTopicProgress(courseId, topic.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [courseId, topic.id, progressTick],
+  );
+  const done = prog.completed;
+  const watchPct = Math.round(prog.watchedRatio * 100);
+
   return (
     <motion.li
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.03, 0.3) }}
-      className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4 shadow-[var(--shadow-card)] backdrop-blur-sm"
+      className={`rounded-2xl border p-4 shadow-[var(--shadow-card)] backdrop-blur-sm ${
+        done
+          ? 'border-emerald-500/40 bg-emerald-500/5'
+          : 'border-[var(--border-default)] bg-[var(--bg-card)]/90'
+      }`}
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 px-2.5 py-1 text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-300">
-          <Clock className="h-3 w-3" />
-          {topic.estimatedHours}h · {topic.dayRange}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onManualToggle}
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-black ${
+              done ? 'bg-emerald-600 text-white' : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
+            }`}
+            title={done ? 'Mark incomplete' : 'Mark complete'}
+          >
+            {done ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+          </button>
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 px-2.5 py-1 text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-300">
+            <Clock className="h-3 w-3" />
+            {topic.estimatedHours}h · {topic.dayRange}
+          </div>
+          {watchPct > 0 && (
+            <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5 text-[10px] font-bold text-[var(--text-muted)]">
+              Watched {watchPct}%
+            </span>
+          )}
         </div>
         {editing && (
           <div className="flex items-center gap-2">
@@ -499,12 +578,12 @@ function TopicCard({
               onClick={onDelete}
               className="inline-flex items-center gap-1 rounded-lg bg-rose-600/90 px-2 py-1 text-[10px] font-black uppercase text-white"
             >
-              <Trash2 className="h-3 w-3" /> Delete topic
+              <Trash2 className="h-3 w-3" /> Delete
             </button>
           </div>
         )}
       </div>
-      <h3 className="text-sm font-black">{topic.title}</h3>
+      <h3 className={`text-sm font-black ${done ? 'text-[var(--text-muted)] line-through' : ''}`}>{topic.title}</h3>
       <p className="mt-1 text-xs text-[var(--text-secondary)]">{topic.description}</p>
       <div className="mt-2 flex flex-wrap gap-1">
         {topic.skills.map((s) => (
@@ -518,16 +597,14 @@ function TopicCard({
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {topic.youtubeUrl && (
-          <a
-            href={topic.youtubeUrl}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            onClick={onPlay}
             className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600/90 px-3 py-1.5 text-[11px] font-bold text-white"
           >
             <Youtube className="h-3.5 w-3.5" />
-            {topic.youtubeTitle || 'YouTube'}
-            <ExternalLink className="h-3 w-3 opacity-80" />
-          </a>
+            {playing ? 'Hide player' : 'Watch on EduRoute'}
+          </button>
         )}
         {topic.docUrl && (
           <a
@@ -542,6 +619,16 @@ function TopicCard({
           </a>
         )}
       </div>
+
+      {playing && topic.youtubeUrl && (
+        <div className="mt-3">
+          <YouTubeCoursePlayer
+            youtubeUrl={topic.youtubeUrl}
+            title={topic.youtubeTitle || topic.title}
+            onProgress={onVideoProgress}
+          />
+        </div>
+      )}
     </motion.li>
   );
 }
