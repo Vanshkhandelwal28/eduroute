@@ -155,3 +155,51 @@ export function hoursToCourseDays(hours: number): number {
   const days = Math.round(h / 2.5);
   return Math.min(90, Math.max(5, days));
 }
+
+/**
+ * Ask Buddy AI (Gemini/Groq) to list skills from raw CV text.
+ * Merges with heuristic extract for reliability.
+ */
+export async function extractSkillsWithAI(text: string): Promise<string[]> {
+  const local = extractSkillsFromText(text);
+  const snippet = String(text || '').slice(0, 6000).trim();
+  if (snippet.length < 40) return local;
+
+  try {
+    const prompt =
+      'Extract ALL technical skills, programming languages, frameworks, tools, databases, ' +
+      'cloud platforms, and relevant soft/engineering practices from this CV / resume text.\n' +
+      'Return ONLY a JSON array of short skill names (max 40 items), no markdown, no explanation.\n' +
+      'Example: ["Java","Spring Boot","PostgreSQL","Docker","System Design"]\n\n' +
+      'CV TEXT:\n' +
+      snippet;
+
+    const res = await fetch('/api/buddy-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: 'cv-skill-extract',
+        message: prompt,
+        language: 'english',
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.ok || typeof data.reply !== 'string') return local;
+    if (/limited mode|No AI key found/i.test(data.reply)) return local;
+
+    const match = data.reply.match(/\[[\s\S]*\]/);
+    if (!match) return local;
+    const arr = JSON.parse(match[0]);
+    if (!Array.isArray(arr)) return local;
+
+    const merged: string[] = [...local];
+    for (const item of arr) {
+      const s = String(item || '').trim();
+      if (!s || s.length > 50) continue;
+      if (!merged.some((m) => m.toLowerCase() === s.toLowerCase())) merged.push(s);
+    }
+    return merged.slice(0, 50);
+  } catch {
+    return local;
+  }
+}
