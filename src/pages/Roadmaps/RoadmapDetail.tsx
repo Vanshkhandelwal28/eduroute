@@ -17,12 +17,15 @@ import { YouTubeCoursePlayer } from '../../components/YouTubeCoursePlayer';
 import { CourseCertificate } from '../../components/CourseCertificate';
 import { getAuthUser } from '../../utils/rbacAuth';
 import {
-  courseCompletionStats,
   formatCertDate,
   getTopicProgress,
   recordWatchProgress,
   setTopicCompleted,
 } from '../../utils/courseProgressStore';
+import {
+  formatWatchDuration,
+  minWatchSecondsFromTopics,
+} from '../../utils/youtubeDurations';
 
 const storageKey = (role: string) => `eduroute-roadmap-topics-${role}`;
 
@@ -79,6 +82,18 @@ export const RoadmapDetail = () => {
   const doneCount = data.topics.filter((t) => completed[t.id]).length;
   const progress = Math.round((doneCount / Math.max(data.topics.length, 1)) * 100);
   const allDone = doneCount === data.topics.length && data.topics.length > 0;
+
+  /** Minimum time to complete = sum of unique YouTube video lengths */
+  const minWatchLabel = useMemo(() => {
+    const sec = minWatchSecondsFromTopics(
+      data.topics.map((t) => ({
+        youtubeUrl: t.youtubeUrl,
+        duration: t.duration,
+      })),
+    );
+    if (sec > 0) return formatWatchDuration(sec);
+    return data.totalHours || '—';
+  }, [data.topics, data.totalHours, progressTick]);
 
   const toggleTopic = (id: string) => {
     setCompleted((prev) => {
@@ -190,8 +205,11 @@ export const RoadmapDetail = () => {
                 <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                   ★ {data.level}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  ⏱ {data.totalHours}
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                  title="Sum of unique lesson video lengths — minimum time to finish"
+                >
+                  ⏱ Min watch {minWatchLabel}
                 </span>
               </div>
 
@@ -301,7 +319,7 @@ export const RoadmapDetail = () => {
             : data.level.includes('Intermediate')
               ? 'Intermediate'
               : 'Advanced',
-          durationLabel: data.totalHours,
+          durationLabel: `Min watch ${minWatchLabel}`,
           completionDate: formatCertDate(),
         }}
       />
