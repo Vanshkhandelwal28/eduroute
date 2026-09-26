@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   BookOpen,
   CheckCircle2,
+  Download,
   ExternalLink,
   FileText,
   MapPin,
@@ -12,6 +13,19 @@ import {
   Youtube,
 } from 'lucide-react';
 import { ROADMAP_DATA, type RoadmapTopic } from './roadmapData';
+import { YouTubeCoursePlayer } from '../../components/YouTubeCoursePlayer';
+import { CourseCertificate } from '../../components/CourseCertificate';
+import { getAuthUser } from '../../utils/rbacAuth';
+import {
+  formatCertDate,
+  getTopicProgress,
+  recordWatchProgress,
+  setTopicCompleted,
+} from '../../utils/courseProgressStore';
+import {
+  formatWatchDuration,
+  minWatchSecondsFromTopics,
+} from '../../utils/youtubeDurations';
 
 const storageKey = (role: string) => `eduroute-roadmap-topics-${role}`;
 
@@ -19,6 +33,8 @@ export const RoadmapDetail = () => {
   const { role = 'frontend' } = useParams();
   const reduceMotion = useReducedMotion();
   const data = ROADMAP_DATA[role] || ROADMAP_DATA.frontend;
+  const courseKey = `roadmap:${role}`;
+  const user = getAuthUser();
 
   const initialCompleted = useMemo(() => {
     const map: Record<string, boolean> = {};
@@ -39,26 +55,65 @@ export const RoadmapDetail = () => {
     }
   });
 
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [progressTick, setProgressTick] = useState(0);
+  const [certOpen, setCertOpen] = useState(false);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     localStorage.setItem(storageKey(role), JSON.stringify(completed));
   }, [role, completed]);
 
+  useEffect(() => {
+    // Sync progress-store completions into local completed map
+    const next = { ...completed };
+    let changed = false;
+    data.topics.forEach((t) => {
+      const p = getTopicProgress(courseKey, t.id);
+      if (p.completed && !next[t.id]) {
+        next[t.id] = true;
+        changed = true;
+      }
+    });
+    if (changed) setCompleted(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, progressTick, courseKey]);
+
   const doneCount = data.topics.filter((t) => completed[t.id]).length;
   const progress = Math.round((doneCount / Math.max(data.topics.length, 1)) * 100);
   const allDone = doneCount === data.topics.length && data.topics.length > 0;
 
+  /** Minimum time to complete = sum of unique YouTube video lengths */
+  const minWatchLabel = useMemo(() => {
+    const sec = minWatchSecondsFromTopics(
+      data.topics.map((t) => ({
+        youtubeUrl: t.youtubeUrl,
+        duration: t.duration,
+      })),
+    );
+    if (sec > 0) return formatWatchDuration(sec);
+    return data.totalHours || '—';
+  }, [data.topics, data.totalHours, progressTick]);
+
   const toggleTopic = (id: string) => {
-    setCompleted((prev) => ({ ...prev, [id]: !prev[id] }));
+    setCompleted((prev) => {
+      const next = !prev[id];
+      setTopicCompleted(courseKey, id, next);
+      return { ...prev, [id]: next };
+    });
+    setProgressTick((n) => n + 1);
   };
 
-  const markAllComplete = () => {
-    const next: Record<string, boolean> = {};
-    data.topics.forEach((t) => {
-      next[t.id] = true;
-    });
-    setCompleted(next);
-  };
+  const onVideoProgress = useCallback(
+    (topicId: string, ratio: number) => {
+      const { justCompleted } = recordWatchProgress(courseKey, topicId, ratio);
+      if (justCompleted) {
+        setCompleted((prev) => ({ ...prev, [topicId]: true }));
+      }
+      setProgressTick((n) => n + 1);
+    },
+    [courseKey],
+  );
 
   const listVariants = {
     hidden: { opacity: 0 },
@@ -80,12 +135,18 @@ export const RoadmapDetail = () => {
     },
   };
 
+  const skillsFromTitle = data.title
+    .replace(/Path|Developer|Complete|Full Stack/gi, '')
+    .split(/[&,]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+
   return (
     <div className="relative flex-1 overflow-x-hidden pb-16">
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-violet-400/15 blur-3xl dark:bg-violet-600/20" />
         <div className="absolute -right-16 top-40 h-80 w-80 rounded-full bg-indigo-400/10 blur-3xl dark:bg-indigo-500/15" />
-        <div className="absolute bottom-20 left-1/3 h-64 w-64 rounded-full bg-fuchsia-400/10 blur-3xl dark:bg-fuchsia-600/10" />
         {!reduceMotion && (
           <div className="roadmap-aurora absolute inset-x-0 top-0 h-48 opacity-40 dark:opacity-30" />
         )}
@@ -111,12 +172,31 @@ export const RoadmapDetail = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
             >
-              <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-                {data.title}
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-                {data.description}
-              </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+                    {data.title}
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+                    {data.description}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!allDone}
+                  onClick={() => setCertOpen(true)}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white ${
+                    allDone
+                      ? 'bg-emerald-600 hover:bg-emerald-500'
+                      : 'cursor-not-allowed bg-slate-400 opacity-70'
+                  }`}
+                  title={allDone ? 'Download certificate' : 'Complete all topics to unlock'}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download certificate
+                </button>
+              </div>
+
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                   <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
@@ -125,8 +205,11 @@ export const RoadmapDetail = () => {
                 <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                   ★ {data.level}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  ⏱ {data.totalHours}
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                  title="Sum of unique lesson video lengths — minimum time to finish"
+                >
+                  ⏱ Min watch {minWatchLabel}
                 </span>
               </div>
 
@@ -143,6 +226,9 @@ export const RoadmapDetail = () => {
                     transition={{ type: 'spring', stiffness: 120, damping: 20 }}
                   />
                 </div>
+                <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                  Open a lesson and watch ~55%+ on EduRoute to auto-tick. Speed controls stay available.
+                </p>
               </div>
             </motion.header>
 
@@ -158,23 +244,15 @@ export const RoadmapDetail = () => {
                   topic={topic}
                   index={index}
                   done={!!completed[topic.id]}
+                  playing={playingId === topic.id}
+                  watchPct={Math.round(getTopicProgress(courseKey, topic.id).watchedRatio * 100)}
                   onToggle={() => toggleTopic(topic.id)}
+                  onPlay={() => setPlayingId(playingId === topic.id ? null : topic.id)}
+                  onVideoProgress={(r) => onVideoProgress(topic.id, r)}
                   variants={rowVariants}
                 />
               ))}
             </motion.ul>
-
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={markAllComplete}
-                disabled={allDone}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-violet-300 hover:text-violet-700 disabled:cursor-default disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-violet-500 dark:hover:text-violet-300"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                {allDone ? 'Roadmap complete' : 'Mark roadmap complete'}
-              </button>
-            </div>
           </div>
 
           <aside className="lg:sticky lg:top-24 lg:self-start">
@@ -189,7 +267,7 @@ export const RoadmapDetail = () => {
                 <h2 className="text-base font-black text-slate-900 dark:text-white">Resources</h2>
               </div>
               <p className="mb-4 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                Handy links and materials for this roadmap.
+                Watch lessons in-page for progress tracking.
               </p>
 
               <div className="space-y-3">
@@ -204,36 +282,10 @@ export const RoadmapDetail = () => {
                       <Play className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-slate-900 dark:text-white">
-                        Full playlist
-                      </span>
-                      <span className="block text-[11px] text-slate-500 dark:text-slate-400">
-                        YouTube playlist
-                      </span>
+                      <span className="block text-sm font-bold text-slate-900 dark:text-white">Full playlist</span>
+                      <span className="block text-[11px] text-slate-500 dark:text-slate-400">YouTube playlist</span>
                     </span>
                     <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400 group-hover:text-violet-500" />
-                  </a>
-                )}
-
-                {data.notesZipUrl && (
-                  <a
-                    href={data.notesZipUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3 transition hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:border-blue-500/40 dark:hover:bg-blue-950/30"
-                  >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
-                      ZIP
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-slate-900 dark:text-white">
-                        All notes / docs
-                      </span>
-                      <span className="block text-[11px] text-slate-500 dark:text-slate-400">
-                        Official documentation
-                      </span>
-                    </span>
-                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400 group-hover:text-blue-500" />
                   </a>
                 )}
 
@@ -245,12 +297,8 @@ export const RoadmapDetail = () => {
                     <Sparkles className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-slate-900 dark:text-white">
-                      Ask Buddy AI
-                    </span>
-                    <span className="block text-[11px] text-slate-500 dark:text-slate-400">
-                      Get help from your AI companion
-                    </span>
+                    <span className="block text-sm font-bold text-slate-900 dark:text-white">Ask Buddy AI</span>
+                    <span className="block text-[11px] text-slate-500 dark:text-slate-400">Get help from your AI companion</span>
                   </span>
                 </Link>
               </div>
@@ -258,6 +306,23 @@ export const RoadmapDetail = () => {
           </aside>
         </div>
       </div>
+
+      <CourseCertificate
+        open={certOpen}
+        onClose={() => setCertOpen(false)}
+        data={{
+          studentName: user?.name || 'Student',
+          courseName: data.title,
+          skills: skillsFromTitle.length ? skillsFromTitle : [data.level],
+          level: data.level.includes('Beginner')
+            ? 'Beginner'
+            : data.level.includes('Intermediate')
+              ? 'Intermediate'
+              : 'Advanced',
+          durationLabel: `Min watch ${minWatchLabel}`,
+          completionDate: formatCertDate(),
+        }}
+      />
     </div>
   );
 };
@@ -266,70 +331,91 @@ function TopicRow({
   topic,
   index,
   done,
+  playing,
+  watchPct,
   onToggle,
+  onPlay,
+  onVideoProgress,
   variants,
 }: {
   topic: RoadmapTopic;
   index: number;
   done: boolean;
+  playing: boolean;
+  watchPct: number;
   onToggle: () => void;
-  variants: {
-    hidden: object;
-    show: object;
-  };
+  onPlay: () => void;
+  onVideoProgress: (ratio: number) => void;
+  variants: { hidden: object; show: object };
 }) {
   return (
     <motion.li
       variants={variants}
-      className="group flex flex-col gap-3 rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-sm transition hover:border-violet-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-violet-500/40 sm:flex-row sm:items-center sm:gap-4 sm:px-4 sm:py-3"
+      className={`group flex flex-col gap-3 rounded-2xl border p-3 shadow-sm transition sm:px-4 sm:py-3 ${
+        done
+          ? 'border-emerald-300/80 bg-emerald-50/80 dark:border-emerald-500/30 dark:bg-emerald-950/20'
+          : 'border-slate-200/90 bg-white/95 hover:border-violet-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-violet-500/40'
+      }`}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-        aria-label={done ? `Mark ${topic.title} incomplete` : `Mark ${topic.title} complete`}
-      >
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black transition ${
-            done
-              ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-              : 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
-          }`}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          aria-label={done ? `Mark ${topic.title} incomplete` : `Mark ${topic.title} complete`}
         >
-          {done ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
-        </span>
-        <span className="min-w-0">
           <span
-            className={`block truncate text-sm font-bold sm:text-[15px] ${
-              done ? 'text-slate-500 line-through dark:text-slate-400' : 'text-slate-900 dark:text-white'
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black transition ${
+              done
+                ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                : 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
             }`}
           >
-            {topic.title}
+            {done ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
           </span>
-          <span className="block text-xs text-slate-500 dark:text-slate-400">{topic.duration}</span>
-        </span>
-      </button>
+          <span className="min-w-0">
+            <span
+              className={`block truncate text-sm font-bold sm:text-[15px] ${
+                done ? 'text-slate-500 line-through dark:text-slate-400' : 'text-slate-900 dark:text-white'
+              }`}
+            >
+              {topic.title}
+            </span>
+            <span className="block text-xs text-slate-500 dark:text-slate-400">
+              {topic.duration}
+              {watchPct > 0 ? ` · watched ${watchPct}%` : ''}
+            </span>
+          </span>
+        </button>
 
-      <div className="flex shrink-0 items-center gap-2 pl-12 sm:pl-0">
-        <a
-          href={topic.youtubeUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50 dark:border-red-500/30 dark:bg-slate-950 dark:text-red-400 dark:hover:bg-red-950/40"
-        >
-          <Youtube className="h-3.5 w-3.5" />
-          YouTube
-        </a>
-        <a
-          href={topic.documentUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-50 dark:border-blue-500/30 dark:bg-slate-950 dark:text-blue-400 dark:hover:bg-blue-950/40"
-        >
-          <FileText className="h-3.5 w-3.5" />
-          Document
-        </a>
+        <div className="flex shrink-0 items-center gap-2 pl-12 sm:pl-0">
+          <button
+            type="button"
+            onClick={onPlay}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50 dark:border-red-500/30 dark:bg-slate-950 dark:text-red-400 dark:hover:bg-red-950/40"
+          >
+            <Youtube className="h-3.5 w-3.5" />
+            {playing ? 'Hide' : 'Watch'}
+          </button>
+          <a
+            href={topic.documentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-50 dark:border-blue-500/30 dark:bg-slate-950 dark:text-blue-400 dark:hover:bg-blue-950/40"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Document
+          </a>
+        </div>
       </div>
+
+      {playing && topic.youtubeUrl && (
+        <YouTubeCoursePlayer
+          youtubeUrl={topic.youtubeUrl}
+          title={topic.title}
+          onProgress={onVideoProgress}
+        />
+      )}
     </motion.li>
   );
 }

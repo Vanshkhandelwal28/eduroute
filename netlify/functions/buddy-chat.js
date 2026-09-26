@@ -1,4 +1,5 @@
 const { generateBuddyReply } = require('./_lib/aiClient');
+const { buddyEnvSummary } = require('./_lib/envCheck');
 
 function json(statusCode, body) {
   return {
@@ -54,6 +55,9 @@ exports.handler = async (event) => {
       console.warn('Buddy DB unavailable, answering without persistence:', dbErr.message);
     }
 
+    const envSnap = buddyEnvSummary();
+    console.log('[buddy-chat] env', JSON.stringify(envSnap));
+
     const { reply: aiReply, usedWebSearch = false, sources = [] } = await generateBuddyReply({
       messages: recentMessages,
       language,
@@ -78,6 +82,9 @@ exports.handler = async (event) => {
       }
     }
 
+    const limited =
+      typeof aiReply === 'string' && /limited mode|No AI key found/i.test(aiReply);
+
     return json(200, {
       ok: true,
       reply: aiReply,
@@ -88,9 +95,14 @@ exports.handler = async (event) => {
         level: newLevel,
         pointsEarned,
       },
+      ...(limited ? { env: envSnap } : {}),
     });
   } catch (error) {
     console.error('buddy-chat error', error);
-    return json(500, { ok: false, error: error.message || 'Failed to process Buddy chat.' });
+    return json(500, {
+      ok: false,
+      error: error.message || 'Failed to process Buddy chat.',
+      env: buddyEnvSummary(),
+    });
   }
 };

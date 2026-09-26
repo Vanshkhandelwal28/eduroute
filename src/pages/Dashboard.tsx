@@ -5,23 +5,19 @@ import {
   Flame,
   Star,
   Trophy,
-  Play,
-  Clock,
-  BarChart2,
   ArrowRight,
   ShieldCheck,
   Sparkles,
   Target,
   Briefcase,
   FileText,
+  TrendingUp,
 } from 'lucide-react';
 import { COURSES } from '../data/mockData';
-import { Course } from '../types';
 import { getCurrentUser, getDisplayFirstName } from '../utils/userProfile';
 import { getNextStepPlan, readOnboarding } from '../utils/onboardingStore';
 import {
   readApplications,
-  statusBadgeClass,
   type InternshipApplication,
 } from '../utils/internshipApplications';
 
@@ -157,6 +153,48 @@ export const Dashboard = () => {
         ))}
       </section>
 
+      <Link to="/ai-course-designer" className="group relative mb-2 block overflow-hidden rounded-[var(--radius-xl)] border border-fuchsia-200/70 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-indigo-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-fuchsia-500/25 dark:from-fuchsia-950/40 dark:via-violet-950/30 dark:to-indigo-950/30 sm:p-6">
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-md"><Sparkles className="h-6 w-6" /></div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-fuchsia-600 dark:text-fuchsia-400">New · AI-powered</p>
+              <h2 className="text-base font-bold text-[var(--text-primary)] sm:text-lg">Design your own mixed course</h2>
+              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">Pick duration + interests (DSA, React, Data Analytics…). AI builds a roadmap with real YouTube + docs you can edit.</p>
+            </div>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-fuchsia-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-md">Start designing <ArrowRight className="h-4 w-4" /></span>
+        </div>
+      </Link>
+
+      <Link
+        to="/trend-analyse"
+        className="group relative mb-2 block overflow-hidden rounded-[var(--radius-xl)] border border-cyan-200/70 bg-gradient-to-br from-cyan-50 via-sky-50 to-indigo-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-cyan-500/25 dark:from-cyan-950/40 dark:via-sky-950/30 dark:to-indigo-950/30 sm:p-6"
+      >
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-indigo-600 text-white shadow-md">
+              <TrendingUp className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-600 dark:text-cyan-400">
+                Gemini · Market vs you
+              </p>
+              <h2 className="text-base font-bold text-[var(--text-primary)] sm:text-lg">
+                Trend Analyse — skill gaps vs market demand
+              </h2>
+              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
+                Compare real market trends with your skill profile. See demand vs current skills, gaps, and
+                charts (refresh every 7 days).
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-md">
+            Open analysis <ArrowRight className="h-4 w-4" />
+          </span>
+        </div>
+      </Link>
+
       <section>
         {nextPlan.kind === 'quiz' ? (
           <Link
@@ -197,25 +235,6 @@ export const Dashboard = () => {
                     <span className="font-semibold text-[var(--text-primary)]">{nextPlan.primary.skill}</span>
                     {' → '}{nextPlan.primary.courseTitle}
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {nextPlan.skills.slice(0, 6).map((skill) => (
-                      <span
-                        key={skill}
-                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                          skill === nextPlan.primary.skill
-                            ? 'bg-amber-500 text-white'
-                            : 'bg-white/80 text-amber-900 dark:bg-slate-900/60 dark:text-amber-200'
-                        }`}
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                    {nextPlan.skills.length > 6 && (
-                      <span className="rounded-full bg-white/60 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-slate-900/40 dark:text-amber-300">
-                        +{nextPlan.skills.length - 6} more
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
               <div className="flex shrink-0 flex-col gap-2 sm:items-end">
@@ -226,33 +245,11 @@ export const Dashboard = () => {
                   Start: {nextPlan.primary.courseTitle}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link
-                  to="/skill-profile"
-                  className="text-center text-xs font-semibold text-amber-800 hover:underline dark:text-amber-300"
-                >
+                <Link to="/skill-profile" className="text-center text-xs font-semibold text-amber-800 hover:underline dark:text-amber-300">
                   View full gap analysis
                 </Link>
               </div>
             </div>
-            {nextPlan.alternatives.length > 0 && (
-              <div className="mt-4 border-t border-amber-200/60 pt-3 dark:border-amber-500/20">
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-amber-700/80 dark:text-amber-400/80">
-                  Also recommended
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {nextPlan.alternatives.map((alt) => (
-                    <Link
-                      key={alt.to + alt.skill}
-                      to={alt.to}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-white/70 px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:border-amber-400 hover:bg-white dark:border-amber-500/30 dark:bg-slate-900/50 dark:text-amber-100 dark:hover:border-amber-400"
-                    >
-                      {alt.courseTitle}
-                      <ArrowRight className="h-3 w-3 opacity-60" />
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <Link
@@ -313,7 +310,12 @@ export const Dashboard = () => {
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {enrolledCourses.length > 0 ? (
-            enrolledCourses.map((course) => <ContinueCard key={course.id} course={course} progress={40} />)
+            enrolledCourses.map((course) => (
+              <div key={course.id} className="er-card p-4">
+                <h3 className="font-bold text-[var(--text-primary)]">{course.title}</h3>
+                <p className="text-sm text-[var(--text-secondary)]">{course.category}</p>
+              </div>
+            ))
           ) : (
             <div className="er-card col-span-full p-8 text-center text-[var(--text-secondary)]">
               No enrolled courses yet.{' '}
@@ -333,16 +335,18 @@ export const Dashboard = () => {
           </Link>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <DsaSheetCard />
-          {recommendedCourses.slice(0, 3).map((course, i) => (
-            <RecommendCard key={course.id} course={course} badgeIndex={i + 1} />
+          {recommendedCourses.slice(0, 4).map((course) => (
+            <Link key={course.id} to={`/courses/${course.id}`} className="er-card er-card-hover p-4">
+              <h3 className="font-bold text-[var(--text-primary)]">{course.title}</h3>
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">{course.category}</p>
+            </Link>
           ))}
         </div>
       </section>
 
       <Link
         to="/cv-builder"
-        className="mb-8 mt-6 flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 via-violet-50 to-white p-5 transition hover:border-indigo-300 hover:shadow-md dark:border-indigo-700/60 dark:from-indigo-950 dark:via-slate-900 dark:to-slate-900 dark:hover:border-indigo-500/50 sm:flex-row sm:items-center sm:justify-between"
+        className="mb-8 mt-6 flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 via-violet-50 to-white p-5 transition hover:border-indigo-300 hover:shadow-md dark:border-indigo-700/60 dark:from-indigo-950 dark:via-slate-900 dark:to-slate-900 sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex items-start gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25">
@@ -355,129 +359,12 @@ export const Dashboard = () => {
             </p>
           </div>
         </div>
-        <span className="inline-flex items-center gap-1 self-start rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/20 sm:self-center">
+        <span className="inline-flex items-center gap-1 self-start rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md sm:self-center">
           Open builder <ArrowRight className="h-3.5 w-3.5" />
         </span>
       </Link>
-
-      {applications.length > 0 && (
-        <section>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
-              <Briefcase className="h-5 w-5 text-[var(--accent)]" /> My Applications
-            </h2>
-            <Link to="/internships" className="text-sm font-semibold text-[var(--accent)] hover:underline inline-flex items-center gap-1">
-              View internships <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-          <div className="er-card divide-y divide-[var(--border-default)] overflow-hidden p-0">
-            {applications.slice(0, 5).map((app) => (
-              <div key={app.internshipId} className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <div className="truncate font-semibold text-[var(--text-primary)]">{app.role}</div>
-                  <div className="text-xs text-[var(--text-secondary)]">{app.company} · {app.stipend}</div>
-                </div>
-                <span className={`shrink-0 self-start rounded-full px-3 py-1 text-[11px] font-bold sm:self-center ${statusBadgeClass(app.status)}`}>
-                  {app.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 };
 
-function ContinueCard({ course, progress }: { course: Course; progress: number }) {
-  return (
-    <Link to={`/course/${course.id}`} className="er-card er-card-hover group flex gap-4 overflow-hidden p-4 transition-all">
-      <div className="relative h-24 w-28 shrink-0 overflow-hidden rounded-[var(--radius-md)] bg-[var(--bg-secondary)]">
-        <img src={course.thumbnail} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-        <span className="absolute left-2 top-2 rounded-md bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">In Progress</span>
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-violet-600 opacity-0 shadow transition group-hover:opacity-100">
-            <Play className="h-4 w-4 fill-current" />
-          </div>
-        </div>
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">{course.category} · {progress}% DONE</div>
-        <h3 className="mt-1 line-clamp-1 text-base font-semibold text-[var(--text-primary)]">{course.title}</h3>
-        <p className="mt-1 line-clamp-2 text-xs text-[var(--text-secondary)]">{course.description}</p>
-        <div className="mt-auto pt-3">
-          <div className="er-progress">
-            <div className="er-progress-bar" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="mt-1 text-right text-[10px] font-medium text-[var(--text-muted)]">{progress}%</div>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function DsaSheetCard() {
-  return (
-    <Link to="/dsa-sheet" className="er-card er-card-hover group flex flex-col overflow-hidden transition-all">
-      <div className="relative aspect-[16/10] overflow-hidden bg-[var(--bg-secondary)]">
-        <img
-          src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80"
-          alt="DSA practice"
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
-        <span className="er-badge absolute left-3 top-3 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">FREE</span>
-      </div>
-      <div className="flex flex-1 flex-col p-4">
-        <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-          <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> 4 HOURS</span>
-          <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
-            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> 4.9
-          </span>
-        </div>
-        <h3 className="mt-2 line-clamp-1 text-sm font-semibold text-[var(--text-primary)]">DSA Beginner Sheet</h3>
-        <p className="mt-1 line-clamp-2 text-xs text-[var(--text-secondary)]">
-          Start your DSA journey with structured problems and guided practice.
-        </p>
-        <div className="mt-auto pt-4">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm transition group-hover:bg-emerald-600">
-            Open Sheet <ArrowRight className="h-3.5 w-3.5" />
-          </span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-const BADGES = [
-  { label: 'FREE', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' },
-  { label: 'BEGINNER', className: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' },
-  { label: 'INTERMEDIATE', className: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300' },
-  { label: 'POPULAR', className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' },
-];
-
-function RecommendCard({ course, badgeIndex }: { course: Course; badgeIndex: number }) {
-  const badge = BADGES[badgeIndex % BADGES.length];
-  const weeks = course.duration?.includes('hour')
-    ? `${Math.max(4, Math.round(parseInt(course.duration) / 10) || 6)} weeks`
-    : course.duration || '6 weeks';
-
-  return (
-    <Link to={course.link || `/course/${course.id}`} className="er-card er-card-hover group flex flex-col overflow-hidden transition-all">
-      <div className="relative aspect-[16/10] overflow-hidden bg-[var(--bg-secondary)]">
-        <img src={course.thumbnail} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-        <span className={`er-badge absolute left-3 top-3 ${badge.className}`}>{badge.label}</span>
-      </div>
-      <div className="flex flex-1 flex-col p-4">
-        <h3 className="line-clamp-1 text-sm font-semibold text-[var(--text-primary)]">{course.title}</h3>
-        <p className="mt-1 line-clamp-2 text-xs text-[var(--text-secondary)]">{course.description}</p>
-        <div className="mt-auto flex items-center justify-between pt-4 text-[11px] text-[var(--text-muted)]">
-          <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {weeks}</span>
-          <span className="inline-flex items-center gap-1"><BarChart2 className="h-3.5 w-3.5" /> {course.level}</span>
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent)] transition group-hover:bg-[var(--accent)] group-hover:text-white">
-            <ArrowRight className="h-3.5 w-3.5" />
-          </span>
-        </div>
-      </div>
-    </Link>
-  );
-}
+export default Dashboard;

@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Code2,
   Terminal,
@@ -12,6 +12,9 @@ import {
   ChevronRight,
   Target,
   Search,
+  Sparkles,
+  ArrowRight,
+  Wand2,
 } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
@@ -347,6 +350,43 @@ export const RoadmapList = () => {
               className="w-full rounded-[28px] border border-slate-100 bg-white/90 py-5 pl-16 pr-6 text-lg font-medium text-slate-900 shadow-xl shadow-slate-200/50 outline-none backdrop-blur-sm transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-900/90 dark:text-white dark:shadow-black/40"
             />
           </motion.div>
+
+          <motion.div
+            className="relative mb-8 max-w-2xl"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.14 }}
+          >
+            <Link
+              to="/ai-course-designer"
+              className="group relative flex flex-col gap-3 overflow-hidden rounded-[28px] border border-indigo-200/80 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 p-5 text-white shadow-xl shadow-indigo-500/25 transition hover:shadow-2xl hover:shadow-violet-500/30 sm:flex-row sm:items-center sm:justify-between sm:p-6"
+            >
+              <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/15 blur-2xl" />
+              <div className="pointer-events-none absolute -bottom-8 left-1/4 h-24 w-24 rounded-full bg-fuchsia-300/20 blur-2xl" />
+              <div className="relative flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm ring-1 ring-white/30">
+                  <Wand2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/80">
+                    AI Course Designer
+                  </p>
+                  <h2 className="text-lg font-black leading-tight sm:text-xl">
+                    Build a custom mixed path in minutes
+                  </h2>
+                  <p className="mt-1 max-w-md text-sm font-medium text-white/85">
+                    Choose 3 / 15 / 30 / 90 days + interests — get a roadmap with real YouTube + docs, hours per topic, editable anytime.
+                  </p>
+                </div>
+              </div>
+              <span className="relative inline-flex shrink-0 items-center gap-2 self-start rounded-full bg-white px-4 py-2.5 text-sm font-black text-indigo-700 transition group-hover:scale-[1.03] sm:self-center">
+                <Sparkles className="h-4 w-4 text-fuchsia-500" />
+                Open designer
+                <ArrowRight className="h-4 w-4" />
+              </span>
+            </Link>
+          </motion.div>
+
         </div>
       </section>
 

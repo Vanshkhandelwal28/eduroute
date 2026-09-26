@@ -8,16 +8,16 @@
 | | |
 |---|---|
 | **Hackathon** | Smart India Hackathon 2026 |
-| **Problem Statement** | **SIH26044** — Portal for Academia–Industry collaboration for Skill Mapping, Internships and Placement |
+| **Problem Statement** | **SIH26144** — Portal for Academia–Industry collaboration for Skill Mapping, Internships and Placement |
 | **Category** | Software |
 | **Theme** | Smart Education / Automation |
 | **Live demo** | **https://eduroutee.netlify.app/** |
 
 [![SIH 2026](https://img.shields.io/badge/SIH-2026-violet)](https://www.sih.gov.in/)
-[![PS SIH26044](https://img.shields.io/badge/PS-SIH26044-indigo)](https://sih.gov.in/sih2026PS)
+[![PS SIH26144](https://img.shields.io/badge/PS-SIH26144-indigo)](https://sih.gov.in/sih2026PS)
 [![Live](https://img.shields.io/badge/Demo-Live%20on%20Netlify-00C7B7)](https://eduroutee.netlify.app/)
 
-> **For jury / shortlisters:** Open the live demo → walk the 3 roles below → match each screen to SIH26044 in Section 5.
+> **For jury / shortlisters:** Open the live demo → walk the 3 roles below → match each screen to SIH26144 in Section 5.
 
 ---
 
@@ -135,9 +135,9 @@ flowchart LR
 
 ---
 
-## Slide 5 — Mapping to SIH26044 (jury checklist)
+## Slide 5 — Mapping to SIH26144 (jury checklist)
 
-| SIH26044 requirement | EDUROUTE delivers |
+| SIH26144 requirement | EDUROUTE delivers |
 |----------------------|-------------------|
 | Skill assessment | Onboarding tracks + gap questions |
 | Skill mapping | Skill Profile (Good / Improve / Gap) + recommendations |

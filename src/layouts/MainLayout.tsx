@@ -21,6 +21,7 @@ import {
   FolderOpen,
   FileText,
   Bell,
+  BarChart3,
   type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -50,6 +51,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: 'CV Builder', path: '/cv-builder', icon: FileText },
       { name: 'Portfolio', path: '/portfolio', icon: FolderOpen },
       { name: 'Events', path: '/events', icon: TrendingUp },
+      { name: 'Demand Intel', path: '/demand-intelligence', icon: BarChart3 },
     ],
   },
   {

@@ -19,16 +19,7 @@ export const AdminLogin = () => {
     event.preventDefault();
     setError('');
     setIsSubmitting(true);
-
-    const isValidPassword = await validateAdminPassword(password);
-
-    if (!isValidPassword) {
-      setAdminSession(false);
-      setError('Access Denied');
-      setIsSubmitting(false);
-      return;
-    }
-
+    // Open demo: unlock admin without password until Railway auth is connected
     setAdminSession(true);
     setIsSubmitting(false);
     navigate('/admin/pending-approvals', { replace: true });
@@ -42,7 +33,7 @@ export const AdminLogin = () => {
         </div>
         <h1 className="text-3xl font-black text-center">Admin Access</h1>
         <p className="text-slate-400 text-sm text-center mt-2 mb-8">
-          Enter password to open the Admin Panel (Pending Approvals).
+          Open demo — click unlock (password optional until Railway is connected).
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -52,7 +43,6 @@ export const AdminLogin = () => {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Admin password"
             className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            required
             autoComplete="current-password"
           />
 
@@ -65,7 +55,7 @@ export const AdminLogin = () => {
             disabled={isSubmitting}
             className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-colors px-4 py-3 font-semibold disabled:opacity-60"
           >
-            {isSubmitting ? 'Checking...' : 'Unlock Admin Panel'}
+            {isSubmitting ? 'Opening…' : 'Unlock Admin Panel (demo)'}
           </button>
         </form>
 
