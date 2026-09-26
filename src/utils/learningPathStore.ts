@@ -21,11 +21,9 @@ export type PathNode = {
   hours: number;
   skills: string[];
   resources: { label: string; kind: string; mins: number }[];
-  /** Where "Continue learning" should go */
   href?: string;
 };
 
-/** Build designer URL so Continue learning pre-fills + can auto-generate */
 export function designerHref(opts: {
   interest: string;
   title: string;
@@ -51,6 +49,7 @@ const TRACK_LABEL: Record<InterestTrack, string> = {
   software: 'Software Engineering',
   cybersecurity: 'Cybersecurity',
   data_analyst: 'Data Analytics',
+  custom: 'Custom Role',
 };
 
 const TEMPLATES: Record<InterestTrack, Omit<PathNode, 'status'>[]> = {
@@ -267,6 +266,50 @@ const TEMPLATES: Record<InterestTrack, Omit<PathNode, 'status'>[]> = {
       href: '/ai-course-designer?interest=Data%20Analytics&title=Data%20Portfolio%20Project',
     },
   ],
+  custom: [
+    {
+      id: 'role-core',
+      title: 'Role Core Skills',
+      short: 'Core',
+      hours: 12,
+      skills: ['Fundamentals'],
+      resources: [
+        { label: 'Core skills for your role', kind: 'Video', mins: 40 },
+        { label: 'Practice set', kind: 'Exercise', mins: 60 },
+      ],
+      href: '/ai-course-designer?interest=Custom&title=Role%20Core%20Skills',
+    },
+    {
+      id: 'system',
+      title: 'System Design',
+      short: 'SysDesign',
+      hours: 12,
+      skills: ['System Design'],
+      resources: [
+        { label: 'System design intro', kind: 'Video', mins: 40 },
+        { label: 'Case study', kind: 'Exercise', mins: 60 },
+      ],
+      href: '/ai-course-designer?interest=System%20Design&title=System%20Design',
+    },
+    {
+      id: 'interviews',
+      title: 'Interview Prep',
+      short: 'Interviews',
+      hours: 12,
+      skills: ['Interviews', 'DSA'],
+      resources: [{ label: 'Interview patterns', kind: 'Practice', mins: 90 }],
+      href: '/dsa-sheet',
+    },
+    {
+      id: 'portfolio',
+      title: 'Portfolio Project',
+      short: 'Portfolio',
+      hours: 16,
+      skills: ['Projects'],
+      resources: [{ label: 'Ship a portfolio project', kind: 'Project', mins: 180 }],
+      href: '/ai-course-designer?interest=Portfolio&title=Portfolio%20Project',
+    },
+  ],
 };
 
 function primaryTrack(profile: OnboardingProfile): InterestTrack {
@@ -419,26 +462,32 @@ export async function resolveLearningPath(opts?: {
   const gaps = profile.missingSkills?.length
     ? profile.missingSkills.join(', ')
     : 'not specified';
+  const haveSkills = [...(profile.customSkills || []), ...(profile.cvSkills || [])]
+    .filter(Boolean)
+    .slice(0, 30)
+    .join(', ');
+  const targetLabel = profile.customRole?.trim() || trackLabel;
 
   const prompt =
-    `Design a practical 5-7 step learning path for a student targeting: ${trackLabel}.\n` +
+    `Design a practical 5-7 step learning path for a student targeting: ${targetLabel}.\n` +
+    `Skills the student already has (skip beginner modules for these): ${haveSkills || 'not specified'}.\n` +
     `Skill gaps to prioritise: ${gaps}.\n` +
     `Return ONLY JSON: {"nodes":[{"id":"slug","title":"Module name","short":"Short","hours":8,"skills":["a","b"],"resources":[{"label":"...","kind":"Video|Reading|Exercise|Quiz","mins":30}]]}\n` +
-    `Rules: steps must match the career (no unrelated domains). Order beginner → job-ready. No markdown.`;
+    `Rules: steps must match the career. Prefer company requirements for the target role. Order beginner → job-ready. No markdown.`;
 
   const ai = await callBuddy(prompt);
   if (ai) {
     const parsed = tryParseNodes(ai);
     if (parsed?.length) {
       const nodes = applyProgress(parsed, readCompletedIds(profile));
-      writeStoredPath(nodes, { track: trackLabel, source: 'ai' });
-      return { nodes, source: 'ai', track: trackLabel };
+      writeStoredPath(nodes, { track: targetLabel, source: 'ai' });
+      return { nodes, source: 'ai', track: targetLabel };
     }
   }
 
   const nodes = templatePath(profile);
-  writeStoredPath(nodes, { track: trackLabel, source: 'template' });
-  return { nodes, source: 'template', track: trackLabel };
+  writeStoredPath(nodes, { track: targetLabel, source: 'template' });
+  return { nodes, source: 'template', track: targetLabel };
 }
 
 export function continueHrefForNode(node: PathNode): string {
@@ -469,5 +518,6 @@ export function continueHrefForNode(node: PathNode): string {
 
 export function careerLabelForUser(): string {
   const profile = readOnboarding();
+  if (profile.customRole?.trim()) return profile.customRole.trim();
   return TRACK_LABEL[primaryTrack(profile)];
 }
