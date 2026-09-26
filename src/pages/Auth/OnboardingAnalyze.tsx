@@ -23,6 +23,7 @@ import {
 import {
   extractSkillsFromText,
   extractSkillsWithAI,
+  extractReadableTextFromBinary,
   saveCustomCareer,
   applySkillProgressToNodes,
 } from '../../utils/customCareer';
@@ -126,12 +127,15 @@ export const OnboardingAnalyze = () => {
       } else {
         const buf = await file.arrayBuffer();
         const raw = new TextDecoder('utf-8', { fatal: false }).decode(buf);
-        text = raw
-          .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u024F]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+        text = extractReadableTextFromBinary(raw);
+        if (text.length < 40) {
+          text = raw
+            .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u024F]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        }
       }
-      setCvPreview(text.slice(0, 8000));
+      setCvPreview(text.slice(0, 10000));
       const quick = extractSkillsFromText(text);
       if (quick.length) setCvSkills(quick);
       setCvReady(true);
@@ -161,7 +165,7 @@ export const OnboardingAnalyze = () => {
         setTimeout(() => setPathStatus(''), 2500);
       } else {
         setCustomError(
-          'AI found few skills. Paste your skills above (e.g. backend, jwt, golang) or use a .txt CV.',
+          'AI found few skills. Paste your skills above (e.g. jwt, c++, dsa, html) or use a .txt CV.',
         );
         setPathStatus('');
       }
@@ -423,7 +427,7 @@ export const OnboardingAnalyze = () => {
             <motion.div key="skills" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               <textarea
                 className="min-h-[100px] w-full rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
-                placeholder="e.g. backend, jwt, golang, restapi, docker, postgresql"
+                placeholder="e.g. jwt, c++, dsa, oops, html, css, js, backend"
                 value={skillText}
                 onChange={(e) => setSkillText(e.target.value)}
               />
@@ -458,7 +462,7 @@ export const OnboardingAnalyze = () => {
                 )}
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[10px] text-[var(--text-muted)] max-w-[60%]">
-                    AI reads full CV text and replies with only skills you already have
+                    Extracts every skill (jwt, html, js, dsa…) — even short ones
                   </p>
                   <button
                     type="button"
