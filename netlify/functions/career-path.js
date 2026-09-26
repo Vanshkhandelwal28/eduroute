@@ -1,9 +1,6 @@
 /**
- * Custom career path: Gemini first, Groq fallback.
- * POST { role, skills?, cvSkills?, cvText?, userId? }
+ * Custom career path: Gemini first, then Groq fallback. Self-contained AI calls.
  */
-const { callGemini, callGroq } = require('./_lib/aiClient');
-
 function json(statusCode, body) {
   return {
     statusCode,
@@ -25,6 +22,78 @@ function env(name) {
   }
 }
 
+async function callGemini({ apiKey, model, messages, temperature }) {
+  const m = model || 'gemini-1.5-flash';
+  const url =
+    'https://generativelanguage.googleapis.com/v1beta/models/' +
+    m +
+    ':generateContent?key=' +
+    encodeURIComponent(apiKey);
+  const contents = (messages || []).map(function (msg) {
+    return {
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: String(msg.content || '') }],
+    };
+  });
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: contents,
+      generationConfig: { temperature: temperature == null ? 0.4 : temperature },
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error((data && data.error && data.error.message) || 'Gemini request failed');
+  }
+  const text =
+    data &&
+    data.candidates &&
+    data.candidates[0] &&
+    data.candidates[0].content &&
+    data.candidates[0].content.parts &&
+    data.candidates[0].content.parts
+      .map(function (p) {
+        return p.text || '';
+      })
+      .join('');
+  if (!text) throw new Error('Empty Gemini response');
+  return text;
+}
+
+async function callGroq({ apiKey, model, messages, temperature }) {
+  const models = [model, 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile'].filter(Boolean);
+  var lastErr = 'Groq failed';
+  for (var i = 0; i < models.length; i++) {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + apiKey,
+        },
+        body: JSON.stringify({
+          model: models[i],
+          messages: messages,
+          temperature: temperature == null ? 0.4 : temperature,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        lastErr = (data && data.error && data.error.message) || 'Groq HTTP ' + res.status;
+        continue;
+      }
+      const text =
+        data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+      if (text) return text;
+    } catch (e) {
+      lastErr = e.message || String(e);
+    }
+  }
+  throw new Error(lastErr);
+}
+
 function buildPrompt({ role, skills, cvSkills, cvText }) {
   const skillList = (skills || []).join(', ') || 'not specified';
   const cvList = (cvSkills || []).join(', ') || 'none extracted';
@@ -44,7 +113,7 @@ function buildPrompt({ role, skills, cvSkills, cvText }) {
     role +
     '" that the student still needs.\n' +
     'Return ONLY valid JSON (no markdown): {"nodes":[{"id":"slug","title":"Module name","short":"Short","hours":8,"skills":["a","b"],"resources":[{"label":"...","kind":"Video|Reading|Exercise|Quiz","mins":30}]]}\n' +
-    'Rules: order beginner→job-ready for this role; skip pure intro for skills they already have; include system design / interviews if relevant to the role; no markdown fences.'
+    'Rules: order beginner→job-ready for this role; skip pure intro for skills they already have; include system design / interviews if relevant; no markdown fences.'
   );
 }
 
