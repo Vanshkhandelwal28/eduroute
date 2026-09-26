@@ -86,9 +86,33 @@ export function enrichTopicsWithDurations(topics: CourseTopic[]): CourseTopic[] 
   });
 }
 
+/**
+ * Read courses and always re-enrich video durations + recompute totalHours
+ * so the header "Min watch" reflects unique YouTube lengths (not stale estimates).
+ */
 export function readAiCourses(): AiDesignedCourse[] {
   const list = readJson<AiDesignedCourse[]>([]);
-  return Array.isArray(list) ? list : [];
+  if (!Array.isArray(list) || list.length === 0) return [];
+
+  let dirty = false;
+  const next = list.map((c) => {
+    const enriched = enrichTopicsWithDurations(c.topics || []);
+    const hours = computeMinWatchHours(enriched);
+    const topicsChanged =
+      enriched.some((t, i) => t.videoDurationSeconds !== (c.topics[i]?.videoDurationSeconds));
+    if (topicsChanged || c.totalHours !== hours) {
+      dirty = true;
+      return {
+        ...c,
+        topics: enriched,
+        totalHours: hours,
+      };
+    }
+    return c;
+  });
+
+  if (dirty) writeJson(next);
+  return next;
 }
 
 export function saveAiCourse(course: AiDesignedCourse): AiDesignedCourse {
