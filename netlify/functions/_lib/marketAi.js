@@ -1,6 +1,6 @@
 /**
- * Gemini-only helpers for market trends (does not change Buddy/Groq defaults).
- * Default: gemini-3.8-flash — 1.5 / 2.5 flash are blocked or retired for many new API keys.
+ * Market trends AI: prefer Gemini, on 404/503 fall through models, then Groq.
+ * Does not change Buddy/Groq defaults elsewhere.
  */
 function env(name) {
   try {
@@ -10,8 +10,8 @@ function env(name) {
   }
 }
 
-/** Preferred models — first available wins. Override with GEMINI_MODEL on Netlify. */
-const MODEL_CANDIDATES = [
+/** Preferred Gemini models — first available wins. */
+const GEMINI_MODELS = [
   'gemini-3.8-flash',
   'gemini-3.6-flash',
   'gemini-3.5-flash',
@@ -21,8 +21,13 @@ const MODEL_CANDIDATES = [
   'gemini-flash-latest',
 ];
 
-/** Models known to fail for new AI Studio keys — never prefer these as sole default. */
-const RETIRED_OR_BLOCKED = /gemini-1\.5|gemini-pro$|gemini-2\.5-flash$|gemini-2\.0-flash$/i;
+const GROQ_MODELS = [
+  'llama-3.1-8b-instant',
+  'llama-3.3-70b-versatile',
+  'openai/gpt-oss-20b',
+];
+
+const RETIRED_OR_BLOCKED = /gemini-1\.5|gemini-pro$/i;
 
 async function callGeminiOnce({ apiKey, model, messages, temperature }) {
   const prompt = messages
@@ -58,57 +63,152 @@ async function callGeminiOnce({ apiKey, model, messages, temperature }) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
-function isModelNotFound(err) {
+function isRetryableGemini(err) {
   const s = String((err && (err.body || err.message)) || '');
+  const status = err && err.status;
   return (
-    (err && err.status === 404) ||
+    status === 404 ||
+    status === 429 ||
+    status === 503 ||
     s.includes('NOT_FOUND') ||
     s.includes('is not found') ||
     s.includes('no longer available') ||
+    s.includes('UNAVAILABLE') ||
+    s.includes('high demand') ||
+    s.includes('RESOURCE_EXHAUSTED') ||
     s.includes('not supported for generateContent')
   );
 }
 
-async function callGemini({ apiKey, model, messages, temperature }) {
+async function callGeminiWithFallback({ apiKey, model, messages, temperature }) {
   const preferred = (model || '').trim();
   const list = [];
   if (preferred) list.push(preferred);
-  MODEL_CANDIDATES.forEach(function (m) {
+  GEMINI_MODELS.forEach(function (m) {
     if (list.indexOf(m) === -1) list.push(m);
   });
 
   let lastErr;
   for (let i = 0; i < list.length; i++) {
     try {
-      return await callGeminiOnce({
-        apiKey: apiKey,
+      return {
+        text: await callGeminiOnce({
+          apiKey: apiKey,
+          model: list[i],
+          messages: messages,
+          temperature: temperature,
+        }),
+        provider: 'gemini',
         model: list[i],
-        messages: messages,
-        temperature: temperature,
-      });
+      };
     } catch (e) {
       lastErr = e;
-      if (isModelNotFound(e)) continue;
+      if (isRetryableGemini(e)) continue;
       throw e;
     }
   }
   throw lastErr || new Error('Gemini: no working model');
 }
 
-async function generateWithGemini(messages, temperature) {
-  const apiKey = env('GEMINI_API_KEY');
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set in Netlify env');
-  let model = (env('GEMINI_MODEL') || 'gemini-3.8-flash').trim();
-  // Map blocked/retired env values to current default
-  if (RETIRED_OR_BLOCKED.test(model) || /gemini-1\.5/i.test(model)) {
-    model = 'gemini-3.8-flash';
-  }
-  return callGemini({
-    apiKey: apiKey,
-    model: model,
-    messages: messages,
-    temperature: temperature,
+async function callGroqOnce({ apiKey, model, messages, temperature }) {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + apiKey,
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: messages,
+      temperature: temperature == null ? 0.4 : temperature,
+      response_format: { type: 'json_object' },
+    }),
   });
+  const text = await response.text();
+  if (!response.ok) {
+    const err = new Error('Groq error: ' + text.slice(0, 400));
+    err.status = response.status;
+    err.body = text;
+    throw err;
+  }
+  const data = JSON.parse(text);
+  return data.choices?.[0]?.message?.content || '';
+}
+
+async function callGroqWithFallback({ apiKey, messages, temperature }) {
+  const preferred = (env('GROQ_MODEL') || 'llama-3.1-8b-instant').trim();
+  const list = [];
+  if (preferred) list.push(preferred);
+  GROQ_MODELS.forEach(function (m) {
+    if (list.indexOf(m) === -1) list.push(m);
+  });
+
+  let lastErr;
+  for (let i = 0; i < list.length; i++) {
+    try {
+      return {
+        text: await callGroqOnce({
+          apiKey: apiKey,
+          model: list[i],
+          messages: messages,
+          temperature: temperature,
+        }),
+        provider: 'groq',
+        model: list[i],
+      };
+    } catch (e) {
+      lastErr = e;
+      const msg = String((e && (e.body || e.message)) || '');
+      const skip =
+        (e && e.status === 404) ||
+        /model_not_found|does not exist|do not have access/i.test(msg);
+      if (skip) continue;
+      throw e;
+    }
+  }
+  throw lastErr || new Error('Groq: no working model');
+}
+
+/**
+ * Prefer Gemini; on overload/404 try other Gemini models; then Groq.
+ * Returns plain text (JSON string). Attaches .provider on the result via wrapper.
+ */
+async function generateMarketAi(messages, temperature) {
+  const geminiKey = env('GEMINI_API_KEY');
+  const groqKey = env('GROQ_API_KEY');
+
+  if (geminiKey) {
+    let model = (env('GEMINI_MODEL') || 'gemini-3.8-flash').trim();
+    if (RETIRED_OR_BLOCKED.test(model)) model = 'gemini-3.8-flash';
+    try {
+      const res = await callGeminiWithFallback({
+        apiKey: geminiKey,
+        model: model,
+        messages: messages,
+        temperature: temperature,
+      });
+      return res;
+    } catch (geminiErr) {
+      console.warn('Gemini failed for market AI, trying Groq:', String(geminiErr && geminiErr.message).slice(0, 200));
+      if (!groqKey) throw geminiErr;
+    }
+  }
+
+  if (groqKey) {
+    return callGroqWithFallback({
+      apiKey: groqKey,
+      messages: messages,
+      temperature: temperature,
+    });
+  }
+
+  throw new Error('No GEMINI_API_KEY or GROQ_API_KEY configured in Netlify');
+}
+
+/** Back-compat: returns text only */
+async function generateWithGemini(messages, temperature) {
+  const res = await generateMarketAi(messages, temperature);
+  return typeof res === 'string' ? res : res.text;
 }
 
 function extractJsonObject(text) {
@@ -131,5 +231,6 @@ function extractJsonObject(text) {
 
 module.exports = {
   generateWithGemini: generateWithGemini,
+  generateMarketAi: generateMarketAi,
   extractJsonObject: extractJsonObject,
 };
