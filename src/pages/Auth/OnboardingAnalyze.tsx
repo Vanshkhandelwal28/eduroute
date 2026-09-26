@@ -6,7 +6,6 @@ import {
   Code2,
   Database,
   FileUp,
-  GraduationCap,
   Loader2,
   Shield,
   Sparkles,
@@ -21,7 +20,12 @@ import {
   saveGapResults,
   saveInterests,
 } from '../../utils/onboardingStore';
-import { extractSkillsFromText, extractSkillsWithAI, saveCustomCareer } from '../../utils/customCareer';
+import {
+  extractSkillsFromText,
+  extractSkillsWithAI,
+  saveCustomCareer,
+  applySkillProgressToNodes,
+} from '../../utils/customCareer';
 import { saveSkillGap } from '../../services/buddyApi';
 import { getAuthUser } from '../../utils/rbacAuth';
 
@@ -46,6 +50,8 @@ export const OnboardingAnalyze = () => {
   const [cvPreview, setCvPreview] = useState('');
   const [customError, setCustomError] = useState('');
   const [pathStatus, setPathStatus] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [cvReady, setCvReady] = useState(false);
 
   const isCustomOnly = selected.length === 1 && selected[0] === 'custom';
 
@@ -110,8 +116,9 @@ export const OnboardingAnalyze = () => {
     setCvFileName(file?.name || '');
     setCvSkills([]);
     setCvPreview('');
+    setCvReady(false);
     if (!file) return;
-    setPathStatus('Reading CV…');
+    setPathStatus('Reading CV file…');
     try {
       let text = '';
       if (file.type.startsWith('text/') || /\.(txt|md|csv|json)$/i.test(file.name)) {
@@ -119,26 +126,50 @@ export const OnboardingAnalyze = () => {
       } else {
         const buf = await file.arrayBuffer();
         const raw = new TextDecoder('utf-8', { fatal: false }).decode(buf);
-        text = raw.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, ' ').replace(/\s+/g, ' ');
+        text = raw
+          .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u024F]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
       }
-      setCvPreview(text.slice(0, 5000));
-      let extracted = extractSkillsFromText(text);
-      setCvSkills(extracted);
-      setPathStatus('AI extracting skills from CV…');
-      const aiSkills = await extractSkillsWithAI(text);
-      if (aiSkills.length) {
-        extracted = aiSkills;
-        setCvSkills(aiSkills);
-      }
-      if (!extracted.length) {
-        setCustomError('Could not auto-read skills from this file. Paste skills below or use a .txt CV.');
-      } else {
-        setCustomError('');
-      }
+      setCvPreview(text.slice(0, 8000));
+      const quick = extractSkillsFromText(text);
+      if (quick.length) setCvSkills(quick);
+      setCvReady(true);
       setPathStatus('');
+      setCustomError('');
     } catch {
       setPathStatus('');
-      setCustomError('Could not read that file. Try .txt or paste skills.');
+      setCustomError('Could not read that file. Try .txt or paste skills in the box above.');
+    }
+  };
+
+  const analyzeCv = async () => {
+    setCustomError('');
+    const text = (cvPreview || skillText || '').trim();
+    if (text.length < 10) {
+      setCustomError('Upload a CV or paste skills first, then click Analyze.');
+      return;
+    }
+    setAnalyzing(true);
+    setPathStatus('AI analyzing full CV text…');
+    try {
+      const combined = [skillText, cvPreview].filter(Boolean).join('\n');
+      const aiSkills = await extractSkillsWithAI(combined);
+      if (aiSkills.length) {
+        setCvSkills(aiSkills);
+        setPathStatus(`Found ${aiSkills.length} skills`);
+        setTimeout(() => setPathStatus(''), 2500);
+      } else {
+        setCustomError(
+          'AI found few skills. Paste your skills above (e.g. backend, jwt, golang) or use a .txt CV.',
+        );
+        setPathStatus('');
+      }
+    } catch {
+      setCustomError('AI analyze failed. Check connection or paste skills manually.');
+      setPathStatus('');
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -149,13 +180,15 @@ export const OnboardingAnalyze = () => {
       setCustomError('Please enter your target role (e.g. SDE 2).');
       return;
     }
-    const skills = [...parsedSkills];
-    if (!skills.length && !cvSkills.length) {
-      setCustomError('Add skills you already have, or upload a CV.');
+    const skills = Array.from(
+      new Set([...parsedSkills, ...cvSkills].map((s) => s.trim()).filter(Boolean)),
+    );
+    if (!skills.length) {
+      setCustomError('Add skills you already have, or upload a CV and click Analyze.');
       return;
     }
     setSaving(true);
-    setPathStatus('Building your career path with AI…');
+    setPathStatus('Designing full career path from your skills…');
     try {
       saveCustomCareer({ role, skills, cvSkills, missingSkills: [] });
       let nodes: any[] | null = null;
@@ -166,8 +199,8 @@ export const OnboardingAnalyze = () => {
           body: JSON.stringify({
             role,
             skills,
-            cvSkills,
-            cvText: cvPreview.slice(0, 3000),
+            cvSkills: skills,
+            cvText: (cvPreview || skillText).slice(0, 8000),
             userId: getAuthUser()?.email || getAuthUser()?.id || 'demo',
           }),
         });
@@ -187,7 +220,7 @@ export const OnboardingAnalyze = () => {
         try {
           const email = (getAuthUser()?.email || 'guest').trim().toLowerCase();
           const key = `eduroute:learning-path-v2:${email}`;
-          const withStatus = nodes.map((n: any, i: number) => {
+          const enriched = nodes.map((n: any) => {
             const hours = Math.max(8, Number(n.hours) || 20);
             const days =
               Number(n.days) > 0
@@ -202,12 +235,12 @@ export const OnboardingAnalyze = () => {
               ...n,
               hours,
               days,
-              status: i === 0 ? 'current' : 'locked',
               href:
                 n.href ||
                 `/ai-course-designer?interest=${encodeURIComponent(interest)}&title=${encodeURIComponent(n.title)}&nodeId=${encodeURIComponent(n.id)}&auto=1&days=${days}&hours=${hours}&skills=${encodeURIComponent(skillFocus)}&role=${encodeURIComponent(role)}`,
             };
           });
+          const withStatus = applySkillProgressToNodes(enriched, skills);
           localStorage.setItem(
             key,
             JSON.stringify({
@@ -217,6 +250,14 @@ export const OnboardingAnalyze = () => {
               updatedAt: new Date().toISOString(),
             }),
           );
+          try {
+            const doneIds = withStatus
+              .filter((n: any) => n.status === 'completed')
+              .map((n: any) => n.id);
+            localStorage.setItem(`${key}:done`, JSON.stringify(doneIds));
+          } catch {
+            /* ignore */
+          }
           window.dispatchEvent(new CustomEvent('eduroute:learning-path-updated'));
         } catch {
           /* ignore */
@@ -382,13 +423,13 @@ export const OnboardingAnalyze = () => {
             <motion.div key="skills" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               <textarea
                 className="min-h-[100px] w-full rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
-                placeholder="e.g. backend, jwt, golang, restapi"
+                placeholder="e.g. backend, jwt, golang, restapi, docker, postgresql"
                 value={skillText}
                 onChange={(e) => setSkillText(e.target.value)}
               />
               <div className="mt-4 rounded-2xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)] p-4">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase text-[var(--text-muted)]">
-                  <FileUp className="h-4 w-4" /> Upload CV (optional) — AI will extract skills
+                  <FileUp className="h-4 w-4" /> Upload CV (optional)
                 </p>
                 <input
                   type="file"
@@ -396,18 +437,11 @@ export const OnboardingAnalyze = () => {
                   className="mt-2 block w-full text-sm"
                   onChange={(e) => void onCvFile(e.target.files?.[0] || null)}
                 />
-                {pathStatus && (
-                  <p className="mt-2 flex items-center gap-2 text-xs font-semibold text-indigo-400">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {pathStatus}
-                  </p>
-                )}
                 {cvFileName && (
                   <p className="mt-2 text-xs text-[var(--text-secondary)]">
                     {cvFileName}
-                    {cvSkills.length > 0 &&
-                      ` · ${cvSkills.length} skill(s) from AI: ${cvSkills.slice(0, 12).join(', ')}${
-                        cvSkills.length > 12 ? '…' : ''
-                      }`}
+                    {cvReady && !cvSkills.length && ' · ready — click Analyze'}
+                    {cvSkills.length > 0 && ` · ${cvSkills.length} skill(s)`}
                   </p>
                 )}
                 {cvSkills.length > 0 && (
@@ -421,6 +455,30 @@ export const OnboardingAnalyze = () => {
                       </span>
                     ))}
                   </div>
+                )}
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[10px] text-[var(--text-muted)] max-w-[60%]">
+                    AI reads full CV text and replies with only skills you already have
+                  </p>
+                  <button
+                    type="button"
+                    disabled={analyzing || (!cvPreview && !skillText.trim())}
+                    onClick={() => void analyzeCv()}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white shadow disabled:opacity-50"
+                  >
+                    {analyzing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    {analyzing ? 'Analyzing…' : 'Analyze CV'}
+                  </button>
+                </div>
+                {pathStatus && (
+                  <p className="mt-2 flex items-center gap-2 text-xs font-semibold text-indigo-400">
+                    {(analyzing || saving) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {pathStatus}
+                  </p>
                 )}
               </div>
               {customError && <p className="mt-2 text-xs font-bold text-rose-500">{customError}</p>}
