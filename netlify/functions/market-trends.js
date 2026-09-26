@@ -1,7 +1,7 @@
 /**
  * Market trends + student trend analysis
  * Prefer Gemini (1 try, 4.5s) → Groq (1 try, 4.5s) → local structured fallback.
- * No multi-retries (Netlify free functions time out at ~10s → HTTP 504).
+ * Accepts body.region (state or "India (All)") for scoped labour-market data.
  */
 const { generateMarketAi, extractJsonObject } = require('./_lib/marketAi');
 
@@ -22,21 +22,46 @@ const JSON_SYSTEM =
   'You are a JSON API. Reply with ONLY one valid JSON object. ' +
   'No markdown, no code fences, no explanation, no trailing text.';
 
-const MARKET_TEMPLATE =
-  'Labour-market analyst for India tech jobs (Maharashtra + pan-India). ' +
-  'Return ONLY this JSON shape: ' +
-  '{"updatedAt":"ISO","region":"India / Maharashtra","summary":"2-3 sentences",' +
-  '"risingSkills":[{"skill":"","demandScore":0,"trend":"rising","note":""}],' +
-  '"stableSkills":[{"skill":"","demandScore":0,"trend":"stable","note":""}],' +
-  '"decliningSkills":[{"skill":"","demandScore":0,"trend":"declining","note":""}],' +
-  '"topRoles":[{"role":"","openingsIndex":0,"avgSalaryLpa":0}],' +
-  '"sectors":[{"name":"","demandScore":0}],' +
-  '"emergingTech":[""],"sourcesNote":""}. ' +
-  '8 risingSkills, 3 decliningSkills, 5 topRoles, 4 sectors. demandScore 0-100.';
+function normalizeRegion(raw) {
+  const r = String(raw || '').trim();
+  if (!r || /india\s*\(all\)|pan[- ]?india|^india$/i.test(r)) return 'India (All)';
+  return r;
+}
+
+function regionLabel(region) {
+  return region === 'India (All)' ? 'India (pan-India tech jobs)' : region + ' (India)';
+}
+
+function marketTemplate(region) {
+  const label = regionLabel(region);
+  const regionField = region === 'India (All)' ? 'India' : 'India / ' + region;
+  return (
+    'You are a labour-market analyst for tech / digital jobs in ' +
+    label +
+    '. Be realistic for this geography. ' +
+    'Return ONLY this JSON shape: ' +
+    '{"updatedAt":"ISO","region":"' +
+    regionField +
+    '","summary":"2-3 sentences about this region",' +
+    '"risingSkills":[{"skill":"","demandScore":0,"trend":"rising","note":""}],' +
+    '"stableSkills":[{"skill":"","demandScore":0,"trend":"stable","note":""}],' +
+    '"decliningSkills":[{"skill":"","demandScore":0,"trend":"declining","note":""}],' +
+    '"topRoles":[{"role":"","openingsIndex":0,"avgSalaryLpa":0}],' +
+    '"sectors":[{"name":"","demandScore":0}],' +
+    '"emergingTech":[""],"sourcesNote":""}. ' +
+    '8 risingSkills, 3 decliningSkills, 5 topRoles, 4 sectors. demandScore 0-100. ' +
+    'Tailor skills, salaries (LPA), and sectors to ' +
+    label +
+    '.'
+  );
+}
 
 function studentTemplate(p) {
+  const region = normalizeRegion(p.region);
   return (
-    'Compare this student to India tech job market. Return ONLY this JSON: ' +
+    'Compare this student to the tech job market in ' +
+    regionLabel(region) +
+    '. Return ONLY this JSON: ' +
     '{"generatedAt":"ISO","summary":"2-3 sentences","matchScore":0,' +
     '"marketSkills":[{"skill":"","marketDemand":0,"studentLevel":0,"status":"strong|gap|missing"}],' +
     '"skillGaps":[{"skill":"","priority":"high|medium|low","why":"","action":""}],' +
@@ -54,13 +79,19 @@ function studentTemplate(p) {
   );
 }
 
-function localMarketFallback() {
+function localMarketFallback(region) {
+  const scope = normalizeRegion(region);
+  const regionField = scope === 'India (All)' ? 'India' : 'India / ' + scope;
+  const hubNote =
+    scope === 'India (All)'
+      ? 'Pan-India tech hubs (Bengaluru, Hyderabad, Pune, NCR, Chennai) drive demand.'
+      : 'Localised view for ' + scope + ' tech hiring (cities + IT parks in this state).';
   return {
     updatedAt: new Date().toISOString(),
-    region: 'India / Maharashtra',
+    region: regionField,
     summary:
-      'India tech hiring remains strong in full-stack, cloud, data, and AI-adjacent roles. ' +
-      'Practical projects, APIs, and system design matter more than pure theory.',
+      hubNote +
+      ' Full-stack, cloud, data, and AI-adjacent roles stay strong. Practical projects and APIs matter more than pure theory.',
     risingSkills: [
       { skill: 'React / Next.js', demandScore: 88, trend: 'rising', note: 'Frontend + full-stack' },
       { skill: 'Python / AI basics', demandScore: 86, trend: 'rising', note: 'Automation + ML entry' },
@@ -91,7 +122,8 @@ function localMarketFallback() {
       { name: 'FinTech', demandScore: 74 },
     ],
     emergingTech: ['GenAI apps', 'Edge / IoT lite', 'Observability'],
-    sourcesNote: 'Heuristic baseline (AI unavailable). Admin can Refresh for live model data.',
+    sourcesNote:
+      'Heuristic baseline for ' + scope + ' (AI unavailable). Admin can Refresh for live model data.',
     provider: 'local-fallback',
   };
 }
@@ -100,6 +132,7 @@ function localStudentFallback(p) {
   const strengths = [].concat(p.strengths || p.skills || []).filter(Boolean);
   const gaps = [].concat(p.gaps || []).filter(Boolean);
   const field = p.field || 'Software Engineering';
+  const region = normalizeRegion(p.region);
   const known = strengths.map(function (s) {
     return String(s).toLowerCase();
   });
@@ -130,7 +163,7 @@ function localStudentFallback(p) {
       return {
         skill: g,
         priority: i === 0 ? 'high' : i < 3 ? 'medium' : 'low',
-        why: 'Market demand is high relative to current profile depth.',
+        why: 'Market demand in ' + region + ' is high relative to current profile depth.',
         action: 'Build 1 focused mini-project and document it on GitHub.',
       };
     });
@@ -139,8 +172,9 @@ function localStudentFallback(p) {
     summary:
       'Based on your onboarding profile for ' +
       field +
-      ', you have useful starting strengths, but market-facing depth in projects and APIs still needs work. ' +
-      'Focus on 1–2 high-demand skills with shippable demos.',
+      ' vs market in ' +
+      region +
+      ', you have useful starting strengths, but market-facing depth in projects and APIs still needs work.',
     matchScore: matchScore,
     marketSkills: bars.map(function (b) {
       return {
@@ -163,7 +197,6 @@ function localStudentFallback(p) {
   };
 }
 
-/** Single AI call only (no second retry — keeps under Netlify 10s). */
 async function aiJson(messages, temperature) {
   const res = await generateMarketAi(messages, temperature);
   const reply = typeof res === 'string' ? res : res.text;
@@ -189,19 +222,20 @@ exports.handler = async (event) => {
   try {
     const body = JSON.parse(event.body || '{}');
     const action = body.action || 'refresh_market';
+    const region = normalizeRegion(body.region || 'Maharashtra');
 
     if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
       if (action === 'refresh_market') {
-        const market = localMarketFallback();
+        const market = localMarketFallback(region);
         memoryMarket = market;
         return json(200, { ok: true, market: market, provider: 'local-fallback' });
       }
       if (action === 'analyze_student') {
-        const analysis = localStudentFallback(body);
+        const analysis = localStudentFallback({ ...body, region: region });
         return json(200, {
           ok: true,
           analysis: analysis,
-          market: memoryMarket || localMarketFallback(),
+          market: memoryMarket || localMarketFallback(region),
           provider: 'local-fallback',
         });
       }
@@ -212,13 +246,13 @@ exports.handler = async (event) => {
         const { parsed, provider, reply } = await aiJson(
           [
             { role: 'system', content: JSON_SYSTEM },
-            { role: 'user', content: MARKET_TEMPLATE },
+            { role: 'user', content: marketTemplate(region) },
           ],
           0.3,
         );
         if (!parsed) {
           console.warn('Market AI non-JSON, local fallback. Preview:', String(reply).slice(0, 160));
-          const market = localMarketFallback();
+          const market = localMarketFallback(region);
           memoryMarket = market;
           return json(200, {
             ok: true,
@@ -228,12 +262,15 @@ exports.handler = async (event) => {
           });
         }
         parsed.updatedAt = parsed.updatedAt || new Date().toISOString();
+        if (!parsed.region) {
+          parsed.region = region === 'India (All)' ? 'India' : 'India / ' + region;
+        }
         parsed.provider = provider;
         memoryMarket = parsed;
         return json(200, { ok: true, market: parsed, provider: provider });
       } catch (e) {
         console.error('refresh_market failed', e);
-        const market = localMarketFallback();
+        const market = localMarketFallback(region);
         memoryMarket = market;
         return json(200, {
           ok: true,
@@ -251,6 +288,7 @@ exports.handler = async (event) => {
         gaps: Array.isArray(body.gaps) ? body.gaps : [],
         field: body.field || 'Software Engineering',
         interests: Array.isArray(body.interests) ? body.interests : [],
+        region: region,
       };
       try {
         const { parsed, provider, reply } = await aiJson(
