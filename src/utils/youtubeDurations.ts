@@ -27,6 +27,7 @@ export function extractYoutubeId(url: string): string | null {
  * Approximate lengths (seconds) for videos used in EduRoute resource packs / roadmaps.
  * Refined live via YT player getDuration() when a lesson is opened.
  * Keys are video IDs as they appear in watch URLs (both - and _ forms accepted in lookup).
+ * Keys with hyphens or leading digits MUST be quoted for valid JS/TS.
  */
 export const KNOWN_YT_DURATION_SEC: Record<string, number> = {
   // AI course resource packs
@@ -47,7 +48,7 @@ export const KNOWN_YT_DURATION_SEC: Record<string, number> = {
   bMknfKXIFA8: 11 * 3600 + 55 * 60,
   LDB4uaJ87e0: 1 * 3600 + 30 * 60,
   PkZNo7MFNFg: 3 * 3600 + 26 * 60,
-  G3e-cpL7ydc: 6 * 3600 + 30 * 60,
+  'G3e-cpL7ydc': 6 * 3600 + 30 * 60,
   Oe421EPjeBE: 8 * 3600 + 16 * 60,
   // Node crash course — URL uses hyphen
   'fBNz5xF-Kx4': 1 * 3600 + 30 * 60,
