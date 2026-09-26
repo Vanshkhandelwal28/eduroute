@@ -1,6 +1,6 @@
 /**
  * Skill Market Trend Engine — client cache + local matching.
- * Server collect uses permitted public seed + optional APIs; no restricted scraping.
+ * Server collect: Adzuna API (if configured) + curated seed; no restricted scraping.
  */
 import { normalizeSkillList, normalizeSkillName, skillsMatch } from './skillNormalize';
 import { readMarketSnapshot, type MarketSnapshot } from './marketTrendStore';
@@ -234,7 +234,6 @@ export function computeSkillDemand(jobs: MarketJob[]): SkillDemandRow[] {
   const rows: SkillDemandRow[] = [];
   counts.forEach((jobCount, skill) => {
     const demandPct = Math.round((jobCount / total) * 1000) / 10;
-    // Single collection window → no fabricated history
     rows.push({
       skill,
       jobCount,
@@ -257,8 +256,8 @@ export function matchStudentToMarket(
     market?.risingSkills?.map((s) => normalizeSkillName(s.skill)).filter(Boolean) ||
     demand.slice(0, 12).map((d) => d.skill);
 
-  const matched = mine.filter((s) =>
-    topMarket.some((m) => skillsMatch(s, m)) || demand.some((d) => skillsMatch(d.skill, s)),
+  const matched = mine.filter(
+    (s) => topMarket.some((m) => skillsMatch(s, m)) || demand.some((d) => skillsMatch(d.skill, s)),
   );
 
   const gapCandidates = demand.filter((d) => !mine.some((s) => skillsMatch(s, d.skill))).slice(0, 10);
@@ -286,6 +285,8 @@ export function matchStudentToMarket(
     market?.updatedAt ||
     new Date().toISOString();
 
+  const hasAdzuna = jobs.some((j) => j.source === 'adzuna');
+
   return {
     matched,
     gaps,
@@ -294,8 +295,9 @@ export function matchStudentToMarket(
     matchScore: Math.min(100, matchScore),
     computedAt: new Date().toISOString(),
     dataAsOf: latest,
-    sourceNote:
-      'Curated public demo jobs + admin market snapshot. No restricted scraping. Growth: Insufficient historical data until multiple collection windows exist.',
+    sourceNote: hasAdzuna
+      ? 'Adzuna Jobs API (India) + curated-public seed + admin AI snapshot. No restricted scraping. Growth: Insufficient historical data until multiple collection windows exist.'
+      : 'Curated public demo jobs + admin market snapshot (Adzuna when keys configured on Netlify). No restricted scraping. Growth: Insufficient historical data until multiple collection windows exist.',
   };
 }
 
@@ -321,7 +323,6 @@ export async function apiCollectJobs(region?: string): Promise<{
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
-    // Local fallback collect (demo)
     const run: CollectionRun = {
       id: `local-${Date.now()}`,
       startedAt: new Date().toISOString(),
