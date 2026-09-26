@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Loader2, Youtube } from 'lucide-react';
+import { cacheVideoDuration, extractYoutubeId } from '../utils/youtubeDurations';
 
 declare global {
   interface Window {
@@ -68,40 +69,24 @@ function loadYouTubeApi(): Promise<void> {
   return apiLoading;
 }
 
-/** Extract 11-char YouTube video id from common URL forms. */
-export function extractYoutubeId(url: string): string | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes('youtu.be')) {
-      const id = u.pathname.replace(/^\//, '').slice(0, 11);
-      return id.length === 11 ? id : null;
-    }
-    const v = u.searchParams.get('v');
-    if (v && v.length >= 11) return v.slice(0, 11);
-    const parts = u.pathname.split('/');
-    const embedIdx = parts.indexOf('embed');
-    if (embedIdx >= 0 && parts[embedIdx + 1]) return parts[embedIdx + 1].slice(0, 11);
-  } catch {
-    /* fall through */
-  }
-  const m = url.match(/(?:v=|\/)([\w-]{11})(?:\?|&|$)/);
-  return m ? m[1] : null;
-}
+export { extractYoutubeId };
 
 type Props = {
   youtubeUrl: string;
   title?: string;
-  /** Called with high-water watch ratio 0–1 while playing */
   onProgress?: (ratio: number) => void;
+  /** Fired once with real video length in seconds when the player is ready */
+  onDuration?: (seconds: number) => void;
   className?: string;
 };
 
-/**
- * In-page YouTube player. Tracks watch high-water mark without remounting the iframe.
- * IMPORTANT: onProgress is stored in a ref so parent re-renders do NOT destroy the player.
- */
-export function YouTubeCoursePlayer({ youtubeUrl, title, onProgress, className = '' }: Props) {
+export function YouTubeCoursePlayer({
+  youtubeUrl,
+  title,
+  onProgress,
+  onDuration,
+  className = '',
+}: Props) {
   const reactId = useId().replace(/:/g, '');
   const containerId = `yt-player-${reactId}`;
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -109,17 +94,23 @@ export function YouTubeCoursePlayer({ youtubeUrl, title, onProgress, className =
   const pollRef = useRef<number | null>(null);
   const maxRatioRef = useRef(0);
   const onProgressRef = useRef(onProgress);
+  const onDurationRef = useRef(onDuration);
+  const durationReported = useRef(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const videoId = extractYoutubeId(youtubeUrl);
 
-  // Keep latest callback without re-running effect (prevents destroy/recreate → blank page)
   useEffect(() => {
     onProgressRef.current = onProgress;
   }, [onProgress]);
 
   useEffect(() => {
+    onDurationRef.current = onDuration;
+  }, [onDuration]);
+
+  useEffect(() => {
     maxRatioRef.current = 0;
+    durationReported.current = false;
     setReady(false);
     setError('');
     if (!videoId) {
@@ -135,8 +126,26 @@ export function YouTubeCoursePlayer({ youtubeUrl, title, onProgress, className =
         try {
           onProgressRef.current?.(ratio);
         } catch {
-          /* parent handler must not crash player */
+          /* */
         }
+      }
+    };
+
+    const emitDuration = (p: YTPlayer) => {
+      if (durationReported.current) return;
+      try {
+        const dur = p.getDuration();
+        if (dur > 0 && Number.isFinite(dur)) {
+          durationReported.current = true;
+          cacheVideoDuration(videoId, dur);
+          try {
+            onDurationRef.current?.(dur);
+          } catch {
+            /* */
+          }
+        }
+      } catch {
+        /* */
       }
     };
 
@@ -144,18 +153,19 @@ export function YouTubeCoursePlayer({ youtubeUrl, title, onProgress, className =
       const p = playerRef.current;
       if (!p) return;
       try {
+        emitDuration(p);
         const dur = p.getDuration();
         const cur = p.getCurrentTime();
         if (dur > 0 && Number.isFinite(dur) && Number.isFinite(cur)) {
           report(Math.min(1, Math.max(0, cur / dur)));
         }
       } catch {
-        /* player may be mid-destroy */
+        /* */
       }
     };
 
     const startPoll = () => {
-      if (pollRef.current != null) return; // already polling
+      if (pollRef.current != null) return;
       pollRef.current = window.setInterval(tick, 1000);
     };
 
@@ -169,7 +179,6 @@ export function YouTubeCoursePlayer({ youtubeUrl, title, onProgress, className =
     loadYouTubeApi().then(() => {
       if (cancelled || !window.YT?.Player) return;
 
-      // Ensure a clean host node — YT replaces the element with an iframe
       const host = hostRef.current;
       if (!host) return;
       host.innerHTML = '';
@@ -196,16 +205,18 @@ export function YouTubeCoursePlayer({ youtubeUrl, title, onProgress, className =
             modestbranding: 1,
             playsinline: 1,
             enablejsapi: 1,
-            // Do NOT pass origin on Netlify previews — mismatched origin can blank the embed
           },
           events: {
-            onReady: () => {
-              if (!cancelled) setReady(true);
+            onReady: (e) => {
+              if (cancelled) return;
+              setReady(true);
+              emitDuration(e.target);
             },
             onStateChange: (e) => {
               const PS = window.YT?.PlayerState;
               if (!PS) return;
               if (e.data === PS.PLAYING || e.data === PS.BUFFERING) {
+                emitDuration(e.target);
                 startPoll();
               } else if (e.data === PS.PAUSED) {
                 tick();
@@ -240,7 +251,6 @@ export function YouTubeCoursePlayer({ youtubeUrl, title, onProgress, className =
       playerRef.current = null;
       if (hostRef.current) hostRef.current.innerHTML = '';
     };
-    // Only recreate when the video itself changes — never on onProgress identity
   }, [videoId, containerId]);
 
   if (!videoId) {
@@ -280,7 +290,6 @@ export function YouTubeCoursePlayer({ youtubeUrl, title, onProgress, className =
             </a>
           </div>
         )}
-        {/* Stable host — YT injects iframe inside; we never replace this ref node from React */}
         <div ref={hostRef} className="absolute inset-0 h-full w-full" />
       </div>
       <div className="flex items-center gap-2 border-t border-white/10 bg-slate-950 px-3 py-2 text-[11px] text-slate-400">
