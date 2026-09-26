@@ -232,111 +232,31 @@ export const TRACK_RECOMMENDATIONS: Record<InterestTrack, TrackRecommendation[]>
   ],
 };
 
-/**
- * Maps each onboarding skill to a concrete in-app path.
- * Priority is used when ranking which gap to close first (lower = do first).
- */
 export type SkillPath = {
   courseTitle: string;
   to: string;
-  /** Lower = more foundational / close first */
   priority: number;
 };
 
 export const SKILL_TO_PATH: Record<string, SkillPath> = {
-  // Software — fundamentals first
-  'Programming fundamentals': {
-    courseTitle: 'Fullstack fundamentals',
-    to: '/roadmaps/fullstack',
-    priority: 1,
-  },
-  'Data structures': {
-    courseTitle: 'DSA Beginner Sheet',
-    to: '/dsa-sheet',
-    priority: 2,
-  },
-  'Git & GitHub': {
-    courseTitle: 'Backend Developer roadmap',
-    to: '/roadmaps/backend',
-    priority: 3,
-  },
-  APIs: {
-    courseTitle: 'Backend & API path',
-    to: '/roadmaps/backend',
-    priority: 4,
-  },
-  'Project building': {
-    courseTitle: 'Frontend & project path',
-    to: '/roadmaps/frontend',
-    priority: 5,
-  },
-  'Practical experience': {
-    courseTitle: 'Internships board',
-    to: '/internships',
-    priority: 6,
-  },
-  // Cyber
-  'Networking basics': {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 1,
-  },
-  Linux: {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 2,
-  },
-  'Cryptography basics': {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 3,
-  },
-  'Web vulnerabilities': {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 4,
-  },
-  'OS & network security': {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 5,
-  },
-  'Hands-on security practice': {
-    courseTitle: 'Assessments & labs',
-    to: '/assessments',
-    priority: 6,
-  },
-  // Data
-  Spreadsheets: {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 1,
-  },
-  SQL: {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 2,
-  },
-  'Python/R for analysis': {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 3,
-  },
-  Statistics: {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 4,
-  },
-  Visualization: {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 5,
-  },
-  'Data cleaning': {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 6,
-  },
+  'Programming fundamentals': { courseTitle: 'Fullstack fundamentals', to: '/roadmaps/fullstack', priority: 1 },
+  'Data structures': { courseTitle: 'DSA Beginner Sheet', to: '/dsa-sheet', priority: 2 },
+  'Git & GitHub': { courseTitle: 'Backend Developer roadmap', to: '/roadmaps/backend', priority: 3 },
+  APIs: { courseTitle: 'Backend & API path', to: '/roadmaps/backend', priority: 4 },
+  'Project building': { courseTitle: 'Frontend & project path', to: '/roadmaps/frontend', priority: 5 },
+  'Practical experience': { courseTitle: 'Internships board', to: '/internships', priority: 6 },
+  'Networking basics': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 1 },
+  Linux: { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 2 },
+  'Cryptography basics': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 3 },
+  'Web vulnerabilities': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 4 },
+  'OS & network security': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 5 },
+  'Hands-on security practice': { courseTitle: 'Assessments & labs', to: '/assessments', priority: 6 },
+  Spreadsheets: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 1 },
+  SQL: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 2 },
+  'Python/R for analysis': { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 3 },
+  Statistics: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 4 },
+  Visualization: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 5 },
+  'Data cleaning': { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 6 },
 };
 
 export type GapAction = {
@@ -352,15 +272,12 @@ export type NextStepPlan =
       kind: 'gaps';
       gapCount: number;
       skills: string[];
-      /** Highest-priority gap action (close this first) */
       primary: GapAction;
-      /** Other unique paths for remaining gaps */
       alternatives: GapAction[];
       trackLabel: string;
     }
   | { kind: 'internships'; trackLabel: string };
 
-/** Resolve dashboard / profile “what should I do next?” from onboarding data. */
 export function getNextStepPlan(profile?: OnboardingProfile): NextStepPlan {
   const p = profile ?? readOnboarding();
   const track = p.interests?.[0];
@@ -371,7 +288,6 @@ export function getNextStepPlan(profile?: OnboardingProfile): NextStepPlan {
   }
 
   const missing = [...(p.missingSkills || [])];
-  // Also treat explicit “no” answers as gaps if missingSkills is empty but answers exist
   if (missing.length === 0 && p.gapAnswers?.length) {
     p.gapAnswers.forEach((a) => {
       if (a.answer === 'no' && a.skill && !missing.includes(a.skill)) {
@@ -394,7 +310,6 @@ export function getNextStepPlan(profile?: OnboardingProfile): NextStepPlan {
         priority: mapped.priority,
       };
     }
-    // Fallback: first track recommendation
     const fallback =
       track && TRACK_RECOMMENDATIONS[track]?.[0]
         ? TRACK_RECOMMENDATIONS[track][0]
@@ -466,6 +381,11 @@ export function writeOnboarding(profile: OnboardingProfile) {
     };
     const json = JSON.stringify(payload);
     localStorage.setItem(GLOBAL_KEY, json);
+    try {
+      window.dispatchEvent(new CustomEvent('eduroute:onboarding-updated'));
+    } catch {
+      /* ignore */
+    }
     if (email) {
       localStorage.setItem(emailKey(email), json);
     }
