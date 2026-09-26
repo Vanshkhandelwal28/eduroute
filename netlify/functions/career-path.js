@@ -1,5 +1,6 @@
 /**
- * Custom career path: Gemini first, then Groq fallback. Self-contained AI calls.
+ * Custom career path: Gemini first, then Groq fallback.
+ * Realistic hours/days per module for the target role seniority.
  */
 function json(statusCode, body) {
   return {
@@ -22,6 +23,14 @@ function env(name) {
   }
 }
 
+function roleSeniority(role) {
+  const r = String(role || '').toLowerCase();
+  if (/\b(staff|principal|architect|lead|manager)\b/.test(r)) return 'lead';
+  if (/\b(senior|sr\.?|sde\s*[23]|l[45]|mid-?senior)\b/.test(r)) return 'senior';
+  if (/\b(junior|intern|fresher|entry|sde\s*1|l[123])\b/.test(r)) return 'junior';
+  return 'mid';
+}
+
 async function callGemini({ apiKey, model, messages, temperature }) {
   const m = model || 'gemini-1.5-flash';
   const url =
@@ -40,13 +49,11 @@ async function callGemini({ apiKey, model, messages, temperature }) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: contents,
-      generationConfig: { temperature: temperature == null ? 0.4 : temperature },
+      generationConfig: { temperature: temperature == null ? 0.35 : temperature },
     }),
   });
   const data = await res.json();
-  if (!res.ok) {
-    throw new Error((data && data.error && data.error.message) || 'Gemini request failed');
-  }
+  if (!res.ok) throw new Error((data && data.error && data.error.message) || 'Gemini failed');
   const text =
     data &&
     data.candidates &&
@@ -76,7 +83,7 @@ async function callGroq({ apiKey, model, messages, temperature }) {
         body: JSON.stringify({
           model: models[i],
           messages: messages,
-          temperature: temperature == null ? 0.4 : temperature,
+          temperature: temperature == null ? 0.35 : temperature,
         }),
       });
       const data = await res.json();
@@ -97,24 +104,67 @@ async function callGroq({ apiKey, model, messages, temperature }) {
 function buildPrompt({ role, skills, cvSkills, cvText }) {
   const skillList = (skills || []).join(', ') || 'not specified';
   const cvList = (cvSkills || []).join(', ') || 'none extracted';
-  const cvSnippet = (cvText || '').slice(0, 2500);
+  const cvSnippet = (cvText || '').slice(0, 3500);
+  const level = roleSeniority(role);
   return (
-    'You are a career coach for EDUROUTE. Design a practical 5-7 step learning path for a student targeting this role: "' +
+    'You are a career coach for EDUROUTE designing a REALISTIC multi-week learning path.\n' +
+    'Target role: "' +
     role +
-    '".\n' +
-    'Skills the student ALREADY has (do not re-teach these as beginner modules): ' +
+    '" (seniority band: ' +
+    level +
+    ').\n' +
+    'Skills the student ALREADY has (skip beginner modules for these): ' +
     skillList +
     '.\n' +
-    'Skills extracted from their CV: ' +
+    'Skills from CV: ' +
     cvList +
     '.\n' +
-    (cvSnippet ? 'CV excerpt (optional context):\n' + cvSnippet + '\n' : '') +
-    'Focus on what companies typically require for "' +
-    role +
-    '" that the student still needs.\n' +
-    'Return ONLY valid JSON (no markdown): {"nodes":[{"id":"slug","title":"Module name","short":"Short","hours":8,"skills":["a","b"],"resources":[{"label":"...","kind":"Video|Reading|Exercise|Quiz","mins":30}]]}\n' +
-    'Rules: order beginner→job-ready for this role; skip pure intro for skills they already have; include system design / interviews if relevant; no markdown fences.'
+    (cvSnippet ? 'CV excerpt:\n' + cvSnippet + '\n' : '') +
+    'Focus on what companies hire for this role that the student still needs.\n' +
+    'CRITICAL timeline rules:\n' +
+    '- hours = total focused study hours for that module (not a single video length).\n' +
+    '- days = calendar days to finish the module at ~2–3 study hours/day.\n' +
+    '- Lightweight topic (Git polish): hours 8–12, days 4–6.\n' +
+    '- Medium (REST depth, one DB): hours 25–40, days 10–16.\n' +
+    '- Heavy (System Design, full Databases & Persistence, Interview prep for senior): hours 40–80, days 15–30.\n' +
+    '- For senior/SDE-2+ roles, Databases alone must NOT be under 40 hours / 15 days.\n' +
+    '- resources[].mins = one resource session; include 4–8 resources per heavy module.\n' +
+    'Return ONLY valid JSON (no markdown):\n' +
+    '{"nodes":[{"id":"slug","title":"Module","short":"Short","hours":40,"days":16,"skills":["a","b"],"resources":[{"label":"...","kind":"Video|Reading|Exercise|Quiz|Project","mins":45}]]}\n' +
+    '5–7 nodes, beginner→job-ready for this role, no markdown fences.'
   );
+}
+
+function normalizeNode(t, i) {
+  var hours = Math.max(8, Number(t.hours) || 20);
+  var days = Number(t.days);
+  if (!days || days < 3) {
+    days = Math.min(90, Math.max(5, Math.round(hours / 2.5)));
+  }
+  var title = String(t.title || 'Step ' + (i + 1));
+  if (/database|system design|interview|distributed|kubernetes|platform/i.test(title) && hours < 30) {
+    hours = Math.max(hours, 40);
+    days = Math.max(days, 15);
+  }
+  return {
+    id: String(t.id || 'step-' + (i + 1))
+      .replace(/[^a-z0-9-_]/gi, '-')
+      .toLowerCase(),
+    title: title,
+    short: String(t.short || title.split(' ')[0] || 'S' + (i + 1)).slice(0, 18),
+    hours: hours,
+    days: days,
+    skills: Array.isArray(t.skills) ? t.skills.map(String).slice(0, 8) : [],
+    resources: Array.isArray(t.resources)
+      ? t.resources.slice(0, 10).map(function (r) {
+          return {
+            label: String(r.label || r.title || 'Resource'),
+            kind: String(r.kind || 'Video'),
+            mins: Math.max(20, Number(r.mins) || 45),
+          };
+        })
+      : [{ label: 'Core lessons', kind: 'Video', mins: 60 }],
+  };
 }
 
 function tryParseNodes(text) {
@@ -125,32 +175,15 @@ function tryParseNodes(text) {
     const parsed = JSON.parse(match[0]);
     const arr = Array.isArray(parsed) ? parsed : parsed.nodes;
     if (!Array.isArray(arr) || arr.length < 3) return null;
-    return arr.slice(0, 8).map(function (t, i) {
-      return {
-        id: String(t.id || 'step-' + (i + 1))
-          .replace(/[^a-z0-9-_]/gi, '-')
-          .toLowerCase(),
-        title: String(t.title || 'Step ' + (i + 1)),
-        short: String(t.short || (t.title || 'Step').split(' ')[0] || 'S' + (i + 1)).slice(0, 18),
-        hours: Math.max(2, Number(t.hours) || 8),
-        skills: Array.isArray(t.skills) ? t.skills.map(String).slice(0, 6) : [],
-        resources: Array.isArray(t.resources)
-          ? t.resources.slice(0, 4).map(function (r) {
-              return {
-                label: String(r.label || r.title || 'Resource'),
-                kind: String(r.kind || 'Video'),
-                mins: Number(r.mins) || 30,
-              };
-            })
-          : [{ label: 'Intro', kind: 'Video', mins: 30 }],
-      };
-    });
+    return arr.slice(0, 8).map(normalizeNode);
   } catch (e) {
     return null;
   }
 }
 
 function fallbackNodes(role, skills) {
+  var level = roleSeniority(role);
+  var heavy = level === 'senior' || level === 'lead';
   var s = (skills || []).map(function (x) {
     return String(x).toLowerCase();
   });
@@ -159,75 +192,102 @@ function fallbackNodes(role, skills) {
       return x.indexOf(k) !== -1;
     });
   };
+
   var nodes = [];
-  if (has('golang') || has('go') || /sde|backend|software/i.test(role)) {
+  if (has('golang') || has('go') || has('backend') || /sde|software|backend/i.test(role)) {
     nodes.push({
       id: 'backend-depth',
-      title: 'Backend Depth (APIs & Auth)',
+      title: 'Backend Depth (APIs, Auth & Services)',
       short: 'Backend',
-      hours: 12,
-      skills: ['REST', 'JWT', 'Golang'],
+      hours: heavy ? 45 : 30,
+      days: heavy ? 18 : 12,
+      skills: ['REST', 'JWT', 'Golang', 'Service design'],
       resources: [
-        { label: 'API design patterns', kind: 'Video', mins: 40 },
-        { label: 'JWT auth lab', kind: 'Exercise', mins: 60 },
+        { label: 'API design & versioning', kind: 'Video', mins: 90 },
+        { label: 'Auth: JWT / OAuth deep dive', kind: 'Video', mins: 75 },
+        { label: 'Idempotency & error models', kind: 'Reading', mins: 60 },
+        { label: 'Build a production-style API', kind: 'Project', mins: 240 },
+        { label: 'Load & failure testing lab', kind: 'Exercise', mins: 120 },
       ],
     });
   }
   nodes.push(
     {
-      id: 'system-design',
-      title: 'System Design for ' + (role || 'Engineers'),
-      short: 'SysDesign',
-      hours: 14,
-      skills: ['System Design', 'Scalability', 'Caching'],
-      resources: [
-        { label: 'System design intro', kind: 'Video', mins: 45 },
-        { label: 'Design a URL shortener', kind: 'Exercise', mins: 90 },
-      ],
-    },
-    {
       id: 'databases',
       title: 'Databases & Persistence',
       short: 'Databases',
-      hours: 10,
-      skills: ['SQL', 'NoSQL', 'Indexing'],
+      hours: heavy ? 55 : 40,
+      days: heavy ? 20 : 15,
+      skills: ['SQL', 'Indexing', 'Transactions', 'NoSQL'],
       resources: [
-        { label: 'SQL performance', kind: 'Video', mins: 35 },
-        { label: 'Schema design drill', kind: 'Exercise', mins: 50 },
+        { label: 'Relational modeling & normalization', kind: 'Video', mins: 90 },
+        { label: 'Indexing & query plans', kind: 'Video', mins: 80 },
+        { label: 'Transactions & isolation levels', kind: 'Reading', mins: 70 },
+        { label: 'NoSQL when / when not', kind: 'Video', mins: 60 },
+        { label: 'Schema design case studies', kind: 'Exercise', mins: 150 },
+        { label: 'Build & tune a real schema', kind: 'Project', mins: 300 },
+      ],
+    },
+    {
+      id: 'system-design',
+      title: 'System Design for ' + (role || 'Engineers'),
+      short: 'SysDesign',
+      hours: heavy ? 60 : 40,
+      days: heavy ? 22 : 16,
+      skills: ['System Design', 'Scalability', 'Caching', 'Queues'],
+      resources: [
+        { label: 'System design foundations', kind: 'Video', mins: 120 },
+        { label: 'Caching, CDN, load balancing', kind: 'Video', mins: 90 },
+        { label: 'Data partitioning & consistency', kind: 'Reading', mins: 80 },
+        { label: 'URL shortener / rate limiter cases', kind: 'Exercise', mins: 180 },
+        { label: 'Design a chat / feed system', kind: 'Project', mins: 300 },
       ],
     },
     {
       id: 'devops-basics',
-      title: 'Deploy & Observability',
+      title: 'Deploy, Containers & Observability',
       short: 'Deploy',
-      hours: 10,
+      hours: heavy ? 40 : 28,
+      days: heavy ? 16 : 12,
       skills: ['Docker', 'CI/CD', 'Monitoring'],
       resources: [
-        { label: 'Docker for developers', kind: 'Video', mins: 40 },
-        { label: 'Ship a service', kind: 'Project', mins: 90 },
+        { label: 'Docker for services', kind: 'Video', mins: 75 },
+        { label: 'CI/CD pipelines', kind: 'Video', mins: 60 },
+        { label: 'Logs, metrics, alerts', kind: 'Reading', mins: 50 },
+        { label: 'Ship a service end-to-end', kind: 'Project', mins: 240 },
       ],
     },
     {
       id: 'interviews',
       title: (role || 'Role') + ' Interview Prep',
       short: 'Interviews',
-      hours: 12,
+      hours: heavy ? 50 : 35,
+      days: heavy ? 20 : 14,
       skills: ['DSA', 'Behavioral', 'Design interviews'],
       resources: [
-        { label: 'Coding interview patterns', kind: 'Practice', mins: 120 },
-        { label: 'Mock system design', kind: 'Exercise', mins: 60 },
+        { label: 'Coding patterns (arrays → graphs)', kind: 'Practice', mins: 300 },
+        { label: 'Timed contest drills', kind: 'Practice', mins: 180 },
+        { label: 'Behavioral / leadership stories', kind: 'Reading', mins: 60 },
+        { label: 'Mock system design interviews', kind: 'Exercise', mins: 180 },
       ],
     },
     {
       id: 'portfolio',
       title: 'Portfolio & Production Project',
       short: 'Portfolio',
-      hours: 16,
+      hours: heavy ? 45 : 30,
+      days: heavy ? 18 : 12,
       skills: ['Production', 'Git', 'Docs'],
-      resources: [{ label: 'Ship one production-grade service', kind: 'Project', mins: 180 }],
+      resources: [
+        { label: 'Scope a production-grade service', kind: 'Reading', mins: 40 },
+        { label: 'Implement, test, deploy', kind: 'Project', mins: 360 },
+        { label: 'Write architecture notes + README', kind: 'Exercise', mins: 90 },
+      ],
     }
   );
-  return nodes;
+  return nodes.map(function (n, i) {
+    return normalizeNode(n, i);
+  });
 }
 
 exports.handler = async function (event) {
@@ -248,16 +308,16 @@ exports.handler = async function (event) {
     if (!role) return json(400, { ok: false, error: 'role is required' });
 
     var skills = Array.isArray(body.skills)
-      ? body.skills.map(String).slice(0, 40)
+      ? body.skills.map(String).slice(0, 50)
       : String(body.skills || '')
           .split(/[,|/]/)
           .map(function (s) {
             return s.trim();
           })
           .filter(Boolean)
-          .slice(0, 40);
-    var cvSkills = Array.isArray(body.cvSkills) ? body.cvSkills.map(String).slice(0, 40) : [];
-    var cvText = String(body.cvText || '').slice(0, 8000);
+          .slice(0, 50);
+    var cvSkills = Array.isArray(body.cvSkills) ? body.cvSkills.map(String).slice(0, 50) : [];
+    var cvText = String(body.cvText || '').slice(0, 10000);
 
     var prompt = buildPrompt({ role: role, skills: skills, cvSkills: cvSkills, cvText: cvText });
     var messages = [{ role: 'user', content: prompt }];
@@ -274,7 +334,7 @@ exports.handler = async function (event) {
           apiKey: geminiKey,
           model: env('GEMINI_MODEL') || 'gemini-1.5-flash',
           messages: messages,
-          temperature: 0.35,
+          temperature: 0.3,
         });
         provider = 'gemini';
       } catch (e) {
@@ -289,7 +349,7 @@ exports.handler = async function (event) {
           apiKey: groqKey,
           model: env('GROQ_MODEL'),
           messages: messages,
-          temperature: 0.35,
+          temperature: 0.3,
         });
         provider = 'groq';
       } catch (e) {
@@ -313,6 +373,7 @@ exports.handler = async function (event) {
       provider: provider,
       skills: skills,
       cvSkills: cvSkills,
+      seniority: roleSeniority(role),
       note: source === 'template' && lastErr ? lastErr : undefined,
     });
   } catch (error) {
