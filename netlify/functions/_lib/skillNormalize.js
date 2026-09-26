@@ -24,7 +24,80 @@ const ALIASES = {
   cybersecurity: 'Cybersecurity',
   'rest api': 'REST APIs',
   apis: 'REST APIs',
+  git: 'Git',
+  linux: 'Linux',
+  azure: 'Azure',
+  gcp: 'GCP',
+  mongodb: 'MongoDB',
+  mysql: 'MySQL',
+  postgresql: 'PostgreSQL',
+  postgres: 'PostgreSQL',
+  django: 'Django',
+  flask: 'Flask',
+  angular: 'Angular',
+  vue: 'Vue',
+  'vue.js': 'Vue',
+  flutter: 'Flutter',
+  'react native': 'React Native',
+  microservices: 'Microservices',
+  'ci/cd': 'CI/CD',
+  cicd: 'CI/CD',
+  pytorch: 'PyTorch',
+  tensorflow: 'TensorFlow',
+  excel: 'Excel',
+  pandas: 'Pandas',
+  networking: 'Networking',
+  typescript: 'TypeScript',
 };
+
+/** Ordered longest-first so multi-word skills match before short ones */
+const DETECT_PHRASES = [
+  'spring boot',
+  'machine learning',
+  'react native',
+  'next.js',
+  'node.js',
+  'rest api',
+  'rest apis',
+  'system design',
+  'data analysis',
+  'ci/cd',
+  'type script',
+  'typescript',
+  'javascript',
+  'kubernetes',
+  'microservices',
+  'cybersecurity',
+  'postgresql',
+  'mongodb',
+  'tensorflow',
+  'pytorch',
+  'react.js',
+  'vue.js',
+  'python',
+  'react',
+  'java',
+  'sql',
+  'aws',
+  'azure',
+  'gcp',
+  'docker',
+  'devops',
+  'linux',
+  'git',
+  'django',
+  'flask',
+  'angular',
+  'vue',
+  'flutter',
+  'pandas',
+  'excel',
+  'mysql',
+  'nodejs',
+  'reactjs',
+  'k8s',
+  'ml',
+];
 
 function normalizeSkillName(raw) {
   const key = String(raw || '')
@@ -56,4 +129,26 @@ function normalizeSkillList(list) {
   return out;
 }
 
-module.exports = { normalizeSkillName: normalizeSkillName, normalizeSkillList: normalizeSkillList };
+/** Extract known skills from free text (title + description). */
+function extractSkillsFromText(text) {
+  const lower = String(text || '').toLowerCase();
+  const found = [];
+  const seen = {};
+  for (let i = 0; i < DETECT_PHRASES.length; i++) {
+    const phrase = DETECT_PHRASES[i];
+    if (lower.indexOf(phrase) === -1) continue;
+    const n = normalizeSkillName(phrase);
+    if (!n) continue;
+    const k = n.toLowerCase();
+    if (seen[k]) continue;
+    seen[k] = true;
+    found.push(n);
+  }
+  return found;
+}
+
+module.exports = {
+  normalizeSkillName: normalizeSkillName,
+  normalizeSkillList: normalizeSkillList,
+  extractSkillsFromText: extractSkillsFromText,
+};

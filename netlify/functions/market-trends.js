@@ -1,9 +1,15 @@
 /**
  * Market trends + Skill Market Trend Engine
  * Actions: refresh_market | analyze_student | collect_jobs | list_jobs
+ *
+ * Job pipeline: Adzuna API (if keys) + curated-public seed → normalize → dedupe
+ * AI: Groq → Gemini → region baseline
  */
 const { generateMarketAi, extractJsonObject } = require('./_lib/marketAi');
-const { normalizeSkillList } = require('./_lib/skillNormalize');
+const {
+  normalizeSkillList,
+  extractSkillsFromText,
+} = require('./_lib/skillNormalize');
 
 function json(statusCode, body) {
   return {
@@ -20,6 +26,14 @@ function json(statusCode, body) {
 
 const JSON_SYSTEM = 'You output only one JSON object. No markdown.';
 
+function env(name) {
+  try {
+    return process.env[name] || '';
+  } catch (_) {
+    return '';
+  }
+}
+
 function normalizeRegion(raw) {
   const r = String(raw || '').trim();
   if (!r || /india\s*\(all\)|pan[- ]?india|^india$/i.test(r)) return 'India (All)';
@@ -28,6 +42,26 @@ function normalizeRegion(raw) {
 
 function regionField(region) {
   return region === 'India (All)' ? 'India' : 'India / ' + region;
+}
+
+/** Map EduRoute region → Adzuna where + search what (efficient, few calls). */
+function adzunaQueriesForRegion(region) {
+  const scope = normalizeRegion(region);
+  const baseWhat = 'software developer OR data OR cloud OR react OR java';
+  const map = {
+    Maharashtra: [{ what: baseWhat, where: 'Pune' }, { what: baseWhat, where: 'Mumbai' }],
+    Karnataka: [{ what: baseWhat, where: 'Bengaluru' }],
+    'Delhi NCR': [{ what: baseWhat, where: 'Noida' }, { what: baseWhat, where: 'Gurgaon' }],
+    Goa: [{ what: 'developer OR frontend OR mobile', where: 'Goa' }],
+    Telangana: [{ what: baseWhat, where: 'Hyderabad' }],
+    'Tamil Nadu': [{ what: baseWhat, where: 'Chennai' }],
+    'India (All)': [
+      { what: baseWhat, where: 'Bengaluru' },
+      { what: baseWhat, where: 'Pune' },
+      { what: baseWhat, where: 'Hyderabad' },
+    ],
+  };
+  return map[scope] || [{ what: baseWhat, where: scope }];
 }
 
 function marketTemplate(region) {
@@ -197,23 +231,139 @@ const CURATED_JOBS = [
 let memoryMarket = null;
 let memoryJobs = null;
 
-function collectJobsPayload(existing) {
-  const started = new Date().toISOString();
-  const prev = Array.isArray(existing) ? existing : memoryJobs || [];
+function hasAdzuna() {
+  return Boolean(env('ADZUNA_APP_ID') && env('ADZUNA_APP_KEY'));
+}
+
+function mapAdzunaResult(r) {
+  const title = r.title || '';
+  const desc = r.description || '';
+  const text = title + ' ' + desc;
+  const skills = extractSkillsFromText(text);
+  const company = (r.company && r.company.display_name) || '';
+  const location = (r.location && r.location.display_name) || '';
+  const category = (r.category && r.category.label) || '';
+  let salaryText;
+  if (r.salary_min || r.salary_max) {
+    salaryText = String(r.salary_min || '?') + '–' + String(r.salary_max || '?');
+  }
+  return {
+    externalId: String(r.id != null ? r.id : title + company),
+    source: 'adzuna',
+    title: title,
+    company: company,
+    location: location,
+    experience: '',
+    industry: category,
+    salaryText: salaryText,
+    postingDate: (r.created || '').slice(0, 10) || undefined,
+    collectedAt: new Date().toISOString(),
+    skills: normalizeSkillList(skills),
+  };
+}
+
+async function fetchAdzunaPage(what, where, page) {
+  const app_id = env('ADZUNA_APP_ID');
+  const app_key = env('ADZUNA_APP_KEY');
+  const url = new URL('https://api.adzuna.com/v1/api/jobs/in/search/' + page);
+  url.searchParams.set('app_id', app_id);
+  url.searchParams.set('app_key', app_key);
+  url.searchParams.set('results_per_page', '20');
+  url.searchParams.set('what', what);
+  if (where) url.searchParams.set('where', where);
+  url.searchParams.set('max_days_old', '30');
+  url.searchParams.set('sort_by', 'date');
+  url.searchParams.set('content-type', 'application/json');
+
+  const controller = new AbortController();
+  const timer = setTimeout(function () {
+    controller.abort();
+  }, 8000);
+  try {
+    const res = await fetch(url.toString(), { signal: controller.signal });
+    clearTimeout(timer);
+    const text = await res.text();
+    if (!res.ok) {
+      const err = new Error('Adzuna ' + res.status + ': ' + text.slice(0, 120));
+      err.status = res.status;
+      throw err;
+    }
+    const data = JSON.parse(text);
+    return Array.isArray(data.results) ? data.results : [];
+  } catch (e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
+/** Limited parallel-friendly sequential fetches (respect free-tier). */
+async function fetchAdzunaJobs(region) {
+  if (!hasAdzuna()) return { jobs: [], errors: [], calls: 0 };
+  const queries = adzunaQueriesForRegion(region).slice(0, 3);
+  const jobs = [];
+  const errors = [];
+  let calls = 0;
+  for (let i = 0; i < queries.length; i++) {
+    const q = queries[i];
+    try {
+      calls += 1;
+      const results = await fetchAdzunaPage(q.what, q.where, 1);
+      for (let j = 0; j < results.length; j++) {
+        jobs.push(mapAdzunaResult(results[j]));
+      }
+    } catch (e) {
+      errors.push(String(e.message || e).slice(0, 160));
+    }
+  }
+  return { jobs: jobs, errors: errors, calls: calls };
+}
+
+function mergeJobs(existing, incoming) {
   const map = {};
-  prev.forEach(function (j) {
+  (existing || []).forEach(function (j) {
     map[String(j.source) + '::' + String(j.externalId)] = j;
   });
   let inserted = 0;
   let dup = 0;
-  const now = new Date().toISOString();
-  CURATED_JOBS.forEach(function (raw) {
-    const key = raw.source + '::' + raw.externalId;
+  (incoming || []).forEach(function (raw) {
+    const key = String(raw.source) + '::' + String(raw.externalId);
     if (map[key]) {
       dup += 1;
       return;
     }
     map[key] = {
+      externalId: String(raw.externalId),
+      source: raw.source,
+      title: raw.title || '',
+      company: raw.company || '',
+      location: raw.location || '',
+      experience: raw.experience || '',
+      industry: raw.industry || '',
+      salaryText: raw.salaryText,
+      postingDate: raw.postingDate,
+      collectedAt: raw.collectedAt || new Date().toISOString(),
+      skills: normalizeSkillList(raw.skills || []),
+    };
+    inserted += 1;
+  });
+  return {
+    jobs: Object.keys(map).map(function (k) {
+      return map[k];
+    }),
+    inserted: inserted,
+    dup: dup,
+  };
+}
+
+async function collectJobsPayload(existing, region) {
+  const started = new Date().toISOString();
+  const prev = Array.isArray(existing) ? existing : memoryJobs || [];
+  const errors = [];
+  const sourcesUsed = [];
+
+  // 1) Always merge curated seed (stable demo + offline)
+  const curatedMapped = CURATED_JOBS.map(function (raw) {
+    return {
       externalId: raw.externalId,
       source: raw.source,
       title: raw.title,
@@ -223,27 +373,71 @@ function collectJobsPayload(existing) {
       industry: raw.industry,
       salaryText: raw.salaryText,
       postingDate: raw.postingDate,
-      collectedAt: now,
+      collectedAt: new Date().toISOString(),
       skills: normalizeSkillList(raw.skills),
     };
-    inserted += 1;
   });
-  const jobs = Object.keys(map).map(function (k) {
-    return map[k];
-  });
-  memoryJobs = jobs;
+  let merged = mergeJobs(prev, curatedMapped);
+  sourcesUsed.push('curated-public');
+  let fetched = CURATED_JOBS.length;
+  let inserted = merged.inserted;
+  let dup = merged.dup;
+
+  // 2) Adzuna live (if keys present)
+  let adzunaJobs = [];
+  if (hasAdzuna()) {
+    try {
+      const az = await fetchAdzunaJobs(region);
+      adzunaJobs = az.jobs || [];
+      fetched += adzunaJobs.length;
+      if (az.errors && az.errors.length) errors.push.apply(errors, az.errors);
+      if (adzunaJobs.length) {
+        sourcesUsed.push('adzuna');
+        const m2 = mergeJobs(merged.jobs, adzunaJobs);
+        inserted += m2.inserted;
+        dup += m2.dup;
+        merged = m2;
+      } else if (az.errors && az.errors.length) {
+        // keys set but API failed
+        errors.push('Adzuna returned 0 jobs');
+      }
+    } catch (e) {
+      errors.push(String(e.message || e).slice(0, 160));
+    }
+  }
+
+  memoryJobs = merged.jobs;
+  const status =
+    errors.length && adzunaJobs.length === 0 && hasAdzuna()
+      ? 'partial'
+      : errors.length
+        ? 'partial'
+        : 'ok';
+
   return {
-    jobs: jobs,
+    jobs: merged.jobs,
     run: {
       id: 'run-' + Date.now(),
       startedAt: started,
       finishedAt: new Date().toISOString(),
-      status: 'ok',
-      source: 'curated-public',
-      jobsFetched: CURATED_JOBS.length,
+      status: status,
+      source: sourcesUsed.join('+'),
+      jobsFetched: fetched,
       jobsInserted: inserted,
       jobsDuplicate: dup,
+      errorMessage: errors.length ? errors.slice(0, 3).join(' | ') : undefined,
     },
+    sources: [
+      { code: 'curated-public', name: 'Curated public demo postings', permitted: true },
+      {
+        code: 'adzuna',
+        name: 'Adzuna Jobs API (India)',
+        permitted: true,
+        configured: hasAdzuna(),
+      },
+    ],
+    note:
+      'Adzuna (official API) + curated-public seed. No restricted scraping. Jobs by Adzuna when live data used.',
   };
 }
 
@@ -262,9 +456,13 @@ exports.handler = async (event) => {
       ok: true,
       market: memoryMarket,
       jobsCount: (memoryJobs || []).length,
-      hasGemini: Boolean(process.env.GEMINI_API_KEY),
-      hasGroq: Boolean(process.env.GROQ_API_KEY),
-      sources: [{ code: 'curated-public', name: 'Curated public demo postings', permitted: true }],
+      hasGemini: Boolean(env('GEMINI_API_KEY')),
+      hasGroq: Boolean(env('GROQ_API_KEY')),
+      hasAdzuna: hasAdzuna(),
+      sources: [
+        { code: 'curated-public', name: 'Curated public demo postings', permitted: true },
+        { code: 'adzuna', name: 'Adzuna Jobs API (India)', permitted: true, configured: hasAdzuna() },
+      ],
     });
   }
   if (event.httpMethod !== 'POST') return json(405, { ok: false, error: 'Method not allowed' });
@@ -275,13 +473,13 @@ exports.handler = async (event) => {
     const region = normalizeRegion(body.region || 'Maharashtra');
 
     if (action === 'collect_jobs') {
-      const result = collectJobsPayload(body.existingJobs);
+      const result = await collectJobsPayload(body.existingJobs, region);
       return json(200, {
         ok: true,
         jobs: result.jobs,
         run: result.run,
-        sources: [{ code: 'curated-public', permitted: true }],
-        note: 'Permitted curated public data only. No restricted scraping.',
+        sources: result.sources,
+        note: result.note,
       });
     }
 
@@ -289,7 +487,7 @@ exports.handler = async (event) => {
       return json(200, { ok: true, jobs: memoryJobs || [] });
     }
 
-    if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
+    if (!env('GEMINI_API_KEY') && !env('GROQ_API_KEY')) {
       if (action === 'refresh_market') {
         const market = localMarketFallback(region);
         memoryMarket = market;
@@ -327,7 +525,12 @@ exports.handler = async (event) => {
       } catch (e) {
         const market = localMarketFallback(region);
         memoryMarket = market;
-        return json(200, { ok: true, market: market, provider: 'local-fallback', warning: String(e.message || e).slice(0, 200) });
+        return json(200, {
+          ok: true,
+          market: market,
+          provider: 'local-fallback',
+          warning: String(e.message || e).slice(0, 200),
+        });
       }
     }
 
@@ -349,7 +552,12 @@ exports.handler = async (event) => {
           0.4,
         );
         if (!out.parsed) {
-          return json(200, { ok: true, analysis: localStudentFallback(payload), market: memoryMarket, provider: 'local-fallback' });
+          return json(200, {
+            ok: true,
+            analysis: localStudentFallback(payload),
+            market: memoryMarket,
+            provider: 'local-fallback',
+          });
         }
         out.parsed.generatedAt = out.parsed.generatedAt || new Date().toISOString();
         out.parsed.provider = out.provider;
@@ -365,7 +573,10 @@ exports.handler = async (event) => {
       }
     }
 
-    return json(400, { ok: false, error: 'Unknown action. Use refresh_market, analyze_student, collect_jobs, list_jobs.' });
+    return json(400, {
+      ok: false,
+      error: 'Unknown action. Use refresh_market, analyze_student, collect_jobs, list_jobs.',
+    });
   } catch (err) {
     return json(500, { ok: false, error: err.message || 'Market trends failed' });
   }
