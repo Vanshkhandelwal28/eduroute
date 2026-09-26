@@ -188,6 +188,22 @@ export function AiCourseDesigner() {
     } else if (title) {
       setCustomInterest(title);
     }
+    // Topic-sized duration from learning path (not always 15d)
+    const daysParam = Number(searchParams.get('days') || 0);
+    const hoursParam = Number(searchParams.get('hours') || 0);
+    let courseDays = daysParam;
+    if (!courseDays && hoursParam > 0) {
+      courseDays = Math.min(90, Math.max(5, Math.round(hoursParam / 2.5)));
+    }
+    if (courseDays >= 5) {
+      if ([7, 15, 30, 60].includes(courseDays)) {
+        setUseCustomDays(false);
+        setDuration(courseDays as 7 | 15 | 30 | 60);
+      } else {
+        setUseCustomDays(true);
+        setCustomDays(String(courseDays));
+      }
+    }
     setProfile(readOnboarding());
   }, [searchParams]);
 
@@ -282,8 +298,7 @@ export function AiCourseDesigner() {
             Design your mixed course
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Pick duration and interests. Watch lessons in-page — topics auto-tick at ~55% watched.
-            Finish the course to unlock your certificate and advance your learning path.
+            Duration comes from your path step size when opened via Continue. Topics auto-tick at ~55% watched.
           </p>
         </motion.div>
 
@@ -299,7 +314,7 @@ export function AiCourseDesigner() {
               </div>
               <div>
                 <h2 className="text-sm font-bold">Course inputs</h2>
-                <p className="text-[11px] text-[var(--text-muted)]">Field from signup / onboarding · path auto-fill</p>
+                <p className="text-[11px] text-[var(--text-muted)]">Duration follows topic size from path</p>
               </div>
             </div>
 
@@ -351,11 +366,15 @@ export function AiCourseDesigner() {
                   min={1}
                   max={365}
                   className={`${selectCls} mt-2 w-full`}
-                  placeholder="e.g. 45"
+                  placeholder="e.g. 20"
                   value={customDays}
                   onChange={(e) => setCustomDays(e.target.value)}
                 />
               )}
+              <p className="mt-1 text-[10px] text-[var(--text-muted)]">
+                Active: <span className="font-bold text-[var(--text-secondary)]">{days} days</span>
+                {' '}(path steps set this automatically)
+              </p>
             </div>
 
             <div>
@@ -466,7 +485,7 @@ export function AiCourseDesigner() {
                 <BookOpen className="mb-3 h-10 w-10 text-[var(--text-muted)]" />
                 <p className="font-bold">No course yet</p>
                 <p className="mt-1 max-w-sm text-sm text-[var(--text-muted)]">
-                  Choose duration + interests and hit Generate. Watch videos here to auto-complete topics.
+                  Choose duration + interests and hit Generate.
                 </p>
               </div>
             ) : (
@@ -483,9 +502,6 @@ export function AiCourseDesigner() {
                         </span>
                         <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">{active.topics.length} topics</span>
                         <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-indigo-700 dark:text-indigo-300">{certLevel}</span>
-                        {stats.allDone && (
-                          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-white">Path step complete</span>
-                        )}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -501,9 +517,8 @@ export function AiCourseDesigner() {
                         type="button"
                         disabled={!stats.allDone}
                         onClick={() => setCertOpen(true)}
-                        title={stats.allDone ? 'Download your certificate' : `Complete all topics (${stats.done}/${stats.total}) to unlock`}
                         className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white ${
-                          stats.allDone ? 'bg-emerald-600 hover:bg-emerald-500' : 'cursor-not-allowed bg-slate-400 opacity-70'
+                          stats.allDone ? 'bg-emerald-600' : 'cursor-not-allowed bg-slate-400 opacity-70'
                         }`}
                       >
                         <Download className="h-3.5 w-3.5" />
@@ -515,7 +530,7 @@ export function AiCourseDesigner() {
                     <div className="mb-1 flex justify-between text-[10px] font-bold text-[var(--text-muted)]">
                       <span>Course progress</span>
                       <span>
-                        {stats.done}/{stats.total} topics · {stats.percent}%
+                        {stats.done}/{stats.total} · {stats.percent}%
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
