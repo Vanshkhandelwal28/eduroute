@@ -1,1 +1,1 @@
-PLACEHOLDER_WILL_FAIL
+const { generateBuddyReply } = require('./aiClient_RESTORED_VIA_MAIN');
