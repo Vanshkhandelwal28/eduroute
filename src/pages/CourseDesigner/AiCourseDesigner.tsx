@@ -285,7 +285,8 @@ export function AiCourseDesigner() {
                 <button
                   type="button"
                   onClick={() => setUseCustomDays(true)}
-                  className={`rounded-xl px-3 py-2 text-xs font-black ${\n                    useCustomDays
+                  className={`rounded-xl px-3 py-2 text-xs font-black ${
+                    useCustomDays
                       ? 'bg-violet-600 text-white'
                       : 'border border-[var(--border-default)] text-[var(--text-secondary)]'
                   }`}
