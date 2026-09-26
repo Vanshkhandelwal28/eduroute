@@ -1,6 +1,6 @@
 /**
  * Real PDF text extraction for CV upload.
- * Uses pdf.js (CDN worker) so FlateDecode streams are decoded — not raw binary.
+ * Loads pdf.js from CDN (no npm dep) so Netlify/Vite singlefile builds work.
  */
 
 export type CvStructuredInfo = {
@@ -58,7 +58,6 @@ function guessName(text: string): string | undefined {
   return undefined;
 }
 
-/** Format structured CV info as human-readable report for the debug card. */
 export function formatCvReport(info: CvStructuredInfo): string {
   const lines: string[] = [];
   lines.push(`Source: ${info.source} · ${info.charCount} characters`);
@@ -88,12 +87,31 @@ export function formatCvReport(info: CvStructuredInfo): string {
   return lines.join('\n');
 }
 
-async function extractWithPdfJs(data: ArrayBuffer): Promise<string> {
-  const pdfjs = await import('pdfjs-dist');
-  // CDN worker avoids Vite worker bundling issues on Netlify
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+async function loadPdfJs(): Promise<any> {
+  const urls = [
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs',
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs',
+    'https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.min.mjs',
+  ];
+  let lastErr: unknown;
+  for (const url of urls) {
+    try {
+      const mod = await import(/* @vite-ignore */ url);
+      const pdfjs = mod.default || mod;
+      if (pdfjs?.getDocument) {
+        pdfjs.GlobalWorkerOptions.workerSrc =
+          'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+        return pdfjs;
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('pdf.js CDN load failed');
+}
 
+async function extractWithPdfJs(data: ArrayBuffer): Promise<string> {
+  const pdfjs = await loadPdfJs();
   const loadingTask = pdfjs.getDocument({ data: new Uint8Array(data) });
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
@@ -106,7 +124,11 @@ async function extractWithPdfJs(data: ArrayBuffer): Promise<string> {
       .filter(Boolean);
     pages.push(strings.join(' '));
   }
-  return pages.join('\n\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return pages
+    .join('\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function binaryFallback(raw: string): string {
@@ -114,14 +136,11 @@ function binaryFallback(raw: string): string {
     .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u024F]/g, ' ')
     .replace(/[^\w+#./\-\s]+/g, ' ');
   const tokens = cleaned.match(/[A-Za-z][A-Za-z0-9+#./\-]{0,40}/g) || [];
-  const short = cleaned.match(/\b(?:js|ts|go|c\+\+|cpp|jwt|dsa|oop|html|css|sql|aws|api)\b/gi) || [];
+  const short =
+    cleaned.match(/\b(?:js|ts|go|c\+\+|cpp|jwt|dsa|oop|html|css|sql|aws|api)\b/gi) || [];
   return [...tokens, ...short].join(' ').slice(0, 10000);
 }
 
-/**
- * Read any CV file → structured + readable text.
- * PDF uses pdf.js so real page text is recovered (not FlateDecode garbage).
- */
 export async function extractCvContent(
   file: File,
   skillExtractor: (text: string) => string[],
@@ -178,6 +197,6 @@ export async function extractCvContent(
     sections: extractSections(rawText),
     source: 'binary-fallback',
     note:
-      'Could not fully decode this PDF. Prefer .txt export, or paste skills above. Showing best-effort tokens.',
+      'Could not fully decode this PDF in-browser. Prefer .txt export, or paste skills above.',
   };
 }
