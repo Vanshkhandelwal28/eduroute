@@ -1,7 +1,5 @@
 /**
  * Career-aware living learning path.
- * Built from onboarding interests + skill gaps; optional Groq (buddy-chat) enrichment.
- * Persisted in localStorage so the path is stable across visits.
  */
 
 import { getAuthUser } from './rbacAuth';
@@ -19,6 +17,8 @@ export type PathNode = {
   short: string;
   status: PathNodeStatus;
   hours: number;
+  /** Calendar days to complete module (~2.5h/day) */
+  days?: number;
   skills: string[];
   resources: { label: string; kind: string; mins: number }[];
   href?: string;
@@ -29,12 +29,22 @@ export function designerHref(opts: {
   title: string;
   nodeId: string;
   auto?: boolean;
+  days?: number;
+  hours?: number;
 }): string {
   const q = new URLSearchParams();
   q.set('interest', opts.interest);
   q.set('title', opts.title);
   q.set('nodeId', opts.nodeId);
   if (opts.auto !== false) q.set('auto', '1');
+  const days =
+    opts.days && opts.days > 0
+      ? opts.days
+      : opts.hours && opts.hours > 0
+        ? Math.min(90, Math.max(5, Math.round(opts.hours / 2.5)))
+        : undefined;
+  if (days) q.set('days', String(days));
+  if (opts.hours) q.set('hours', String(opts.hours));
   return `/ai-course-designer?${q.toString()}`;
 }
 
@@ -58,23 +68,25 @@ const TEMPLATES: Record<InterestTrack, Omit<PathNode, 'status'>[]> = {
       id: 'prog',
       title: 'Programming Fundamentals',
       short: 'Programming',
-      hours: 8,
+      hours: 25,
+      days: 10,
       skills: ['Python', 'JavaScript', 'Problem solving'],
       resources: [
-        { label: 'Language basics', kind: 'Video', mins: 45 },
-        { label: 'Small exercises', kind: 'Exercise', mins: 60 },
+        { label: 'Language basics', kind: 'Video', mins: 90 },
+        { label: 'Exercises', kind: 'Exercise', mins: 120 },
       ],
-      href: '/ai-course-designer?interest=Python&title=Programming%20Fundamentals',
+      href: '/ai-course-designer?interest=Python&title=Programming%20Fundamentals&days=10&hours=25',
     },
     {
       id: 'dsa',
       title: 'Data Structures & Algorithms',
       short: 'DSA',
-      hours: 20,
+      hours: 50,
+      days: 20,
       skills: ['Arrays', 'Trees', 'Graphs', 'DP'],
       resources: [
-        { label: 'DSA practice sheet', kind: 'Practice', mins: 120 },
-        { label: 'Complexity basics', kind: 'Reading', mins: 30 },
+        { label: 'DSA practice sheet', kind: 'Practice', mins: 300 },
+        { label: 'Complexity basics', kind: 'Reading', mins: 60 },
       ],
       href: '/dsa-sheet',
     },
@@ -82,46 +94,50 @@ const TEMPLATES: Record<InterestTrack, Omit<PathNode, 'status'>[]> = {
       id: 'frontend',
       title: 'Frontend Foundations',
       short: 'Frontend',
-      hours: 12,
+      hours: 35,
+      days: 14,
       skills: ['HTML', 'CSS', 'React'],
       resources: [
-        { label: 'React crash path', kind: 'Video', mins: 40 },
-        { label: 'Build a mini UI', kind: 'Exercise', mins: 90 },
+        { label: 'React path', kind: 'Video', mins: 120 },
+        { label: 'Build a mini UI', kind: 'Exercise', mins: 180 },
       ],
-      href: '/ai-course-designer?interest=React&title=Frontend%20Foundations',
+      href: '/ai-course-designer?interest=React&title=Frontend%20Foundations&days=14&hours=35',
     },
     {
       id: 'backend',
       title: 'Backend & APIs',
       short: 'Backend',
-      hours: 12,
+      hours: 40,
+      days: 16,
       skills: ['Node.js', 'REST', 'Databases'],
       resources: [
-        { label: 'API design intro', kind: 'Video', mins: 35 },
-        { label: 'CRUD project', kind: 'Exercise', mins: 90 },
+        { label: 'API design', kind: 'Video', mins: 90 },
+        { label: 'CRUD project', kind: 'Exercise', mins: 240 },
       ],
-      href: '/ai-course-designer?interest=Node.js&title=Backend%20%26%20APIs',
+      href: '/ai-course-designer?interest=Node.js&title=Backend%20%26%20APIs&days=16&hours=40',
     },
     {
       id: 'system',
       title: 'System Design Basics',
       short: 'System Design',
-      hours: 8,
+      hours: 45,
+      days: 18,
       skills: ['System Design', 'Caching', 'Load Balancing'],
       resources: [
-        { label: 'System design intro', kind: 'Video', mins: 25 },
-        { label: 'URL shortener case', kind: 'Exercise', mins: 60 },
+        { label: 'System design intro', kind: 'Video', mins: 120 },
+        { label: 'URL shortener case', kind: 'Exercise', mins: 180 },
       ],
-      href: '/ai-course-designer?interest=System%20Design&title=System%20Design%20Basics',
+      href: '/ai-course-designer?interest=System%20Design&title=System%20Design%20Basics&days=18&hours=45',
     },
     {
       id: 'projects',
       title: 'Portfolio Projects',
       short: 'Projects',
-      hours: 16,
+      hours: 40,
+      days: 16,
       skills: ['Full-stack', 'Git', 'Deploy'],
-      resources: [{ label: 'Ship one end-to-end app', kind: 'Project', mins: 180 }],
-      href: '/ai-course-designer?interest=Full-stack&title=Portfolio%20Projects',
+      resources: [{ label: 'Ship one end-to-end app', kind: 'Project', mins: 360 }],
+      href: '/ai-course-designer?interest=Full-stack&title=Portfolio%20Projects&days=16&hours=40',
     },
   ],
   cybersecurity: [
@@ -129,70 +145,76 @@ const TEMPLATES: Record<InterestTrack, Omit<PathNode, 'status'>[]> = {
       id: 'linux',
       title: 'Linux & Networking Basics',
       short: 'Linux',
-      hours: 8,
+      hours: 30,
+      days: 12,
       skills: ['Linux', 'Networking', 'CLI'],
       resources: [
-        { label: 'Linux essentials', kind: 'Video', mins: 40 },
-        { label: 'Network fundamentals', kind: 'Reading', mins: 30 },
+        { label: 'Linux essentials', kind: 'Video', mins: 90 },
+        { label: 'Network fundamentals', kind: 'Reading', mins: 60 },
       ],
-      href: '/ai-course-designer?interest=Linux&title=Linux%20%26%20Networking',
+      href: '/ai-course-designer?interest=Linux&title=Linux%20%26%20Networking&days=12&hours=30',
     },
     {
       id: 'sec-fund',
       title: 'Security Fundamentals',
       short: 'Sec Fund',
-      hours: 10,
+      hours: 35,
+      days: 14,
       skills: ['CIA triad', 'Threats', 'Risk'],
       resources: [
-        { label: 'Security overview', kind: 'Video', mins: 35 },
-        { label: 'Threat modelling intro', kind: 'Reading', mins: 25 },
+        { label: 'Security overview', kind: 'Video', mins: 90 },
+        { label: 'Threat modelling', kind: 'Reading', mins: 60 },
       ],
-      href: '/ai-course-designer?interest=Cybersecurity&title=Security%20Fundamentals',
+      href: '/ai-course-designer?interest=Cybersecurity&title=Security%20Fundamentals&days=14&hours=35',
     },
     {
       id: 'owasp',
       title: 'OWASP Top 10 & AppSec',
       short: 'OWASP',
-      hours: 10,
+      hours: 40,
+      days: 16,
       skills: ['OWASP', 'Web security', 'Auth'],
       resources: [
-        { label: 'OWASP Top 10 walkthrough', kind: 'Video', mins: 45 },
-        { label: 'Fix a vulnerable app', kind: 'Exercise', mins: 90 },
+        { label: 'OWASP Top 10', kind: 'Video', mins: 120 },
+        { label: 'Fix a vulnerable app', kind: 'Exercise', mins: 240 },
       ],
-      href: '/ai-course-designer?interest=OWASP&title=OWASP%20Top%2010',
+      href: '/ai-course-designer?interest=OWASP&title=OWASP%20Top%2010&days=16&hours=40',
     },
     {
       id: 'ethical',
       title: 'Ethical Hacking Basics',
       short: 'Ethical',
-      hours: 12,
+      hours: 45,
+      days: 18,
       skills: ['Recon', 'Pentest basics', 'Tools'],
       resources: [
-        { label: 'Ethical hacking intro', kind: 'Video', mins: 50 },
-        { label: 'Lab practice', kind: 'Exercise', mins: 90 },
+        { label: 'Ethical hacking intro', kind: 'Video', mins: 120 },
+        { label: 'Lab practice', kind: 'Exercise', mins: 240 },
       ],
-      href: '/ai-course-designer?interest=Ethical%20Hacking&title=Ethical%20Hacking%20Basics',
+      href: '/ai-course-designer?interest=Ethical%20Hacking&title=Ethical%20Hacking%20Basics&days=18&hours=45',
     },
     {
       id: 'defense',
       title: 'Defensive Security',
       short: 'Defense',
-      hours: 10,
+      hours: 35,
+      days: 14,
       skills: ['Monitoring', 'Hardening', 'IR'],
       resources: [
-        { label: 'Defense in depth', kind: 'Video', mins: 30 },
-        { label: 'Incident response basics', kind: 'Reading', mins: 25 },
+        { label: 'Defense in depth', kind: 'Video', mins: 90 },
+        { label: 'Incident response', kind: 'Reading', mins: 60 },
       ],
-      href: '/ai-course-designer?interest=Cybersecurity&title=Defensive%20Security',
+      href: '/ai-course-designer?interest=Cybersecurity&title=Defensive%20Security&days=14&hours=35',
     },
     {
       id: 'capstone',
       title: 'Security Capstone',
       short: 'Capstone',
-      hours: 12,
+      hours: 40,
+      days: 16,
       skills: ['Report writing', 'Labs'],
-      resources: [{ label: 'End-to-end security lab', kind: 'Project', mins: 150 }],
-      href: '/ai-course-designer?interest=Cybersecurity&title=Security%20Capstone',
+      resources: [{ label: 'End-to-end security lab', kind: 'Project', mins: 360 }],
+      href: '/ai-course-designer?interest=Cybersecurity&title=Security%20Capstone&days=16&hours=40',
     },
   ],
   data_analyst: [
@@ -200,70 +222,76 @@ const TEMPLATES: Record<InterestTrack, Omit<PathNode, 'status'>[]> = {
       id: 'sql',
       title: 'SQL & Databases',
       short: 'SQL',
-      hours: 10,
+      hours: 40,
+      days: 16,
       skills: ['SQL', 'Joins', 'Aggregations'],
       resources: [
-        { label: 'SQL full path', kind: 'Video', mins: 60 },
-        { label: 'Query practice', kind: 'Exercise', mins: 60 },
+        { label: 'SQL full path', kind: 'Video', mins: 150 },
+        { label: 'Query practice', kind: 'Exercise', mins: 180 },
       ],
-      href: '/ai-course-designer?interest=SQL&title=SQL%20%26%20Databases',
+      href: '/ai-course-designer?interest=SQL&title=SQL%20%26%20Databases&days=16&hours=40',
     },
     {
       id: 'python-data',
       title: 'Python for Data',
       short: 'Python',
-      hours: 10,
+      hours: 35,
+      days: 14,
       skills: ['Python', 'Pandas', 'NumPy'],
       resources: [
-        { label: 'Pandas getting started', kind: 'Video', mins: 40 },
-        { label: 'Clean a dataset', kind: 'Exercise', mins: 60 },
+        { label: 'Pandas getting started', kind: 'Video', mins: 90 },
+        { label: 'Clean a dataset', kind: 'Exercise', mins: 150 },
       ],
-      href: '/ai-course-designer?interest=Python&title=Python%20for%20Data',
+      href: '/ai-course-designer?interest=Python&title=Python%20for%20Data&days=14&hours=35',
     },
     {
       id: 'eda',
       title: 'EDA & Statistics',
       short: 'EDA',
-      hours: 8,
+      hours: 30,
+      days: 12,
       skills: ['EDA', 'Stats', 'Hypothesis'],
       resources: [
-        { label: 'Exploratory analysis', kind: 'Video', mins: 35 },
-        { label: 'Stats refresher', kind: 'Reading', mins: 30 },
+        { label: 'Exploratory analysis', kind: 'Video', mins: 90 },
+        { label: 'Stats refresher', kind: 'Reading', mins: 60 },
       ],
-      href: '/ai-course-designer?interest=Data%20Analytics&title=EDA%20%26%20Statistics',
+      href: '/ai-course-designer?interest=Data%20Analytics&title=EDA%20%26%20Statistics&days=12&hours=30',
     },
     {
       id: 'viz',
       title: 'Visualization & BI',
       short: 'BI',
-      hours: 10,
+      hours: 35,
+      days: 14,
       skills: ['Power BI', 'Tableau', 'Charts'],
       resources: [
-        { label: 'Dashboard design', kind: 'Video', mins: 40 },
-        { label: 'Build one dashboard', kind: 'Exercise', mins: 90 },
+        { label: 'Dashboard design', kind: 'Video', mins: 90 },
+        { label: 'Build one dashboard', kind: 'Exercise', mins: 180 },
       ],
-      href: '/ai-course-designer?interest=Power%20BI&title=Visualization%20%26%20BI',
+      href: '/ai-course-designer?interest=Power%20BI&title=Visualization%20%26%20BI&days=14&hours=35',
     },
     {
       id: 'story',
       title: 'Analytics Storytelling',
       short: 'Story',
-      hours: 6,
+      hours: 20,
+      days: 8,
       skills: ['Insights', 'Communication'],
       resources: [
-        { label: 'Present insights', kind: 'Reading', mins: 25 },
-        { label: 'Case study write-up', kind: 'Exercise', mins: 60 },
+        { label: 'Present insights', kind: 'Reading', mins: 45 },
+        { label: 'Case study write-up', kind: 'Exercise', mins: 120 },
       ],
-      href: '/ai-course-designer?interest=Data%20Analytics&title=Analytics%20Storytelling',
+      href: '/ai-course-designer?interest=Data%20Analytics&title=Analytics%20Storytelling&days=8&hours=20',
     },
     {
       id: 'portfolio',
       title: 'Data Portfolio Project',
       short: 'Portfolio',
-      hours: 14,
+      hours: 40,
+      days: 16,
       skills: ['End-to-end analysis', 'Git'],
-      resources: [{ label: 'Publish a portfolio project', kind: 'Project', mins: 180 }],
-      href: '/ai-course-designer?interest=Data%20Analytics&title=Data%20Portfolio%20Project',
+      resources: [{ label: 'Publish a portfolio project', kind: 'Project', mins: 360 }],
+      href: '/ai-course-designer?interest=Data%20Analytics&title=Data%20Portfolio%20Project&days=16&hours=40',
     },
   ],
   custom: [
@@ -271,43 +299,49 @@ const TEMPLATES: Record<InterestTrack, Omit<PathNode, 'status'>[]> = {
       id: 'role-core',
       title: 'Role Core Skills',
       short: 'Core',
-      hours: 12,
+      hours: 35,
+      days: 14,
       skills: ['Fundamentals'],
       resources: [
-        { label: 'Core skills for your role', kind: 'Video', mins: 40 },
-        { label: 'Practice set', kind: 'Exercise', mins: 60 },
+        { label: 'Core skills for your role', kind: 'Video', mins: 90 },
+        { label: 'Hands-on practice set', kind: 'Exercise', mins: 180 },
+        { label: 'Mini project', kind: 'Project', mins: 240 },
       ],
-      href: '/ai-course-designer?interest=Custom&title=Role%20Core%20Skills',
+      href: '/ai-course-designer?interest=Custom&title=Role%20Core%20Skills&days=14&hours=35',
     },
     {
       id: 'system',
       title: 'System Design',
       short: 'SysDesign',
-      hours: 12,
+      hours: 50,
+      days: 20,
       skills: ['System Design'],
       resources: [
-        { label: 'System design intro', kind: 'Video', mins: 40 },
-        { label: 'Case study', kind: 'Exercise', mins: 60 },
+        { label: 'System design foundations', kind: 'Video', mins: 120 },
+        { label: 'Case study drills', kind: 'Exercise', mins: 180 },
+        { label: 'Full design write-up', kind: 'Project', mins: 240 },
       ],
-      href: '/ai-course-designer?interest=System%20Design&title=System%20Design',
+      href: '/ai-course-designer?interest=System%20Design&title=System%20Design&days=20&hours=50',
     },
     {
       id: 'interviews',
       title: 'Interview Prep',
       short: 'Interviews',
-      hours: 12,
+      hours: 45,
+      days: 18,
       skills: ['Interviews', 'DSA'],
-      resources: [{ label: 'Interview patterns', kind: 'Practice', mins: 90 }],
+      resources: [{ label: 'Interview patterns + mocks', kind: 'Practice', mins: 300 }],
       href: '/dsa-sheet',
     },
     {
       id: 'portfolio',
       title: 'Portfolio Project',
       short: 'Portfolio',
-      hours: 16,
+      hours: 40,
+      days: 16,
       skills: ['Projects'],
-      resources: [{ label: 'Ship a portfolio project', kind: 'Project', mins: 180 }],
-      href: '/ai-course-designer?interest=Portfolio&title=Portfolio%20Project',
+      resources: [{ label: 'Ship a production-grade project', kind: 'Project', mins: 360 }],
+      href: '/ai-course-designer?interest=Portfolio&title=Portfolio%20Project&days=16&hours=40',
     },
   ],
 };
@@ -403,20 +437,29 @@ function tryParseNodes(text: string): Omit<PathNode, 'status'>[] | null {
       const short = String(t.short || title.split(' ')[0] || `Step${i + 1}`).slice(0, 18);
       const skills = Array.isArray(t.skills) ? t.skills.map(String).slice(0, 6) : [short];
       const resources = Array.isArray(t.resources)
-        ? t.resources.slice(0, 4).map((r: any) => ({
+        ? t.resources.slice(0, 8).map((r: any) => ({
             label: String(r.label || r.title || 'Resource'),
             kind: String(r.kind || 'Video'),
-            mins: Number(r.mins) || 30,
+            mins: Number(r.mins) || 45,
           }))
-        : [{ label: `${title} intro`, kind: 'Video', mins: 30 }];
+        : [{ label: `${title} intro`, kind: 'Video', mins: 60 }];
       const id = String(t.id || `step-${i + 1}`).replace(/[^a-z0-9-_]/gi, '-').toLowerCase();
-      let href = String(t.href || '');
-      if (!href.startsWith('/')) {
-        if (/dsa|algorithm|structure/i.test(title)) href = '/dsa-sheet';
-        else if (/assessment|quiz/i.test(title)) href = '/assessments';
-        else href = designerHref({ interest: skills[0] || short, title, nodeId: id, auto: true });
+      let hours = Math.max(8, Number(t.hours) || 20);
+      let days = Number(t.days) || Math.round(hours / 2.5);
+      days = Math.min(90, Math.max(5, days));
+      if (/database|system design|interview/i.test(title) && hours < 30) {
+        hours = Math.max(hours, 40);
+        days = Math.max(days, 15);
       }
-      return { id, title, short, hours: Math.max(2, Number(t.hours) || 8), skills, resources, href };
+      const href = designerHref({
+        interest: skills[0] || short,
+        title,
+        nodeId: id,
+        auto: true,
+        days,
+        hours,
+      });
+      return { id, title, short, hours, days, skills, resources, href };
     });
   } catch {
     return null;
@@ -472,8 +515,8 @@ export async function resolveLearningPath(opts?: {
     `Design a practical 5-7 step learning path for a student targeting: ${targetLabel}.\n` +
     `Skills the student already has (skip beginner modules for these): ${haveSkills || 'not specified'}.\n` +
     `Skill gaps to prioritise: ${gaps}.\n` +
-    `Return ONLY JSON: {"nodes":[{"id":"slug","title":"Module name","short":"Short","hours":8,"skills":["a","b"],"resources":[{"label":"...","kind":"Video|Reading|Exercise|Quiz","mins":30}]]}\n` +
-    `Rules: steps must match the career. Prefer company requirements for the target role. Order beginner → job-ready. No markdown.`;
+    `Return ONLY JSON: {"nodes":[{"id":"slug","title":"Module name","short":"Short","hours":40,"days":16,"skills":["a","b"],"resources":[{"label":"...","kind":"Video|Reading|Exercise|Quiz|Project","mins":60}]]}\n` +
+    `Rules: hours = total study hours (heavy topics like Databases/System Design for senior roles: 40–80h / 15–25 days). days ≈ hours/2.5. Prefer company requirements. Order beginner → job-ready. No markdown.`;
 
   const ai = await callBuddy(prompt);
   if (ai) {
@@ -494,6 +537,10 @@ export function continueHrefForNode(node: PathNode): string {
   if (node.href?.startsWith('/dsa-sheet') || /dsa|algorithm|structure/i.test(node.title)) {
     return node.href?.startsWith('/dsa-sheet') ? node.href : '/dsa-sheet';
   }
+  const topicDays =
+    node.days && node.days > 0
+      ? node.days
+      : Math.min(90, Math.max(5, Math.round((node.hours || 20) / 2.5)));
   if (node.href?.includes('/ai-course-designer')) {
     try {
       const u = new URL(node.href, 'https://eduroute.local');
@@ -503,6 +550,10 @@ export function continueHrefForNode(node: PathNode): string {
         u.searchParams.set('interest', node.skills[0] || node.short);
       }
       if (!u.searchParams.get('title')) u.searchParams.set('title', node.title);
+      if (!u.searchParams.get('days')) u.searchParams.set('days', String(topicDays));
+      if (!u.searchParams.get('hours') && node.hours) {
+        u.searchParams.set('hours', String(node.hours));
+      }
       return `/ai-course-designer?${u.searchParams.toString()}`;
     } catch {
       /* fall through */
@@ -513,6 +564,8 @@ export function continueHrefForNode(node: PathNode): string {
     title: node.title,
     nodeId: node.id,
     auto: true,
+    days: topicDays,
+    hours: node.hours,
   });
 }
 
