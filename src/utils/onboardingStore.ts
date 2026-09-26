@@ -5,7 +5,7 @@
 
 import { getAuthUser } from './rbacAuth';
 
-export type InterestTrack = 'software' | 'cybersecurity' | 'data_analyst';
+export type InterestTrack = 'software' | 'cybersecurity' | 'data_analyst' | 'custom';
 
 export type GapAnswer = {
   questionId: string;
@@ -20,8 +20,10 @@ export type OnboardingProfile = {
   missingSkills: string[];
   completedAt: string | null;
   skipped: boolean;
-  /** Email this profile belongs to (when known). */
   userEmail?: string | null;
+  customRole?: string | null;
+  customSkills?: string[];
+  cvSkills?: string[];
 };
 
 const GLOBAL_KEY = 'eduroute:onboarding-v1';
@@ -34,6 +36,9 @@ const EMPTY: OnboardingProfile = {
   completedAt: null,
   skipped: false,
   userEmail: null,
+  customRole: null,
+  customSkills: [],
+  cvSkills: [],
 };
 
 function emailKey(email: string) {
@@ -76,6 +81,13 @@ export const INTEREST_OPTIONS: {
     description: 'Find insights in data, help businesses make better decisions and drive growth.',
     accent: 'from-emerald-50 to-teal-50 border-emerald-100',
     icon: 'data',
+  },
+  {
+    id: 'custom',
+    title: 'Custom role',
+    description: 'Enter any target role (e.g. SDE 2, DevOps) and your skills or CV.',
+    accent: 'from-amber-50 to-orange-50 border-amber-100',
+    icon: 'software',
   },
 ];
 
@@ -147,9 +159,9 @@ export const GAP_QUESTIONS: Record<
       skill: 'Data cleaning',
     },
   ],
+  custom: [],
 };
 
-/** Roadmap / path suggestions by career track (matches existing /roadmaps/:id). */
 export type TrackRecommendation = {
   title: string;
   blurb: string;
@@ -230,113 +242,41 @@ export const TRACK_RECOMMENDATIONS: Record<InterestTrack, TrackRecommendation[]>
       tag: 'Career',
     },
   ],
+  custom: [
+    {
+      title: 'AI Course Designer',
+      blurb: 'Build a course for your custom role.',
+      to: '/ai-course-designer',
+      tag: 'Custom',
+    },
+  ],
 };
 
-/**
- * Maps each onboarding skill to a concrete in-app path.
- * Priority is used when ranking which gap to close first (lower = do first).
- */
 export type SkillPath = {
   courseTitle: string;
   to: string;
-  /** Lower = more foundational / close first */
   priority: number;
 };
 
 export const SKILL_TO_PATH: Record<string, SkillPath> = {
-  // Software — fundamentals first
-  'Programming fundamentals': {
-    courseTitle: 'Fullstack fundamentals',
-    to: '/roadmaps/fullstack',
-    priority: 1,
-  },
-  'Data structures': {
-    courseTitle: 'DSA Beginner Sheet',
-    to: '/dsa-sheet',
-    priority: 2,
-  },
-  'Git & GitHub': {
-    courseTitle: 'Backend Developer roadmap',
-    to: '/roadmaps/backend',
-    priority: 3,
-  },
-  APIs: {
-    courseTitle: 'Backend & API path',
-    to: '/roadmaps/backend',
-    priority: 4,
-  },
-  'Project building': {
-    courseTitle: 'Frontend & project path',
-    to: '/roadmaps/frontend',
-    priority: 5,
-  },
-  'Practical experience': {
-    courseTitle: 'Internships board',
-    to: '/internships',
-    priority: 6,
-  },
-  // Cyber
-  'Networking basics': {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 1,
-  },
-  Linux: {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 2,
-  },
-  'Cryptography basics': {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 3,
-  },
-  'Web vulnerabilities': {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 4,
-  },
-  'OS & network security': {
-    courseTitle: 'Cybersecurity roadmap',
-    to: '/roadmaps/cybersecurity',
-    priority: 5,
-  },
-  'Hands-on security practice': {
-    courseTitle: 'Assessments & labs',
-    to: '/assessments',
-    priority: 6,
-  },
-  // Data
-  Spreadsheets: {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 1,
-  },
-  SQL: {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 2,
-  },
-  'Python/R for analysis': {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 3,
-  },
-  Statistics: {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 4,
-  },
-  Visualization: {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 5,
-  },
-  'Data cleaning': {
-    courseTitle: 'Data Analyst roadmap',
-    to: '/roadmaps/data-analyst',
-    priority: 6,
-  },
+  'Programming fundamentals': { courseTitle: 'Fullstack fundamentals', to: '/roadmaps/fullstack', priority: 1 },
+  'Data structures': { courseTitle: 'DSA Beginner Sheet', to: '/dsa-sheet', priority: 2 },
+  'Git & GitHub': { courseTitle: 'Backend Developer roadmap', to: '/roadmaps/backend', priority: 3 },
+  APIs: { courseTitle: 'Backend & API path', to: '/roadmaps/backend', priority: 4 },
+  'Project building': { courseTitle: 'Frontend & project path', to: '/roadmaps/frontend', priority: 5 },
+  'Practical experience': { courseTitle: 'Internships board', to: '/internships', priority: 6 },
+  'Networking basics': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 1 },
+  Linux: { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 2 },
+  'Cryptography basics': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 3 },
+  'Web vulnerabilities': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 4 },
+  'OS & network security': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 5 },
+  'Hands-on security practice': { courseTitle: 'Assessments & labs', to: '/assessments', priority: 6 },
+  Spreadsheets: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 1 },
+  SQL: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 2 },
+  'Python/R for analysis': { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 3 },
+  Statistics: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 4 },
+  Visualization: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 5 },
+  'Data cleaning': { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 6 },
 };
 
 export type GapAction = {
@@ -352,15 +292,12 @@ export type NextStepPlan =
       kind: 'gaps';
       gapCount: number;
       skills: string[];
-      /** Highest-priority gap action (close this first) */
       primary: GapAction;
-      /** Other unique paths for remaining gaps */
       alternatives: GapAction[];
       trackLabel: string;
     }
   | { kind: 'internships'; trackLabel: string };
 
-/** Resolve dashboard / profile “what should I do next?” from onboarding data. */
 export function getNextStepPlan(profile?: OnboardingProfile): NextStepPlan {
   const p = profile ?? readOnboarding();
   const track = p.interests?.[0];
@@ -371,7 +308,6 @@ export function getNextStepPlan(profile?: OnboardingProfile): NextStepPlan {
   }
 
   const missing = [...(p.missingSkills || [])];
-  // Also treat explicit “no” answers as gaps if missingSkills is empty but answers exist
   if (missing.length === 0 && p.gapAnswers?.length) {
     p.gapAnswers.forEach((a) => {
       if (a.answer === 'no' && a.skill && !missing.includes(a.skill)) {
@@ -394,7 +330,6 @@ export function getNextStepPlan(profile?: OnboardingProfile): NextStepPlan {
         priority: mapped.priority,
       };
     }
-    // Fallback: first track recommendation
     const fallback =
       track && TRACK_RECOMMENDATIONS[track]?.[0]
         ? TRACK_RECOMMENDATIONS[track][0]
@@ -466,6 +401,11 @@ export function writeOnboarding(profile: OnboardingProfile) {
     };
     const json = JSON.stringify(payload);
     localStorage.setItem(GLOBAL_KEY, json);
+    try {
+      window.dispatchEvent(new CustomEvent('eduroute:onboarding-updated'));
+    } catch {
+      /* ignore */
+    }
     if (email) {
       localStorage.setItem(emailKey(email), json);
     }
@@ -503,7 +443,6 @@ export function isOnboardingDone(): boolean {
   return Boolean(readOnboarding().completedAt);
 }
 
-/** Text injected into Buddy AI context for personalized guidance. */
 export function buildBuddyOnboardingContext(): {
   interests: string[];
   missingSkills: string[];
@@ -528,7 +467,9 @@ export function buildBuddyOnboardingContext(): {
   const yesSkills = profile.gapAnswers.filter((a) => a.answer === 'yes').map((a) => a.skill);
   const summary = [
     interests.length ? `Career interests: ${interests.join(', ')}.` : '',
+    profile.customRole ? `Custom target role: ${profile.customRole}.` : '',
     yesSkills.length ? `Strengths: ${yesSkills.join(', ')}.` : '',
+    (profile.customSkills || []).length ? `Known skills: ${profile.customSkills!.join(', ')}.` : '',
     missingSkills.length
       ? `Skill gaps to close: ${missingSkills.join(', ')}.`
       : 'No major skill gaps marked from the quiz.',
