@@ -8,6 +8,7 @@ import { saveAuthSession } from '../../utils/rbacAuth';
 import { parseGoogleCredential, saveUserProfile } from '../../utils/userProfile';
 import { isAuthDbConfigError, localDemoRegister } from '../../utils/localDemoAuth';
 import { handleSocialAuth } from '../../utils/socialAuth';
+import { isSupabaseConfigured, supabaseSignUp } from '../../utils/supabaseAuth';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -136,6 +137,14 @@ export const Signup = () => {
       password: formData.password,
     };
     try {
+      // 1) Supabase (production)
+      if (isSupabaseConfigured) {
+        await supabaseSignUp(payload);
+        goToCollegeIdUpload();
+        return;
+      }
+
+      // 2) MySQL / Go API
       let token: string;
       let user: { id: string; name?: string; email?: string; verificationStatus?: string };
       try {
@@ -212,7 +221,9 @@ export const Signup = () => {
               <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>EDUROUTE</span>
             </div>
             <h2 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Create account</h2>
-            <p className={`mt-1 text-sm ${muted}`}>Start your learning journey today</p>
+            <p className={`mt-1 text-sm ${muted}`}>
+              {isSupabaseConfigured ? 'Secure signup (Supabase)' : 'Start your learning journey today'}
+            </p>
 
             <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
               <div>
@@ -241,7 +252,7 @@ export const Signup = () => {
                 {formErrors.password && <p className="mt-1 text-xs text-red-400">{formErrors.password}</p>}
               </div>
               {apiError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{apiError}</p>}
-              {demoHint && <p className="text-xs text-amber-500">MySQL not configured — account saved in this browser (demo mode).</p>}
+              {demoHint && <p className="text-xs text-amber-500">DB not configured — account saved in this browser (demo mode).</p>}
               <button type="submit" disabled={isSubmitting} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-500 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-600/30 disabled:opacity-60">
                 {isSubmitting ? 'Creating account…' : 'Sign Up'}{!isSubmitting && <ArrowRight className="h-4 w-4" />}
               </button>
@@ -272,15 +283,6 @@ export const Signup = () => {
                 aria-label="Sign up with LinkedIn"
               >
                 in
-              </button>
-              <button
-                type="button"
-                onClick={() => document.querySelector<HTMLInputElement>('input[type="email"]')?.focus()}
-                className={`flex h-11 w-11 items-center justify-center rounded-xl border transition hover:scale-105 ${isDark ? 'border-white/10 bg-slate-800/80' : 'border-slate-200 bg-white'}`}
-                title="Sign up with email"
-                aria-label="Sign up with email"
-              >
-                <Mail className="h-4 w-4 text-slate-500" />
               </button>
             </div>
             {googleError && <p className="mt-3 text-center text-xs text-amber-500">{googleError}</p>}
