@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -26,9 +26,12 @@ import { getDisplayFirstName, getStoredUserProfile } from '../../utils/userProfi
 import { readApplications, readCompletions, type InternshipApplication } from '../../utils/internshipApplications';
 import {
   getStoredPublicUsername,
+  isSupabaseConfigured,
   publicProfileUrl,
   slugifyUsername,
+  syncMyPublicData,
 } from '../../utils/supabaseAuth';
+import type { PublicProfilePayload } from '../../utils/publicProfilePayload';
 
 type PortfolioProject = {
   id: string;
@@ -113,6 +116,64 @@ export const DigitalPortfolio = () => {
   const [onboarding, setOnboarding] = useState<OnboardingProfile>(() => readOnboarding());
   const [apps, setApps] = useState<InternshipApplication[]>(() => readApplications());
   const [shareMsg, setShareMsg] = useState<string | null>(null);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+
+  const strengths = useMemo(
+    () =>
+      (onboarding.gapAnswers || [])
+        .filter((a) => a.answer === 'yes')
+        .map((a) => a.skill),
+    [onboarding.gapAnswers],
+  );
+  const gaps = onboarding.missingSkills || [];
+  const interests = (onboarding.interests || []).map(interestLabel);
+  const completions = useMemo(() => readCompletions(), [apps]);
+  const activeApps = apps.filter((a) => a.status !== 'Completed');
+
+  const buildPublicPayload = useCallback((): PublicProfilePayload => {
+    const skills =
+      strengths.length > 0
+        ? strengths
+        : interests.length > 0
+          ? interests
+          : ['JavaScript', 'React', 'Problem Solving'];
+    const internships = [...completions, ...activeApps].slice(0, 8).map((a) => ({
+      role: a.role,
+      company: a.company,
+      status: a.status,
+      duration: a.duration,
+    }));
+    // If no real internships yet, still show a lean placeholder only when nothing else — skip empty noise
+    const certs = DEMO_CERTS.map((c) => ({
+      title: c.title,
+      issuer: c.issuer,
+      date: c.date,
+    }));
+    const achievements = DEMO_ACHIEVEMENTS.map((a) => ({
+      title: a.title,
+      detail: a.detail,
+      icon: a.icon,
+    }));
+    return {
+      skills,
+      skillGaps: gaps.slice(0, 12),
+      certs,
+      internships,
+      achievements,
+      xp: 120 + completions.length * 50,
+      solved: 0,
+      pathSummary: skills.slice(0, 5).map((t) => ({ title: t, status: 'active' })),
+    };
+  }, [strengths, interests, gaps, completions, activeApps]);
+
+  // Push portfolio snapshot to Supabase public_data so /u/:username is rich
+  useEffect(() => {
+    if (!isSupabaseConfigured || !auth?.id) return;
+    const payload = buildPublicPayload();
+    void syncMyPublicData(payload)
+      .then(() => setSyncNote('Public profile updated'))
+      .catch(() => setSyncNote(null));
+  }, [auth?.id, buildPublicPayload]);
 
   useEffect(() => {
     const refresh = () => {
@@ -128,18 +189,6 @@ export const DigitalPortfolio = () => {
       window.removeEventListener('eduroute:applications-updated', refresh);
     };
   }, []);
-
-  const strengths = useMemo(
-    () =>
-      (onboarding.gapAnswers || [])
-        .filter((a) => a.answer === 'yes')
-        .map((a) => a.skill),
-    [onboarding.gapAnswers],
-  );
-  const gaps = onboarding.missingSkills || [];
-  const interests = (onboarding.interests || []).map(interestLabel);
-  const completions = useMemo(() => readCompletions(), [apps]);
-  const activeApps = apps.filter((a) => a.status !== 'Completed');
 
   const completeness = useMemo(() => {
     let score = 0;
@@ -252,6 +301,7 @@ export const DigitalPortfolio = () => {
               {shareUrl}
             </p>
             {shareMsg && <p className="text-right text-xs font-semibold text-emerald-600">{shareMsg}</p>}
+            {syncNote && <p className="text-right text-[11px] text-slate-400">{syncNote}</p>}
           </div>
         </div>
 
@@ -267,7 +317,7 @@ export const DigitalPortfolio = () => {
             />
           </div>
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            Public link works like LeetCode: anyone with /u/{username} can open your profile.
+            Share link: /u/{username} (skills, certs, internships, achievements).
           </p>
         </div>
       </motion.section>
@@ -349,18 +399,10 @@ export const DigitalPortfolio = () => {
                 key={a.internshipId}
                 className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-800/40"
               >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <div className="font-bold text-slate-900 dark:text-white">{a.role}</div>
-                    <div className="text-xs text-slate-500">
-                      {a.company}
-                      {a.duration ? ` · ${a.duration}` : ''}
-                      {a.mode ? ` · ${a.mode}` : ''}
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-black uppercase text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-300">
-                    {a.status}
-                  </span>
+                <div className="font-bold text-slate-900 dark:text-white">{a.role}</div>
+                <div className="text-xs text-slate-500">
+                  {a.company}
+                  {a.duration ? ` · ${a.duration}` : ''} · {a.status}
                 </div>
               </li>
             ))}
