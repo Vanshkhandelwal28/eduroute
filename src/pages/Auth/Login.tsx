@@ -58,6 +58,8 @@ export const Login = () => {
   const [roleOpen, setRoleOpen] = useState(false);
   const roleRef = useRef<HTMLDivElement>(null);
 
+  const studentNeedsRealAuth = isSupabaseConfigured && role === 'student';
+
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (roleRef.current && !roleRef.current.contains(e.target as Node)) setRoleOpen(false);
@@ -83,19 +85,26 @@ export const Login = () => {
       const emailRaw = formData.email.trim();
       const password = formData.password;
 
-      // Student + Supabase: real auth when email & password provided
-      if (role === 'student' && isSupabaseConfigured && emailRaw && password.length >= 6) {
+      // Student + Supabase: ALWAYS real auth — no passwordless demo
+      if (studentNeedsRealAuth) {
+        if (!emailRaw) {
+          setError('Email is required.');
+          return;
+        }
+        if (password.length < 6) {
+          setError('Password is required (min 6 characters).');
+          return;
+        }
         try {
           await supabaseSignIn({ email: emailRaw, password });
           goHome('student');
-          return;
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Login failed');
-          return;
+          setError(err instanceof Error ? err.message : 'Invalid email or password.');
         }
+        return;
       }
 
-      // Open demo mode for other roles / missing credentials
+      // Other roles (or Supabase not configured): demo mode only
       setUsedDemoMode(true);
       const email =
         emailRaw ||
@@ -173,6 +182,7 @@ export const Login = () => {
         return;
       }
 
+      // Student only when Supabase is NOT configured
       saveAuthSession(`open-student-${Date.now()}`, {
         id: `open-student-${Date.now()}`,
         name: displayName,
@@ -229,9 +239,11 @@ export const Login = () => {
               <div>
                 <div className="text-base font-bold">Sign in</div>
                 <div className={`text-xs ${muted}`}>
-                  {isSupabaseConfigured && role === 'student'
-                    ? 'Student: email + password (Supabase)'
-                    : 'Pick a role — demo or real student login'}
+                  {studentNeedsRealAuth
+                    ? 'Student login requires email + password'
+                    : isSupabaseConfigured
+                      ? 'Other roles: demo · Student: real auth'
+                      : 'Demo mode (set VITE_SUPABASE_* for real student auth)'}
                 </div>
               </div>
             </div>
@@ -299,7 +311,7 @@ export const Login = () => {
 
               <div>
                 <label className={`mb-1.5 block text-xs font-semibold ${muted}`}>
-                  Email {role === 'student' && isSupabaseConfigured ? '(required)' : '(optional)'}
+                  Email {studentNeedsRealAuth ? '(required)' : '(optional)'}
                 </label>
                 <div className="relative">
                   <Mail className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
@@ -308,6 +320,8 @@ export const Login = () => {
                     value={formData.email}
                     onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
                     placeholder="you@college.edu"
+                    required={studentNeedsRealAuth}
+                    autoComplete="email"
                     className={`w-full rounded-xl border py-2.5 pl-10 pr-3.5 text-sm outline-none focus:ring-2 focus:ring-violet-500/30 ${fieldCls}`}
                   />
                 </div>
@@ -315,7 +329,7 @@ export const Login = () => {
 
               <div>
                 <label className={`mb-1.5 block text-xs font-semibold ${muted}`}>
-                  Password {role === 'student' && isSupabaseConfigured ? '(required)' : '(optional)'}
+                  Password {studentNeedsRealAuth ? '(required)' : '(optional)'}
                 </label>
                 <div className="relative">
                   <Lock className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
@@ -323,7 +337,9 @@ export const Login = () => {
                     type={showPass ? 'text' : 'password'}
                     value={formData.password}
                     onChange={(e) => setFormData((p) => ({ ...p, password: e.target.value }))}
-                    placeholder={role === 'student' && isSupabaseConfigured ? 'Your password' : 'Optional in demo'}
+                    placeholder={studentNeedsRealAuth ? 'Your password' : 'Optional in demo'}
+                    required={studentNeedsRealAuth}
+                    autoComplete="current-password"
                     className={`w-full rounded-xl border py-2.5 pl-10 pr-10 text-sm outline-none focus:ring-2 focus:ring-violet-500/30 ${fieldCls}`}
                   />
                   <button type="button" onClick={() => setShowPass((v) => !v)} className={`absolute right-3 top-1/2 -translate-y-1/2 ${muted}`} aria-label="Toggle password">
@@ -333,7 +349,7 @@ export const Login = () => {
               </div>
 
               {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
-              {usedDemoMode && (
+              {usedDemoMode && !studentNeedsRealAuth && (
                 <p className="text-xs text-amber-500">Demo mode — credentials not checked for this role.</p>
               )}
 
