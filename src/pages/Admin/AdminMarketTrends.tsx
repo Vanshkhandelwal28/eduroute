@@ -62,6 +62,13 @@ export function AdminMarketTrends() {
   const due = monthDueForRefresh(market?.updatedAt);
   const filtered = useMemo(() => filterJobs(jobs, filters), [jobs, filters]);
   const demand = useMemo(() => computeSkillDemand(filtered), [filtered]);
+  const sourceBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {};
+    jobs.forEach((j) => {
+      counts[j.source] = (counts[j.source] || 0) + 1;
+    });
+    return counts;
+  }, [jobs]);
 
   const onRegionChange = (value: string) => {
     setRegion(value);
@@ -122,8 +129,8 @@ export function AdminMarketTrends() {
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Admin · Engine</p>
           <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">Market Trend Engine</h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Collect permitted public job data, dedupe, normalize skills, and analyze demand. AI refresh updates the
-            student-facing snapshot. Never scrapes restricted sources.
+            Collect live jobs via <strong>Adzuna API</strong> (when configured) plus curated public seed. Dedupe,
+            normalize skills, demand %. AI refresh updates the student-facing snapshot. No restricted scraping.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -156,7 +163,7 @@ export function AdminMarketTrends() {
           <select
             value={region}
             onChange={(e) => onRegionChange(e.target.value)}
-            disabled={busy}
+            disabled={busy || collectBusy}
             className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/40"
           >
             {MARKET_REGIONS.map((r) => (
@@ -166,9 +173,11 @@ export function AdminMarketTrends() {
             ))}
           </select>
         </label>
-        <p className="max-w-md pb-1 text-xs text-[var(--text-muted)]">
-          Sources: <strong>curated-public</strong> (permitted demo). Optional MySQL schema:{' '}
-          <code className="text-[10px]">docs/sql/market_trend_schema.sql</code>
+        <p className="max-w-lg pb-1 text-xs text-[var(--text-muted)]">
+          Sources:{' '}
+          <strong>adzuna</strong> (official Jobs API, India) + <strong>curated-public</strong> seed. Netlify env:{' '}
+          <code className="text-[10px]">ADZUNA_APP_ID</code>, <code className="text-[10px]">ADZUNA_APP_KEY</code>. Optional
+          SQL: <code className="text-[10px]">docs/sql/market_trend_schema.sql</code>
         </p>
       </div>
 
@@ -189,8 +198,7 @@ export function AdminMarketTrends() {
         </p>
       )}
 
-      {/* Collection status */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
           <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Jobs stored</p>
           <p className="mt-1 text-2xl font-black">{jobs.length}</p>
@@ -202,6 +210,16 @@ export function AdminMarketTrends() {
           <p className="text-xs text-[var(--text-muted)]">Role / industry / location / experience</p>
         </div>
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
+          <p className="text-xs font-bold uppercase text-[var(--text-muted)]">By source</p>
+          <p className="mt-1 text-xs font-semibold leading-relaxed">
+            {Object.keys(sourceBreakdown).length === 0
+              ? '—'
+              : Object.entries(sourceBreakdown)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join(' · ')}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
           <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Last collection</p>
           <p className="mt-1 text-sm font-bold">
             {runs[0] ? new Date(runs[0].finishedAt || runs[0].startedAt).toLocaleString() : '—'}
@@ -210,7 +228,6 @@ export function AdminMarketTrends() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
           <Filter className="h-4 w-4" /> Job filters
@@ -228,7 +245,6 @@ export function AdminMarketTrends() {
         </div>
       </div>
 
-      {/* Skill demand from jobs */}
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
         <h2 className="mb-3 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
           Skill demand (from collected jobs)
@@ -261,10 +277,10 @@ export function AdminMarketTrends() {
         )}
         <p className="mt-2 text-[11px] text-[var(--text-muted)]">
           Historical growth requires multiple collection windows — shown as “Insufficient historical data” until then.
+          Live rows come from Adzuna when API keys are set on Netlify.
         </p>
       </div>
 
-      {/* Run history */}
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
           <History className="h-4 w-4" /> Collection history
@@ -292,7 +308,6 @@ export function AdminMarketTrends() {
         )}
       </div>
 
-      {/* AI snapshot (existing) */}
       {!market ? (
         <div className="rounded-2xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)] p-10 text-center">
           <TrendingUp className="mx-auto mb-3 h-10 w-10 text-[var(--text-muted)]" />
