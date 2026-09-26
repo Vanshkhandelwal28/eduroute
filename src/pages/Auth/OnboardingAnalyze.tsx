@@ -460,9 +460,35 @@ export const OnboardingAnalyze = () => {
                     ))}
                   </div>
                 )}
+                {cvPreview && (
+                  <div className="mt-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3">
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">
+                        Extracted text from CV ({cvPreview.length} chars)
+                      </p>
+                      <button
+                        type="button"
+                        className="text-[10px] font-bold text-indigo-400 hover:underline"
+                        onClick={() => {
+                          try {
+                            void navigator.clipboard.writeText(cvPreview);
+                          } catch {
+                            /* ignore */
+                          }
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[var(--text-secondary)]">
+                      {cvPreview.slice(0, 4000)}
+                      {cvPreview.length > 4000 ? '\n… (truncated)' : ''}
+                    </pre>
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[10px] text-[var(--text-muted)] max-w-[60%]">
-                    Extracts every skill (jwt, html, js, dsa…) — even short ones
+                    Check extracted text above — AI only sees what is shown here
                   </p>
                   <button
                     type="button"
