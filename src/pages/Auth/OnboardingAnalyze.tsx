@@ -23,10 +23,10 @@ import {
 import {
   extractSkillsFromText,
   extractSkillsWithAI,
-  extractReadableTextFromBinary,
   saveCustomCareer,
   applySkillProgressToNodes,
 } from '../../utils/customCareer';
+import { extractCvContent, formatCvReport } from '../../utils/pdfTextExtract';
 import { saveSkillGap } from '../../services/buddyApi';
 import { getAuthUser } from '../../utils/rbacAuth';
 
@@ -49,6 +49,7 @@ export const OnboardingAnalyze = () => {
   const [cvSkills, setCvSkills] = useState<string[]>([]);
   const [cvFileName, setCvFileName] = useState('');
   const [cvPreview, setCvPreview] = useState('');
+  const [cvReport, setCvReport] = useState('');
   const [customError, setCustomError] = useState('');
   const [pathStatus, setPathStatus] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
@@ -117,31 +118,28 @@ export const OnboardingAnalyze = () => {
     setCvFileName(file?.name || '');
     setCvSkills([]);
     setCvPreview('');
+    setCvReport('');
     setCvReady(false);
     if (!file) return;
-    setPathStatus('Reading CV file…');
+    setPathStatus('Reading CV (decoding PDF text)…');
     try {
-      let text = '';
-      if (file.type.startsWith('text/') || /\.(txt|md|csv|json)$/i.test(file.name)) {
-        text = await file.text();
-      } else {
-        const buf = await file.arrayBuffer();
-        const raw = new TextDecoder('utf-8', { fatal: false }).decode(buf);
-        text = extractReadableTextFromBinary(raw);
-        if (text.length < 40) {
-          text = raw
-            .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u024F]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-        }
-      }
-      setCvPreview(text.slice(0, 10000));
-      const quick = extractSkillsFromText(text);
-      if (quick.length) setCvSkills(quick);
+      const info = await extractCvContent(file, extractSkillsFromText);
+      const report = formatCvReport(info);
+      setCvPreview(info.rawText);
+      setCvReport(report);
+      if (info.skills.length) setCvSkills(info.skills);
       setCvReady(true);
-      setPathStatus('');
+      setPathStatus(
+        info.source === 'pdfjs'
+          ? `Decoded PDF · ${info.skills.length} skills found`
+          : info.source === 'text'
+            ? `Text file · ${info.skills.length} skills found`
+            : 'Partial decode — check report below',
+      );
+      setTimeout(() => setPathStatus(''), 3000);
       setCustomError('');
-    } catch {
+    } catch (e) {
+      console.error(e);
       setPathStatus('');
       setCustomError('Could not read that file. Try .txt or paste skills in the box above.');
     }
@@ -460,18 +458,18 @@ export const OnboardingAnalyze = () => {
                     ))}
                   </div>
                 )}
-                {cvPreview && (
+                {(cvReport || cvPreview) && (
                   <div className="mt-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3">
                     <div className="mb-1.5 flex items-center justify-between gap-2">
                       <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">
-                        Extracted text from CV ({cvPreview.length} chars)
+                        CV report (readable A–Z) · {(cvReport || cvPreview).length} chars
                       </p>
                       <button
                         type="button"
                         className="text-[10px] font-bold text-indigo-400 hover:underline"
                         onClick={() => {
                           try {
-                            void navigator.clipboard.writeText(cvPreview);
+                            void navigator.clipboard.writeText(cvReport || cvPreview);
                           } catch {
                             /* ignore */
                           }
@@ -480,15 +478,15 @@ export const OnboardingAnalyze = () => {
                         Copy
                       </button>
                     </div>
-                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[var(--text-secondary)]">
-                      {cvPreview.slice(0, 4000)}
-                      {cvPreview.length > 4000 ? '\n… (truncated)' : ''}
+                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[var(--text-secondary)]">
+                      {(cvReport || cvPreview).slice(0, 8000)}
+                      {(cvReport || cvPreview).length > 8000 ? '\n… (truncated)' : ''}
                     </pre>
                   </div>
                 )}
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[10px] text-[var(--text-muted)] max-w-[60%]">
-                    Check extracted text above — AI only sees what is shown here
+                    Full A–Z report above (name, skills, sections, text). AI uses this.
                   </p>
                   <button
                     type="button"
