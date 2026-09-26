@@ -21,6 +21,7 @@ import { handleSocialAuth } from '../../utils/socialAuth';
 import { INDUSTRY_DEMO_CREDENTIALS } from '../../utils/industryStore';
 import { FACULTY_DEMO_CREDENTIALS } from '../../utils/facultyStore';
 import { COLLEGE_DEMO_CREDENTIALS } from '../../utils/placementDashboard';
+import { isSupabaseConfigured, supabaseSignIn } from '../../utils/supabaseAuth';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -77,11 +78,25 @@ export const Login = () => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    setUsedDemoMode(true);
+    setUsedDemoMode(false);
     try {
-      // Open demo mode: no password / API checks until Railway MySQL is connected.
-      // Pick a role and continue — email is optional (defaults applied).
       const emailRaw = formData.email.trim();
+      const password = formData.password;
+
+      // Student + Supabase: real auth when email & password provided
+      if (role === 'student' && isSupabaseConfigured && emailRaw && password.length >= 6) {
+        try {
+          await supabaseSignIn({ email: emailRaw, password });
+          goHome('student');
+          return;
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Login failed');
+          return;
+        }
+      }
+
+      // Open demo mode for other roles / missing credentials
+      setUsedDemoMode(true);
       const email =
         emailRaw ||
         (role === 'admin'
@@ -158,7 +173,6 @@ export const Login = () => {
         return;
       }
 
-      // student (default)
       saveAuthSession(`open-student-${Date.now()}`, {
         id: `open-student-${Date.now()}`,
         name: displayName,
@@ -206,19 +220,6 @@ export const Login = () => {
           <p className={`mt-4 text-base leading-relaxed ${muted}`}>
             Sign in to continue skill mapping, internships, roadmaps, and placement preparation — all in one place.
           </p>
-          <div className="mt-8 grid grid-cols-2 gap-3">
-            {[
-              { t: 'Skill mapping', d: 'Know your gaps' },
-              { t: 'Internships', d: 'Match & apply' },
-              { t: 'Roadmaps', d: 'Learn with path' },
-              { t: 'Placement', d: 'Track outcomes' },
-            ].map((item) => (
-              <div key={item.t} className={`rounded-2xl border p-4 backdrop-blur-sm ${isDark ? 'border-white/10 bg-white/5' : 'border-slate-200/80 bg-white/70 shadow-sm'}`}>
-                <p className="text-sm font-bold">{item.t}</p>
-                <p className={`mt-0.5 text-xs ${muted}`}>{item.d}</p>
-              </div>
-            ))}
-          </div>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
@@ -227,7 +228,11 @@ export const Login = () => {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-sm font-black text-white">E</div>
               <div>
                 <div className="text-base font-bold">Sign in</div>
-                <div className={`text-xs ${muted}`}>Open demo — pick a role (no password needed)</div>
+                <div className={`text-xs ${muted}`}>
+                  {isSupabaseConfigured && role === 'student'
+                    ? 'Student: email + password (Supabase)'
+                    : 'Pick a role — demo or real student login'}
+                </div>
               </div>
             </div>
 
@@ -293,7 +298,9 @@ export const Login = () => {
               </div>
 
               <div>
-                <label className={`mb-1.5 block text-xs font-semibold ${muted}`}>Email (optional)</label>
+                <label className={`mb-1.5 block text-xs font-semibold ${muted}`}>
+                  Email {role === 'student' && isSupabaseConfigured ? '(required)' : '(optional)'}
+                </label>
                 <div className="relative">
                   <Mail className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
                   <input
@@ -307,14 +314,16 @@ export const Login = () => {
               </div>
 
               <div>
-                <label className={`mb-1.5 block text-xs font-semibold ${muted}`}>Password (optional)</label>
+                <label className={`mb-1.5 block text-xs font-semibold ${muted}`}>
+                  Password {role === 'student' && isSupabaseConfigured ? '(required)' : '(optional)'}
+                </label>
                 <div className="relative">
                   <Lock className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
                   <input
                     type={showPass ? 'text' : 'password'}
                     value={formData.password}
                     onChange={(e) => setFormData((p) => ({ ...p, password: e.target.value }))}
-                    placeholder="Not required in open demo"
+                    placeholder={role === 'student' && isSupabaseConfigured ? 'Your password' : 'Optional in demo'}
                     className={`w-full rounded-xl border py-2.5 pl-10 pr-10 text-sm outline-none focus:ring-2 focus:ring-violet-500/30 ${fieldCls}`}
                   />
                   <button type="button" onClick={() => setShowPass((v) => !v)} className={`absolute right-3 top-1/2 -translate-y-1/2 ${muted}`} aria-label="Toggle password">
@@ -325,33 +334,14 @@ export const Login = () => {
 
               {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
               {usedDemoMode && (
-                <p className="text-xs text-amber-500">
-                  Open demo mode — credentials not checked until Railway is connected.
-                </p>
+                <p className="text-xs text-amber-500">Demo mode — credentials not checked for this role.</p>
               )}
-              <p className={`text-[11px] ${muted}`}>
-                Tip: select Student / Faculty / Industry / College / Staff and click Sign in.
-              </p>
 
               <button type="submit" disabled={isLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-500 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-600/30 transition hover:from-violet-500 hover:to-indigo-400 disabled:opacity-60">
                 {isLoading ? 'Signing in…' : 'Sign in'}
                 {!isLoading && <ArrowRight className="h-4 w-4" />}
               </button>
             </form>
-
-            <div className="my-5 flex items-center gap-3">
-              <div className={`h-px flex-1 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-              <span className={`text-xs ${muted}`}>OR</span>
-              <div className={`h-px flex-1 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-            </div>
-
-            <div className="flex items-center justify-center gap-3">
-              <button type="button" onClick={() => navigate('/signup')} className={`flex h-11 w-11 items-center justify-center rounded-xl border text-sm font-bold ${isDark ? 'border-white/10 bg-slate-800/80 text-white' : 'border-slate-200 bg-white text-slate-800'}`}>G</button>
-              <button type="button" onClick={() => handleSocialAuth('github', 'login', (msg) => setSocialMsg(msg))} className={`flex h-11 w-11 items-center justify-center rounded-xl border ${isDark ? 'border-white/10 bg-slate-800/80' : 'border-slate-200 bg-white'}`} title="Sign in with GitHub" aria-label="Sign in with GitHub">
-                <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.387.6.113.82-.26.82-.577 0-.285-.01-1.04-.016-2.04-3.338.726-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.757-1.333-1.757-1.09-.745.083-.73.083-.73 1.205.085 1.84 1.238 1.84 1.238 1.07 1.834 2.807 1.304 3.492.997.108-.775.418-1.305.76-1.605-2.665-.303-5.467-1.333-5.467-5.93 0-1.31.468-2.382 1.236-3.222-.124-.303-.536-1.523.117-3.176 0 0 1.008-.322 3.3 1.23.96-.267 1.98-.4 3-.405 1.02.005 2.04.138 3 .405 2.29-1.232 3.297 1.23 3.297 1.23.653 1.653.242 2.873.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.61-2.807 5.625-5.48 5.922.43.372.823 1.102.823 2.222 0 1.606-.015 2.896-.015 3.286 0 .319.216.694.825.576C20.565 21.796 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
-              </button>
-            </div>
-            {socialMsg && <p className={`mt-3 text-center text-xs ${muted}`}>{socialMsg}</p>}
 
             <p className={`mt-6 text-center text-sm ${muted}`}>
               New here?{' '}
