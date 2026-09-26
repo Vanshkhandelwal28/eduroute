@@ -1,9 +1,10 @@
 /**
- * Market trends + student trend analysis — always Gemini via marketAi.js
+ * Market trends + student trend analysis
+ * Prefer Gemini; on overload/404 fall back to Groq (same keys as Buddy).
  * POST { action: 'refresh_market' | 'analyze_student', skills?, strengths?, gaps?, field?, interests? }
  * GET  → last in-memory market snapshot
  */
-const { generateWithGemini, extractJsonObject } = require('./_lib/marketAi');
+const { generateMarketAi, extractJsonObject } = require('./_lib/marketAi');
 
 function json(statusCode, body) {
   return {
@@ -38,10 +39,14 @@ function studentTemplate(p) {
     '"skillGaps":[{"skill":"","priority":"high|medium|low","why":"","action":""}],' +
     '"strengths":[""],"recommendations":[""],' +
     '"comparisonBars":[{"skill":"","market":0,"student":0}]}. ' +
-    'Field: ' + (p.field || 'General') +
-    '. Interests: ' + (p.interests || []).join(', ') +
-    '. Strengths: ' + (p.strengths || p.skills || []).join(', ') +
-    '. Gaps: ' + (p.gaps || []).join(', ') +
+    'Field: ' +
+    (p.field || 'General') +
+    '. Interests: ' +
+    (p.interests || []).join(', ') +
+    '. Strengths: ' +
+    (p.strengths || p.skills || []).join(', ') +
+    '. Gaps: ' +
+    (p.gaps || []).join(', ') +
     '. comparisonBars: 6-10 skills, realistic scores 0-100.'
   );
 }
@@ -54,8 +59,8 @@ exports.handler = async (event) => {
     return json(200, {
       ok: true,
       market: memoryMarket,
-      provider: 'gemini',
       hasGemini: Boolean(process.env.GEMINI_API_KEY),
+      hasGroq: Boolean(process.env.GROQ_API_KEY),
     });
   }
   if (event.httpMethod !== 'POST') return json(405, { ok: false, error: 'Method not allowed' });
@@ -64,34 +69,36 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || '{}');
     const action = body.action || 'refresh_market';
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
       return json(503, {
         ok: false,
-        error: 'GEMINI_API_KEY not configured in Netlify. Add env and redeploy.',
-        provider: 'gemini',
+        error: 'Neither GEMINI_API_KEY nor GROQ_API_KEY is set in Netlify. Add at least one and redeploy.',
       });
     }
 
     if (action === 'refresh_market') {
-      const reply = await generateWithGemini(
+      const res = await generateMarketAi(
         [
           { role: 'system', content: 'You output only valid JSON. No prose outside JSON.' },
           { role: 'user', content: MARKET_TEMPLATE },
         ],
         0.35,
       );
+      const reply = typeof res === 'string' ? res : res.text;
+      const provider = (res && res.provider) || 'ai';
       const parsed = extractJsonObject(reply);
       if (!parsed) {
         return json(502, {
           ok: false,
-          error: 'Gemini returned non-JSON. Try again.',
+          error: 'AI returned non-JSON. Try again.',
+          provider: provider,
           rawPreview: String(reply).slice(0, 400),
         });
       }
       parsed.updatedAt = parsed.updatedAt || new Date().toISOString();
-      parsed.provider = 'gemini';
+      parsed.provider = provider;
       memoryMarket = parsed;
-      return json(200, { ok: true, market: parsed, provider: 'gemini' });
+      return json(200, { ok: true, market: parsed, provider: provider });
     }
 
     if (action === 'analyze_student') {
@@ -102,29 +109,32 @@ exports.handler = async (event) => {
         field: body.field || 'Software Engineering',
         interests: Array.isArray(body.interests) ? body.interests : [],
       };
-      const reply = await generateWithGemini(
+      const res = await generateMarketAi(
         [
           { role: 'system', content: 'You output only valid JSON. No prose outside JSON.' },
           { role: 'user', content: studentTemplate(payload) },
         ],
         0.4,
       );
+      const reply = typeof res === 'string' ? res : res.text;
+      const provider = (res && res.provider) || 'ai';
       const parsed = extractJsonObject(reply);
       if (!parsed) {
         return json(502, {
           ok: false,
-          error: 'Gemini returned non-JSON. Try again.',
+          error: 'AI returned non-JSON. Try again.',
+          provider: provider,
           rawPreview: String(reply).slice(0, 400),
         });
       }
       parsed.generatedAt = parsed.generatedAt || new Date().toISOString();
-      parsed.provider = 'gemini';
-      return json(200, { ok: true, analysis: parsed, market: memoryMarket, provider: 'gemini' });
+      parsed.provider = provider;
+      return json(200, { ok: true, analysis: parsed, market: memoryMarket, provider: provider });
     }
 
     return json(400, { ok: false, error: 'Unknown action. Use refresh_market or analyze_student.' });
   } catch (err) {
     console.error('market-trends error', err);
-    return json(500, { ok: false, error: err.message || 'Market trends failed', provider: 'gemini' });
+    return json(500, { ok: false, error: err.message || 'Market trends failed' });
   }
 };
