@@ -2,6 +2,12 @@
  * AI-designed mixed courses — localStorage (student editable).
  */
 
+import {
+  getVideoDurationSeconds,
+  minWatchSecondsFromTopics,
+  secondsToHoursRounded,
+} from './youtubeDurations';
+
 export type CourseTopic = {
   id: string;
   title: string;
@@ -13,6 +19,8 @@ export type CourseTopic = {
   docUrl: string;
   docTitle: string;
   skills: string[];
+  /** Real YouTube length in seconds (unique videos drive min watch time) */
+  videoDurationSeconds?: number;
 };
 
 export type AiDesignedCourse = {
@@ -25,6 +33,7 @@ export type AiDesignedCourse = {
   skillGaps: string[];
   demandHints: string[];
   topics: CourseTopic[];
+  /** Minimum watch hours from unique video lengths (not study estimate) */
   totalHours: number;
   createdAt: string;
   updatedAt: string;
@@ -53,14 +62,44 @@ function writeJson(value: unknown) {
   }
 }
 
+/** Enrich topics with known YT durations, then sum unique videos → hours. */
+export function computeMinWatchHours(topics: CourseTopic[]): number {
+  const enriched = topics.map((t) => ({
+    ...t,
+    videoDurationSeconds:
+      t.videoDurationSeconds && t.videoDurationSeconds > 0
+        ? t.videoDurationSeconds
+        : getVideoDurationSeconds(t.youtubeUrl),
+  }));
+  const sec = minWatchSecondsFromTopics(enriched);
+  if (sec > 0) return secondsToHoursRounded(sec);
+  // Fallback only if no video lengths known yet
+  return Math.round(topics.reduce((a, t) => a + (t.estimatedHours || 0), 0) * 10) / 10;
+}
+
+export function enrichTopicsWithDurations(topics: CourseTopic[]): CourseTopic[] {
+  return topics.map((t) => {
+    const known = getVideoDurationSeconds(t.youtubeUrl);
+    if (!known) return t;
+    if (t.videoDurationSeconds && t.videoDurationSeconds > 0) return t;
+    return { ...t, videoDurationSeconds: known };
+  });
+}
+
 export function readAiCourses(): AiDesignedCourse[] {
   const list = readJson<AiDesignedCourse[]>([]);
   return Array.isArray(list) ? list : [];
 }
 
 export function saveAiCourse(course: AiDesignedCourse): AiDesignedCourse {
+  const topics = enrichTopicsWithDurations(course.topics);
+  const next: AiDesignedCourse = {
+    ...course,
+    topics,
+    totalHours: computeMinWatchHours(topics),
+    updatedAt: new Date().toISOString(),
+  };
   const list = readAiCourses().filter((c) => c.id !== course.id);
-  const next = { ...course, updatedAt: new Date().toISOString() };
   writeJson([next, ...list]);
   return next;
 }
@@ -73,11 +112,34 @@ export function updateCourseTopics(id: string, topics: CourseTopic[]): AiDesigne
   const list = readAiCourses();
   const idx = list.findIndex((c) => c.id === id);
   if (idx < 0) return null;
-  const totalHours = topics.reduce((a, t) => a + (t.estimatedHours || 0), 0);
+  const enriched = enrichTopicsWithDurations(topics);
+  const next: AiDesignedCourse = {
+    ...list[idx],
+    topics: enriched,
+    totalHours: computeMinWatchHours(enriched),
+    updatedAt: new Date().toISOString(),
+  };
+  list[idx] = next;
+  writeJson(list);
+  return next;
+}
+
+/** Persist a measured YT duration onto one topic and refresh totalHours. */
+export function updateTopicVideoDuration(
+  courseId: string,
+  topicId: string,
+  seconds: number,
+): AiDesignedCourse | null {
+  const list = readAiCourses();
+  const idx = list.findIndex((c) => c.id === courseId);
+  if (idx < 0) return null;
+  const topics = list[idx].topics.map((t) =>
+    t.id === topicId ? { ...t, videoDurationSeconds: Math.round(seconds) } : t,
+  );
   const next: AiDesignedCourse = {
     ...list[idx],
     topics,
-    totalHours,
+    totalHours: computeMinWatchHours(topics),
     updatedAt: new Date().toISOString(),
   };
   list[idx] = next;
