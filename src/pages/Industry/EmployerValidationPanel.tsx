@@ -87,7 +87,7 @@ export function EmployerValidationPanel({ companyName = 'EduRoute Partners' }: {
       <div className="relative z-10 space-y-6 p-5 sm:p-6">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
-            SIH26134 · Employer validation
+            Employer validation
           </p>
           <h2 className="mt-1 text-xl font-black tracking-tight">Validate skills & courses</h2>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
