@@ -103,7 +103,7 @@ const SKILL_BANK: { pattern: RegExp; label: string }[] = [
 function extractFromSkillSections(text: string): string[] {
   const found: string[] = [];
   const sectionRe =
-    /(?:^|\n)\s*(?:technical\s+)?(?:skills?|tech(?:nical)?\s*stack|technologies|tools|languages?|frameworks?|libraries|competencies|expertise)\s*[:\-–]?\s*([\s\S]{0,800}?)(?=\n\s*[A-Z][A-Za-z &/]{2,40}\s*[:\-–]?\s*\n|\n\s*\n\s*[A-Z]|$)/gi;
+    /(?:^|\n)\s*(?:technical\s+)?(?:skills?|tech(?:nical)?\s*stack|technologies|tools|languages?|frameworks?|libraries|competencies|expertise)\s*[:\-–]?\s*([\s\S]{0,1200}?)(?=\n\s*[A-Z][A-Za-z &/]{2,40}\s*[:\-–]?\s*\n|\n\s*\n\s*[A-Z]|$)/gi;
   let m: RegExpExecArray | null;
   while ((m = sectionRe.exec(text)) !== null) {
     const block = m[1] || '';
@@ -140,7 +140,7 @@ export function extractSkillsFromText(text: string): string[] {
     if (pattern.test(text)) add(label);
   }
   extractFromSkillSections(text).forEach(add);
-  if (text.length < 400 && /[,|]/.test(text)) {
+  if (text.length < 500 && /[,|]/.test(text)) {
     text
       .split(/[,|;\n]+/)
       .map((s) => s.trim())
@@ -156,24 +156,40 @@ export function hoursToCourseDays(hours: number): number {
   return Math.min(90, Math.max(5, days));
 }
 
+export function normalizeSkillList(items: unknown[]): string[] {
+  const out: string[] = [];
+  for (const item of items) {
+    let s = String(item || '').trim();
+    if (!s) continue;
+    s = s.replace(/^[\-\*•\d.)\s]+/, '').replace(/\s+/g, ' ').slice(0, 50);
+    if (s.length < 2) continue;
+    if (/^(skill|skills|technologies|tools|none|n\/a)$/i.test(s)) continue;
+    if (!out.some((x) => x.toLowerCase() === s.toLowerCase())) out.push(s);
+  }
+  return out.slice(0, 50);
+}
+
 /**
- * Ask Buddy AI (Gemini/Groq) to list skills from raw CV text.
- * Merges with heuristic extract for reliability.
+ * AI skill extract — full CV text in, skills-only JSON out.
  */
 export async function extractSkillsWithAI(text: string): Promise<string[]> {
   const local = extractSkillsFromText(text);
-  const snippet = String(text || '').slice(0, 6000).trim();
-  if (snippet.length < 40) return local;
+  const snippet = String(text || '').slice(0, 8000).trim();
+  if (snippet.length < 20) return local;
+
+  const prompt =
+    'You are a skills extractor for EduRoute.\n' +
+    'Read the CV / resume text below carefully.\n' +
+    'List EVERY technical skill the candidate ALREADY has (languages, frameworks, tools, databases, cloud, practices).\n' +
+    'Ignore soft skills like "team player" unless they are engineering practices (e.g. Agile, CI/CD).\n' +
+    'Reply with ONLY this JSON template — no markdown fences, no extra text:\n' +
+    '{"skills":["skill1","skill2","skill3"]}\n' +
+    'Use short names (max 40 chars each). Max 40 skills.\n\n' +
+    '--- CV TEXT ---\n' +
+    snippet +
+    '\n--- END ---';
 
   try {
-    const prompt =
-      'Extract ALL technical skills, programming languages, frameworks, tools, databases, ' +
-      'cloud platforms, and relevant soft/engineering practices from this CV / resume text.\n' +
-      'Return ONLY a JSON array of short skill names (max 40 items), no markdown, no explanation.\n' +
-      'Example: ["Java","Spring Boot","PostgreSQL","Docker","System Design"]\n\n' +
-      'CV TEXT:\n' +
-      snippet;
-
     const res = await fetch('/api/buddy-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -187,19 +203,64 @@ export async function extractSkillsWithAI(text: string): Promise<string[]> {
     if (!res.ok || !data?.ok || typeof data.reply !== 'string') return local;
     if (/limited mode|No AI key found/i.test(data.reply)) return local;
 
-    const match = data.reply.match(/\[[\s\S]*\]/);
-    if (!match) return local;
-    const arr = JSON.parse(match[0]);
-    if (!Array.isArray(arr)) return local;
-
-    const merged: string[] = [...local];
-    for (const item of arr) {
-      const s = String(item || '').trim();
-      if (!s || s.length > 50) continue;
-      if (!merged.some((m) => m.toLowerCase() === s.toLowerCase())) merged.push(s);
+    const reply = data.reply;
+    let aiList: string[] = [];
+    try {
+      const objMatch = reply.match(/\{[\s\S]*\}/);
+      if (objMatch) {
+        const parsed = JSON.parse(objMatch[0]);
+        if (Array.isArray(parsed.skills)) aiList = normalizeSkillList(parsed.skills);
+        else if (Array.isArray(parsed)) aiList = normalizeSkillList(parsed);
+      }
+      if (!aiList.length) {
+        const arrMatch = reply.match(/\[[\s\S]*\]/);
+        if (arrMatch) aiList = normalizeSkillList(JSON.parse(arrMatch[0]));
+      }
+    } catch {
+      /* fall through */
     }
-    return merged.slice(0, 50);
+
+    if (!aiList.length) return local;
+    const merged = normalizeSkillList([...local, ...aiList]);
+    return merged.length ? merged : local;
   } catch {
     return local;
   }
+}
+
+/**
+ * Mark path nodes completed when the student already has most of that node's skills.
+ */
+export function applySkillProgressToNodes<
+  T extends { id: string; skills?: string[]; status?: string },
+>(nodes: T[], knownSkills: string[]): T[] {
+  const known = new Set(knownSkills.map((s) => s.toLowerCase().trim()).filter(Boolean));
+  const hasSkill = (s: string) => {
+    const k = s.toLowerCase().trim();
+    if (!k) return false;
+    if (known.has(k)) return true;
+    for (const x of known) {
+      if (x.includes(k) || k.includes(x)) return true;
+    }
+    return false;
+  };
+
+  let foundCurrent = false;
+  return nodes.map((n) => {
+    const skills = Array.isArray(n.skills) ? n.skills : [];
+    const covered =
+      skills.length > 0 &&
+      skills.filter((s) => hasSkill(String(s))).length >= Math.ceil(skills.length * 0.6);
+    const forceOpen = /system\s*design|interview|portfolio|capstone/i.test(
+      String((n as any).title || n.id),
+    );
+    if (covered && !forceOpen) {
+      return { ...n, status: 'completed' as const };
+    }
+    if (!foundCurrent) {
+      foundCurrent = true;
+      return { ...n, status: 'current' as const };
+    }
+    return { ...n, status: 'locked' as const };
+  });
 }
