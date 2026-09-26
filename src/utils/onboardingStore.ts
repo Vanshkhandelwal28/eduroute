@@ -5,7 +5,7 @@
 
 import { getAuthUser } from './rbacAuth';
 
-export type InterestTrack = 'software' | 'cybersecurity' | 'data_analyst';
+export type InterestTrack = 'software' | 'cybersecurity' | 'data_analyst' | 'custom';
 
 export type GapAnswer = {
   questionId: string;
@@ -20,8 +20,10 @@ export type OnboardingProfile = {
   missingSkills: string[];
   completedAt: string | null;
   skipped: boolean;
-  /** Email this profile belongs to (when known). */
   userEmail?: string | null;
+  customRole?: string | null;
+  customSkills?: string[];
+  cvSkills?: string[];
 };
 
 const GLOBAL_KEY = 'eduroute:onboarding-v1';
@@ -34,6 +36,9 @@ const EMPTY: OnboardingProfile = {
   completedAt: null,
   skipped: false,
   userEmail: null,
+  customRole: null,
+  customSkills: [],
+  cvSkills: [],
 };
 
 function emailKey(email: string) {
@@ -76,6 +81,13 @@ export const INTEREST_OPTIONS: {
     description: 'Find insights in data, help businesses make better decisions and drive growth.',
     accent: 'from-emerald-50 to-teal-50 border-emerald-100',
     icon: 'data',
+  },
+  {
+    id: 'custom',
+    title: 'Custom role',
+    description: 'Enter any target role (e.g. SDE 2, DevOps) and your skills or CV.',
+    accent: 'from-amber-50 to-orange-50 border-amber-100',
+    icon: 'software',
   },
 ];
 
@@ -147,9 +159,9 @@ export const GAP_QUESTIONS: Record<
       skill: 'Data cleaning',
     },
   ],
+  custom: [],
 };
 
-/** Roadmap / path suggestions by career track (matches existing /roadmaps/:id). */
 export type TrackRecommendation = {
   title: string;
   blurb: string;
@@ -228,6 +240,14 @@ export const TRACK_RECOMMENDATIONS: Record<InterestTrack, TrackRecommendation[]>
       blurb: 'Analyst and BI intern roles.',
       to: '/internships',
       tag: 'Career',
+    },
+  ],
+  custom: [
+    {
+      title: 'AI Course Designer',
+      blurb: 'Build a course for your custom role.',
+      to: '/ai-course-designer',
+      tag: 'Custom',
     },
   ],
 };
@@ -423,7 +443,6 @@ export function isOnboardingDone(): boolean {
   return Boolean(readOnboarding().completedAt);
 }
 
-/** Text injected into Buddy AI context for personalized guidance. */
 export function buildBuddyOnboardingContext(): {
   interests: string[];
   missingSkills: string[];
@@ -448,7 +467,9 @@ export function buildBuddyOnboardingContext(): {
   const yesSkills = profile.gapAnswers.filter((a) => a.answer === 'yes').map((a) => a.skill);
   const summary = [
     interests.length ? `Career interests: ${interests.join(', ')}.` : '',
+    profile.customRole ? `Custom target role: ${profile.customRole}.` : '',
     yesSkills.length ? `Strengths: ${yesSkills.join(', ')}.` : '',
+    (profile.customSkills || []).length ? `Known skills: ${profile.customSkills!.join(', ')}.` : '',
     missingSkills.length
       ? `Skill gaps to close: ${missingSkills.join(', ')}.`
       : 'No major skill gaps marked from the quiz.',
