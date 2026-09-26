@@ -1,7 +1,7 @@
 /**
  * Market trends + student trend analysis
- * Prefer Gemini; on overload/404 fall back to Groq.
- * Retries once if model returns non-JSON; local structured fallback last.
+ * Prefer Gemini (1 try, 4.5s) → Groq (1 try, 4.5s) → local structured fallback.
+ * No multi-retries (Netlify free functions time out at ~10s → HTTP 504).
  */
 const { generateMarketAi, extractJsonObject } = require('./_lib/marketAi');
 
@@ -32,7 +32,7 @@ const MARKET_TEMPLATE =
   '"topRoles":[{"role":"","openingsIndex":0,"avgSalaryLpa":0}],' +
   '"sectors":[{"name":"","demandScore":0}],' +
   '"emergingTech":[""],"sourcesNote":""}. ' +
-  '8-12 risingSkills, 3-6 decliningSkills, 5-8 topRoles, 4-6 sectors. demandScore 0-100.';
+  '8 risingSkills, 3 decliningSkills, 5 topRoles, 4 sectors. demandScore 0-100.';
 
 function studentTemplate(p) {
   return (
@@ -50,7 +50,7 @@ function studentTemplate(p) {
     (p.strengths || p.skills || []).join(', ') +
     '. Gaps: ' +
     (p.gaps || []).join(', ') +
-    '. matchScore 0-100. comparisonBars: 6-10 skills scores 0-100.'
+    '. matchScore 0-100. comparisonBars: 6 skills scores 0-100.'
   );
 }
 
@@ -120,18 +120,20 @@ function localStudentFallback(p) {
     bars.reduce(function (a, b) {
       return a + b.student;
     }, 0) / bars.length;
-  const matchScore = Math.max(15, Math.min(92, Math.round(avgStudent + (strengths.length > 2 ? 8 : 0))));
-  const skillGaps = (gaps.length
-    ? gaps
-    : ['Project building', 'APIs', 'Practical experience']
-  ).slice(0, 6).map(function (g, i) {
-    return {
-      skill: g,
-      priority: i === 0 ? 'high' : i < 3 ? 'medium' : 'low',
-      why: 'Market demand is high relative to current profile depth.',
-      action: 'Build 1 focused mini-project and document it on GitHub.',
-    };
-  });
+  const matchScore = Math.max(
+    15,
+    Math.min(92, Math.round(avgStudent + (strengths.length > 2 ? 8 : 0))),
+  );
+  const skillGaps = (gaps.length ? gaps : ['Project building', 'APIs', 'Practical experience'])
+    .slice(0, 6)
+    .map(function (g, i) {
+      return {
+        skill: g,
+        priority: i === 0 ? 'high' : i < 3 ? 'medium' : 'low',
+        why: 'Market demand is high relative to current profile depth.',
+        action: 'Build 1 focused mini-project and document it on GitHub.',
+      };
+    });
   return {
     generatedAt: new Date().toISOString(),
     summary:
@@ -161,28 +163,13 @@ function localStudentFallback(p) {
   };
 }
 
+/** Single AI call only (no second retry — keeps under Netlify 10s). */
 async function aiJson(messages, temperature) {
   const res = await generateMarketAi(messages, temperature);
   const reply = typeof res === 'string' ? res : res.text;
   const provider = (res && res.provider) || 'ai';
-  let parsed = extractJsonObject(reply);
-  if (parsed) return { parsed: parsed, provider: provider, reply: reply };
-
-  // One strict retry
-  const retryMessages = [
-    {
-      role: 'system',
-      content:
-        JSON_SYSTEM +
-        ' Previous reply was invalid. Output a single JSON object only, starting with { and ending with }.',
-    },
-    messages[messages.length - 1],
-  ];
-  const res2 = await generateMarketAi(retryMessages, Math.min(0.2, temperature || 0.2));
-  const reply2 = typeof res2 === 'string' ? res2 : res2.text;
-  const provider2 = (res2 && res2.provider) || provider;
-  parsed = extractJsonObject(reply2);
-  return { parsed: parsed, provider: provider2, reply: reply2 };
+  const parsed = extractJsonObject(reply);
+  return { parsed: parsed, provider: provider, reply: reply };
 }
 
 let memoryMarket = null;
@@ -204,7 +191,6 @@ exports.handler = async (event) => {
     const action = body.action || 'refresh_market';
 
     if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
-      // Still return usable local data so UI works offline of keys
       if (action === 'refresh_market') {
         const market = localMarketFallback();
         memoryMarket = market;
@@ -231,10 +217,15 @@ exports.handler = async (event) => {
           0.3,
         );
         if (!parsed) {
-          console.warn('Market AI non-JSON, using local fallback. Preview:', String(reply).slice(0, 200));
+          console.warn('Market AI non-JSON, local fallback. Preview:', String(reply).slice(0, 160));
           const market = localMarketFallback();
           memoryMarket = market;
-          return json(200, { ok: true, market: market, provider: 'local-fallback', warning: 'AI non-JSON' });
+          return json(200, {
+            ok: true,
+            market: market,
+            provider: 'local-fallback',
+            warning: 'AI non-JSON',
+          });
         }
         parsed.updatedAt = parsed.updatedAt || new Date().toISOString();
         parsed.provider = provider;
@@ -270,7 +261,7 @@ exports.handler = async (event) => {
           0.35,
         );
         if (!parsed) {
-          console.warn('Student AI non-JSON, using local fallback. Preview:', String(reply).slice(0, 200));
+          console.warn('Student AI non-JSON, local fallback. Preview:', String(reply).slice(0, 160));
           const analysis = localStudentFallback(payload);
           return json(200, {
             ok: true,
@@ -282,7 +273,12 @@ exports.handler = async (event) => {
         }
         parsed.generatedAt = parsed.generatedAt || new Date().toISOString();
         parsed.provider = provider;
-        return json(200, { ok: true, analysis: parsed, market: memoryMarket, provider: provider });
+        return json(200, {
+          ok: true,
+          analysis: parsed,
+          market: memoryMarket,
+          provider: provider,
+        });
       } catch (e) {
         console.error('analyze_student failed', e);
         const analysis = localStudentFallback(payload);
