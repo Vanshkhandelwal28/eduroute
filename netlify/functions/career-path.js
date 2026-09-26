@@ -121,12 +121,13 @@ function buildPrompt({ role, skills, cvSkills, cvText }) {
     '.\n' +
     (cvSnippet ? 'CV excerpt:\n' + cvSnippet + '\n' : '') +
     'Focus on what companies hire for this role that the student still needs.\n' +
+    'Module titles MUST name concrete skills/projects (e.g. \'Golang concurrency\', \'PostgreSQL performance\', \'System design: rate limiter\') — never \'Role Core Skills\' or \'Custom\'.\n' +
     'CRITICAL timeline rules:\n' +
     '- hours = total focused study hours for that module (not a single video length).\n' +
     '- days = calendar days to finish the module at ~2–3 study hours/day.\n' +
     '- Lightweight topic (Git polish): hours 8–12, days 4–6.\n' +
     '- Medium (REST depth, one DB): hours 25–40, days 10–16.\n' +
-    '- Heavy (System Design, full Databases & Persistence, Interview prep for senior): hours 40–80, days 15–30.\n' +
+    '- Heavy (System Design, full Databases, Interview prep for senior): hours 40–80, days 15–30.\n' +
     '- For senior/SDE-2+ roles, Databases alone must NOT be under 40 hours / 15 days.\n' +
     '- resources[].mins = one resource session; include 4–8 resources per heavy module.\n' +
     'Return ONLY valid JSON (no markdown):\n' +
@@ -192,29 +193,26 @@ function fallbackNodes(role, skills) {
       return x.indexOf(k) !== -1;
     });
   };
-
   var nodes = [];
   if (has('golang') || has('go') || has('backend') || /sde|software|backend/i.test(role)) {
     nodes.push({
       id: 'backend-depth',
-      title: 'Backend Depth (APIs, Auth & Services)',
+      title: has('golang') || has('go') ? 'Golang service design & APIs' : 'Backend Depth (APIs, Auth & Services)',
       short: 'Backend',
       hours: heavy ? 45 : 30,
       days: heavy ? 18 : 12,
-      skills: ['REST', 'JWT', 'Golang', 'Service design'],
+      skills: has('golang') || has('go') ? ['Golang', 'REST', 'JWT'] : ['REST', 'JWT', 'Service design'],
       resources: [
         { label: 'API design & versioning', kind: 'Video', mins: 90 },
         { label: 'Auth: JWT / OAuth deep dive', kind: 'Video', mins: 75 },
-        { label: 'Idempotency & error models', kind: 'Reading', mins: 60 },
         { label: 'Build a production-style API', kind: 'Project', mins: 240 },
-        { label: 'Load & failure testing lab', kind: 'Exercise', mins: 120 },
       ],
     });
   }
   nodes.push(
     {
       id: 'databases',
-      title: 'Databases & Persistence',
+      title: 'PostgreSQL & persistence for production',
       short: 'Databases',
       hours: heavy ? 55 : 40,
       days: heavy ? 20 : 15,
@@ -222,9 +220,6 @@ function fallbackNodes(role, skills) {
       resources: [
         { label: 'Relational modeling & normalization', kind: 'Video', mins: 90 },
         { label: 'Indexing & query plans', kind: 'Video', mins: 80 },
-        { label: 'Transactions & isolation levels', kind: 'Reading', mins: 70 },
-        { label: 'NoSQL when / when not', kind: 'Video', mins: 60 },
-        { label: 'Schema design case studies', kind: 'Exercise', mins: 150 },
         { label: 'Build & tune a real schema', kind: 'Project', mins: 300 },
       ],
     },
@@ -234,55 +229,44 @@ function fallbackNodes(role, skills) {
       short: 'SysDesign',
       hours: heavy ? 60 : 40,
       days: heavy ? 22 : 16,
-      skills: ['System Design', 'Scalability', 'Caching', 'Queues'],
+      skills: ['System Design', 'Scalability', 'Caching'],
       resources: [
         { label: 'System design foundations', kind: 'Video', mins: 120 },
-        { label: 'Caching, CDN, load balancing', kind: 'Video', mins: 90 },
-        { label: 'Data partitioning & consistency', kind: 'Reading', mins: 80 },
-        { label: 'URL shortener / rate limiter cases', kind: 'Exercise', mins: 180 },
         { label: 'Design a chat / feed system', kind: 'Project', mins: 300 },
       ],
     },
     {
       id: 'devops-basics',
-      title: 'Deploy, Containers & Observability',
+      title: 'Docker, CI/CD & observability',
       short: 'Deploy',
       hours: heavy ? 40 : 28,
       days: heavy ? 16 : 12,
       skills: ['Docker', 'CI/CD', 'Monitoring'],
       resources: [
         { label: 'Docker for services', kind: 'Video', mins: 75 },
-        { label: 'CI/CD pipelines', kind: 'Video', mins: 60 },
-        { label: 'Logs, metrics, alerts', kind: 'Reading', mins: 50 },
         { label: 'Ship a service end-to-end', kind: 'Project', mins: 240 },
       ],
     },
     {
       id: 'interviews',
-      title: (role || 'Role') + ' Interview Prep',
+      title: (role || 'Role') + ' interview prep',
       short: 'Interviews',
       hours: heavy ? 50 : 35,
       days: heavy ? 20 : 14,
       skills: ['DSA', 'Behavioral', 'Design interviews'],
       resources: [
-        { label: 'Coding patterns (arrays → graphs)', kind: 'Practice', mins: 300 },
-        { label: 'Timed contest drills', kind: 'Practice', mins: 180 },
-        { label: 'Behavioral / leadership stories', kind: 'Reading', mins: 60 },
-        { label: 'Mock system design interviews', kind: 'Exercise', mins: 180 },
+        { label: 'Coding patterns', kind: 'Practice', mins: 300 },
+        { label: 'Mock system design', kind: 'Exercise', mins: 180 },
       ],
     },
     {
       id: 'portfolio',
-      title: 'Portfolio & Production Project',
+      title: 'Portfolio & production project',
       short: 'Portfolio',
       hours: heavy ? 45 : 30,
       days: heavy ? 18 : 12,
       skills: ['Production', 'Git', 'Docs'],
-      resources: [
-        { label: 'Scope a production-grade service', kind: 'Reading', mins: 40 },
-        { label: 'Implement, test, deploy', kind: 'Project', mins: 360 },
-        { label: 'Write architecture notes + README', kind: 'Exercise', mins: 90 },
-      ],
+      resources: [{ label: 'Implement, test, deploy', kind: 'Project', mins: 360 }],
     }
   );
   return nodes.map(function (n, i) {
@@ -293,7 +277,6 @@ function fallbackNodes(role, skills) {
 exports.handler = async function (event) {
   if (event.httpMethod === 'OPTIONS') return json(200, { ok: true });
   if (event.httpMethod !== 'POST') return json(405, { ok: false, error: 'Method not allowed' });
-
   try {
     var body = {};
     try {
@@ -301,12 +284,10 @@ exports.handler = async function (event) {
     } catch (e) {
       return json(400, { ok: false, error: 'Invalid JSON body' });
     }
-
     var role = String(body.role || '')
       .trim()
       .slice(0, 80);
     if (!role) return json(400, { ok: false, error: 'role is required' });
-
     var skills = Array.isArray(body.skills)
       ? body.skills.map(String).slice(0, 50)
       : String(body.skills || '')
@@ -318,16 +299,13 @@ exports.handler = async function (event) {
           .slice(0, 50);
     var cvSkills = Array.isArray(body.cvSkills) ? body.cvSkills.map(String).slice(0, 50) : [];
     var cvText = String(body.cvText || '').slice(0, 10000);
-
     var prompt = buildPrompt({ role: role, skills: skills, cvSkills: cvSkills, cvText: cvText });
     var messages = [{ role: 'user', content: prompt }];
-
     var geminiKey = env('GEMINI_API_KEY');
     var groqKey = env('GROQ_API_KEY');
     var reply = null;
     var provider = 'none';
     var lastErr = '';
-
     if (geminiKey) {
       try {
         reply = await callGemini({
@@ -339,10 +317,8 @@ exports.handler = async function (event) {
         provider = 'gemini';
       } catch (e) {
         lastErr = e.message || String(e);
-        console.warn('career-path Gemini failed', lastErr);
       }
     }
-
     if ((!reply || !tryParseNodes(reply)) && groqKey) {
       try {
         reply = await callGroq({
@@ -354,17 +330,14 @@ exports.handler = async function (event) {
         provider = 'groq';
       } catch (e) {
         lastErr = e.message || String(e);
-        console.warn('career-path Groq failed', lastErr);
       }
     }
-
     var nodes = tryParseNodes(reply);
     var source = provider;
     if (!nodes) {
-      nodes = fallbackNodes(role, skills);
+      nodes = fallbackNodes(role, skills.concat(cvSkills));
       source = 'template';
     }
-
     return json(200, {
       ok: true,
       role: role,
