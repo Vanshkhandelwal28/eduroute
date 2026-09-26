@@ -46,7 +46,7 @@ export function AdminMarketTrends() {
     <div className="mx-auto max-w-5xl space-y-6 text-[var(--text-primary)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">SIH26134 · Admin</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Admin</p>
           <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">Market trends</h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
             Refresh labour-market demand with <strong>Gemini AI</strong> anytime. Recommended at least once a month.
@@ -91,6 +91,9 @@ export function AdminMarketTrends() {
               </span>
               <span>{market.region || 'India'}</span>
               <span>· Updated {new Date(market.updatedAt).toLocaleString()}</span>
+              {market.isSeed && (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-300">Placeholder</span>
+              )}
             </div>
             <p className="mt-3 text-sm leading-relaxed text-[var(--text-secondary)]">{market.summary}</p>
             {market.sourcesNote && <p className="mt-2 text-[11px] text-[var(--text-muted)]">{market.sourcesNote}</p>}
