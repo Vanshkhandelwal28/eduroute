@@ -14,16 +14,15 @@ export function slugifyUsername(input: string): string {
   return s.length >= 3 ? s : `user${Date.now().toString(36).slice(-6)}`;
 }
 
-async function ensureUniqueUsername(base: string): Promise<string> {
+/** Ensure username is unique across profiles (optionally ignore the current user). */
+export async function ensureUniqueUsername(base: string, excludeUserId?: string): Promise<string> {
   const sb = getSupabase();
   if (!sb) return base;
-  let candidate = base;
-  for (let i = 0; i < 12; i++) {
-    const { data } = await sb
-      .from('profiles')
-      .select('id')
-      .ilike('username', candidate)
-      .maybeSingle();
+  let candidate = slugifyUsername(base) || base;
+  for (let i = 0; i < 20; i++) {
+    let q = sb.from('profiles').select('id').ilike('username', candidate);
+    if (excludeUserId) q = q.neq('id', excludeUserId);
+    const { data } = await q.maybeSingle();
     if (!data) return candidate;
     candidate = `${base.slice(0, 18)}${i + 1}`;
   }
@@ -205,9 +204,14 @@ export async function syncMyPublicData(partial: Record<string, unknown>): Promis
     .maybeSingle();
 
   const prev = (existing?.public_data as Record<string, unknown>) || {};
+  // When skills are provided, always replace with the full merged list (do not leave stale single skill)
+  const next = { ...prev, ...partial };
+  if (Array.isArray(partial.skills)) {
+    next.skills = partial.skills;
+  }
   await sb
     .from('profiles')
-    .update({ public_data: { ...prev, ...partial } })
+    .update({ public_data: next })
     .eq('id', user.id);
 }
 
@@ -231,7 +235,7 @@ export async function updateMyProfile(fields: {
   if (fields.username !== undefined) {
     const u = slugifyUsername(fields.username);
     if (!USERNAME_RE.test(u)) throw new Error('Username must be 3–24 chars: a-z, 0-9, _');
-    patch.username = await ensureUniqueUsername(u);
+    patch.username = await ensureUniqueUsername(u, user.id);
   }
   if (Object.keys(patch).length === 0) return;
   const { error } = await sb.from('profiles').update(patch).eq('id', user.id);
