@@ -5,12 +5,12 @@ import {
   BarChart3,
   Loader2,
   RefreshCw,
-  Target,
   TrendingUp,
   AlertTriangle,
   CheckCircle2,
   Sparkles,
   Database,
+  MapPin,
 } from 'lucide-react';
 import {
   Bar,
@@ -24,8 +24,11 @@ import {
 } from 'recharts';
 import {
   apiAnalyzeStudent,
+  MARKET_REGIONS,
   readMarketSnapshot,
+  readPreferredRegion,
   readStudentAnalysis,
+  writePreferredRegion,
   type MarketSnapshot,
   type StudentAnalysis,
 } from '../../utils/marketTrendStore';
@@ -38,6 +41,7 @@ import {
 import {
   buildComparisonBars,
   computeSkillDemand,
+  jobsForRegion,
   matchStudentToMarket,
   readJobs,
   risingFromDemand,
@@ -65,10 +69,12 @@ export function TrendAnalyse() {
   const [market, setMarket] = useState<MarketSnapshot | null>(() => readMarketSnapshot());
   const [analysis, setAnalysis] = useState<StudentAnalysis | null>(() => readStudentAnalysis());
   const [jobs, setJobs] = useState<MarketJob[]>(() => readJobs());
+  const [region, setRegion] = useState(() => readPreferredRegion() || 'India (All)');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const skillKeyRef = useRef('');
+  const regionKeyRef = useRef(region);
   const autoAiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reloadAll = useCallback(() => {
@@ -78,8 +84,11 @@ export function TrendAnalyse() {
     setJobs(readJobs());
   }, []);
 
+  // Full page refresh whenever admin jobs, market, or skill-gap test (onboarding) change
   useEffect(() => {
-    const onUp = () => reloadAll();
+    const onUp = () => {
+      reloadAll();
+    };
     window.addEventListener('eduroute:market-trends-updated', onUp);
     window.addEventListener('eduroute:student-trend-updated', onUp);
     window.addEventListener('eduroute:mt-jobs-updated', onUp);
@@ -107,82 +116,112 @@ export function TrendAnalyse() {
     [strengths, gaps],
   );
 
-  const demandRows: SkillDemandRow[] = useMemo(() => computeSkillDemand(jobs), [jobs]);
+  // State-wise: filter admin job pool to selected region
+  const regionJobs = useMemo(() => jobsForRegion(jobs, region), [jobs, region]);
+
+  const demandRows: SkillDemandRow[] = useMemo(
+    () => computeSkillDemand(regionJobs),
+    [regionJobs],
+  );
   const maxDemand = demandRows[0]?.demandPct || 1;
 
   const localMatch = useMemo(
-    () => matchStudentToMarket(allSkills, jobs, market),
-    [allSkills, jobs, market],
+    () => matchStudentToMarket(allSkills, regionJobs, market),
+    [allSkills, regionJobs, market],
   );
 
-  // Prefer live job-demand rising over seed/AI invent
   const risingDisplay = useMemo(() => {
-    if (jobs.length > 0) return risingFromDemand(jobs, 6);
+    if (regionJobs.length > 0) return risingFromDemand(regionJobs, 6);
     return market?.risingSkills || [];
-  }, [jobs, market]);
+  }, [regionJobs, market]);
 
   const sourceBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
-    jobs.forEach((j) => {
+    regionJobs.forEach((j) => {
       counts[j.source] = (counts[j.source] || 0) + 1;
     });
     return counts;
-  }, [jobs]);
+  }, [regionJobs]);
 
-  const runAnalysis = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) {
-      setBusy(true);
-      setErr('');
-      setMsg('');
-    }
-    try {
-      const o = readOnboarding();
-      const s = strengthsFromProfile(o);
-      const g = gapsFromProfile(o);
-      const skills = normalizeSkillList([...new Set([...s, ...g])]);
-      const f =
-        o.interests?.[0] != null
-          ? interestLabel(o.interests[0] as InterestTrack)
-          : 'Software Engineering';
-      const res = await apiAnalyzeStudent({
-        skills,
-        strengths: s,
-        gaps: g,
-        field: f,
-        interests: (o.interests || []).map((id) => interestLabel(id)),
-      });
-      if (!res.ok) {
-        if (!opts?.silent) setErr(res.error || 'Analysis failed');
-        return;
+  const onRegionChange = (value: string) => {
+    setRegion(value);
+    writePreferredRegion(value);
+    setMsg(`Gap analysis scoped to ${value}. Match score & demand updated.`);
+  };
+
+  const runAnalysis = useCallback(
+    async (opts?: { silent?: boolean; regionOverride?: string }) => {
+      if (!opts?.silent) {
+        setBusy(true);
+        setErr('');
+        setMsg('');
       }
-      setAnalysis(res.analysis || readStudentAnalysis());
-      setMarket(readMarketSnapshot());
-      if (!opts?.silent) setMsg('Trend analysis updated from admin market demand + your skills.');
-    } catch (e) {
-      if (!opts?.silent) setErr(e instanceof Error ? e.message : 'Network error');
-    } finally {
-      if (!opts?.silent) setBusy(false);
-    }
-  }, []);
+      try {
+        const o = readOnboarding();
+        const s = strengthsFromProfile(o);
+        const g = gapsFromProfile(o);
+        const skills = normalizeSkillList([...new Set([...s, ...g])]);
+        const f =
+          o.interests?.[0] != null
+            ? interestLabel(o.interests[0] as InterestTrack)
+            : 'Software Engineering';
+        const scope = opts?.regionOverride || region;
+        const res = await apiAnalyzeStudent({
+          skills,
+          strengths: s,
+          gaps: g,
+          field: f,
+          interests: (o.interests || []).map((id) => interestLabel(id)),
+          region: scope,
+        });
+        if (!res.ok) {
+          if (!opts?.silent) setErr(res.error || 'Analysis failed');
+          return;
+        }
+        setAnalysis(res.analysis || readStudentAnalysis());
+        setMarket(readMarketSnapshot());
+        setProfile(readOnboarding());
+        setJobs(readJobs());
+        if (!opts?.silent) {
+          setMsg(`Trend analysis updated for ${scope} from admin demand + your skill-gap answers.`);
+        }
+      } catch (e) {
+        if (!opts?.silent) setErr(e instanceof Error ? e.message : 'Network error');
+      } finally {
+        if (!opts?.silent) setBusy(false);
+      }
+    },
+    [region],
+  );
 
+  // Every skill-gap test change → reload page data + auto AI refresh
   useEffect(() => {
-    const key = allSkills.slice().sort().join('|') + '::' + gaps.join(',');
+    const key = allSkills.slice().sort().join('|') + '::' + gaps.join(',') + '::' + region;
     if (key === skillKeyRef.current) return;
     const prev = skillKeyRef.current;
     skillKeyRef.current = key;
     if (!prev) return;
+    // Skills or region changed — full local recompute is already live via memos;
+    // also re-run AI analysis so summary/gaps stay in sync
     if (autoAiTimer.current) clearTimeout(autoAiTimer.current);
     autoAiTimer.current = setTimeout(() => {
+      reloadAll();
       void runAnalysis({ silent: true });
-    }, 900);
+    }, 700);
     return () => {
       if (autoAiTimer.current) clearTimeout(autoAiTimer.current);
     };
-  }, [allSkills, gaps, runAnalysis]);
+  }, [allSkills, gaps, region, runAnalysis, reloadAll]);
 
-  // Correct chart: market = relative demand intensity; student = has skill vs not
+  // Region change alone also triggers analysis
+  useEffect(() => {
+    if (regionKeyRef.current === region) return;
+    regionKeyRef.current = region;
+    void runAnalysis({ silent: true, regionOverride: region });
+  }, [region, runAnalysis]);
+
   const chartData = useMemo(() => {
-    const bars = buildComparisonBars(jobs, allSkills, 8);
+    const bars = buildComparisonBars(regionJobs, allSkills, 8);
     if (bars.length) {
       return bars.map((b) => ({
         skill: b.skill.length > 14 ? b.skill.slice(0, 12) + '…' : b.skill,
@@ -192,9 +231,8 @@ export function TrendAnalyse() {
       }));
     }
     return [];
-  }, [jobs, allSkills]);
+  }, [regionJobs, allSkills]);
 
-  // Always prefer local weighted match score (recomputes when skills/jobs change)
   const displayScore = localMatch.matchScore;
 
   return (
@@ -202,14 +240,14 @@ export function TrendAnalyse() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-600 dark:text-cyan-400">
-            Skill Market Trends · Live admin demand
+            Skill Market Trends · State-wise gaps
           </p>
           <h1 className="mt-1 text-2xl font-black tracking-tight text-[var(--text-primary)] md:text-3xl">
             Skill Trend Analysis
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Match score and gaps use <strong>all collected jobs</strong> (Adzuna + data.gov.in / Skill India +
-            curated). Updates when you change skills or admin collects jobs.
+            Match score and gaps use admin job pool for the <strong>selected state / India</strong>.
+            Page refreshes automatically after every skill-gap test answer.
           </p>
         </div>
         <button
@@ -221,6 +259,31 @@ export function TrendAnalyse() {
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           {busy ? 'Analyzing…' : !analysis ? 'Generate analysis' : 'Refresh analysis'}
         </button>
+      </div>
+
+      {/* State / region selector for gap analysis */}
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
+        <label className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
+            <MapPin className="h-3.5 w-3.5" /> Gap analysis region
+          </span>
+          <select
+            value={region}
+            onChange={(e) => onRegionChange(e.target.value)}
+            disabled={busy}
+            className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-cyan-500/40"
+          >
+            {MARKET_REGIONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="pb-2 text-xs text-[var(--text-muted)]">
+          Demand, match score, rising skills & gaps are computed only from jobs in this region
+          ({regionJobs.length} of {jobs.length} jobs).
+        </p>
       </div>
 
       {msg && (
@@ -243,9 +306,9 @@ export function TrendAnalyse() {
           <div>
             Complete the{' '}
             <Link to="/onboarding" className="font-bold underline">
-              skill quiz
-            </Link>{' '}
-            so gaps update against live market demand.
+              skill gap quiz
+            </Link>
+            . Each answer refreshes match score, gaps, and demand for <strong>{region}</strong>.
           </div>
         </div>
       )}
@@ -254,15 +317,15 @@ export function TrendAnalyse() {
         <div className="er-card p-4">
           <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Match score</p>
           <p className="mt-1 text-3xl font-black text-[var(--text-primary)]">{displayScore}%</p>
-          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Weighted by top job demand</p>
+          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">vs {region} demand</p>
         </div>
         <div className="er-card p-4">
           <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Your track</p>
           <p className="mt-1 text-lg font-bold text-[var(--text-primary)]">{field}</p>
         </div>
         <div className="er-card p-4">
-          <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Jobs (admin pool)</p>
-          <p className="mt-1 text-2xl font-black text-[var(--text-primary)]">{jobs.length}</p>
+          <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Jobs in region</p>
+          <p className="mt-1 text-2xl font-black text-[var(--text-primary)]">{regionJobs.length}</p>
           <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
             {Object.keys(sourceBreakdown).length
               ? Object.entries(sourceBreakdown)
@@ -282,17 +345,21 @@ export function TrendAnalyse() {
 
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
-          <Database className="h-4 w-4" /> Skill demand from admin job pool
+          <Database className="h-4 w-4" /> Skill demand — {region}
         </h2>
         <p className="mb-4 text-xs text-[var(--text-muted)]">
-          Demand % = share of jobs mentioning each skill (Adzuna + data.gov.in + curated).
+          Demand % from {regionJobs.length} jobs in this region (Adzuna + data.gov.in + curated).
         </p>
         {demandRows.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">Admin has not collected jobs yet.</p>
+          <p className="text-sm text-[var(--text-muted)]">
+            Admin has not collected jobs for this region yet.
+          </p>
         ) : (
           <ul className="space-y-3">
             {demandRows.slice(0, 10).map((row) => {
-              const have = localMatch.matched.some((s) => s.toLowerCase() === row.skill.toLowerCase());
+              const have = localMatch.matched.some(
+                (s) => s.toLowerCase() === row.skill.toLowerCase(),
+              );
               return (
                 <li key={row.skill}>
                   <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -333,7 +400,7 @@ export function TrendAnalyse() {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-2 text-sm font-black uppercase text-emerald-600 dark:text-emerald-400">
-            Matched skills
+            Matched skills ({region})
           </h2>
           {localMatch.matched.length ? (
             <div className="flex flex-wrap gap-2">
@@ -348,13 +415,13 @@ export function TrendAnalyse() {
             </div>
           ) : (
             <p className="text-sm text-[var(--text-muted)]">
-              No strong matches yet — complete onboarding or expand skills.
+              No strong matches yet — complete the skill gap quiz.
             </p>
           )}
         </div>
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-2 text-sm font-black uppercase text-amber-600 dark:text-amber-400">
-            Skill gaps (live)
+            Skill gaps (live · {region})
           </h2>
           {localMatch.gaps.length ? (
             <div className="flex flex-wrap gap-2">
@@ -368,10 +435,10 @@ export function TrendAnalyse() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-[var(--text-muted)]">No major gaps against current job demand.</p>
+            <p className="text-sm text-[var(--text-muted)]">No major gaps against {region} demand.</p>
           )}
           <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-            Recalculates whenever skills or admin jobs update.
+            Recalculates on every skill-gap test answer and region change.
           </p>
         </div>
       </div>
@@ -407,7 +474,7 @@ export function TrendAnalyse() {
       {analysis?.summary && (
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase text-violet-600 dark:text-violet-400">
-            <Sparkles className="h-3.5 w-3.5" /> AI summary
+            <Sparkles className="h-3.5 w-3.5" /> AI summary ({region})
           </div>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{analysis.summary}</p>
         </div>
@@ -416,7 +483,7 @@ export function TrendAnalyse() {
       {chartData.length > 0 && (
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
-            <BarChart3 className="h-4 w-4" /> Market demand vs your skill level
+            <BarChart3 className="h-4 w-4" /> Market demand vs your skill level — {region}
           </h2>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -438,8 +505,7 @@ export function TrendAnalyse() {
             </ResponsiveContainer>
           </div>
           <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-            Market = relative demand intensity (top skill = 100). You = high if you match that skill, low if
-            gap. Recalculates when skills or jobs change.
+            Updates when you change region or complete skill-gap answers.
           </p>
         </div>
       )}
@@ -447,33 +513,24 @@ export function TrendAnalyse() {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
-            <TrendingUp className="h-4 w-4" /> In-demand / rising (from jobs)
+            <TrendingUp className="h-4 w-4" /> In-demand / rising ({region})
           </h2>
           {risingDisplay.length ? (
             <ul className="mt-1 space-y-2">
               {risingDisplay.slice(0, 6).map((s) => (
                 <li key={s.skill} className="flex justify-between gap-2 text-sm">
                   <span className="font-semibold">{s.skill}</span>
-                  <span className="shrink-0 tabular-nums text-[var(--text-muted)]">
-                    {s.demandScore}
-                    {'note' in s && s.note ? (
-                      <span className="ml-1 text-[10px] opacity-70">{String(s.note).slice(0, 24)}</span>
-                    ) : null}
-                  </span>
+                  <span className="shrink-0 tabular-nums text-[var(--text-muted)]">{s.demandScore}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-[var(--text-muted)]">Collect jobs in Admin to populate rising skills.</p>
-          )}
-          {market?.sourcesNote && (
-            <p className="mt-3 text-[11px] text-[var(--text-muted)]">{market.sourcesNote}</p>
+            <p className="text-sm text-[var(--text-muted)]">No rising data yet for this region.</p>
           )}
         </div>
-
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
-            <Target className="h-4 w-4" /> Priority gaps
+          <h2 className="mb-3 text-sm font-black uppercase text-[var(--text-muted)]">
+            Priority gaps detail
           </h2>
           {localMatch.priority.length > 0 ? (
             <ul className="space-y-3">
@@ -481,9 +538,7 @@ export function TrendAnalyse() {
                 <li key={g.skill} className="text-sm">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-[var(--text-primary)]">{g.skill}</span>
-                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
-                      {g.demandPct}%
-                    </span>
+                    <span className="tabular-nums text-[var(--text-muted)]">{g.demandPct}%</span>
                   </div>
                   <p className="mt-0.5 text-[var(--text-secondary)]">{g.reason}</p>
                 </li>
@@ -511,6 +566,9 @@ export function TrendAnalyse() {
       </div>
 
       <div className="flex flex-wrap gap-3">
+        <Link to="/onboarding" className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-600 dark:text-amber-400">
+          Retake skill gap quiz <ArrowRight className="h-4 w-4" />
+        </Link>
         <Link to="/skill-profile" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
           Open skill profile <ArrowRight className="h-4 w-4" />
         </Link>
