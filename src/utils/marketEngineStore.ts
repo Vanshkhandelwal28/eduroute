@@ -1,6 +1,6 @@
 /**
  * Skill Market Trend Engine — client cache + local matching.
- * Server collect: Adzuna (multi-page) + data.gov.in Skill India/PLFS + curated seed; no restricted scraping.
+ * Server collect: Adzuna (multi-page) + data.gov.in Skill India/PLFS + curated seed.
  */
 import { normalizeSkillList, normalizeSkillName, skillsMatch } from './skillNormalize';
 import { readMarketSnapshot, type MarketSnapshot } from './marketTrendStore';
@@ -53,7 +53,44 @@ export type StudentMarketMatch = {
 const JOBS_KEY = 'eduroute:mt-jobs-v1';
 const RUNS_KEY = 'eduroute:mt-runs-v1';
 
-/** Curated public-style demo postings (not scraped from restricted sites). */
+/** Map onboarding / soft skill labels → market skill tokens for matching. */
+const STUDENT_SKILL_EXPAND: Record<string, string[]> = {
+  'project building': ['React', 'Node.js', 'Git', 'JavaScript'],
+  'programming fundamentals': ['Python', 'Java', 'JavaScript'],
+  'data structures': ['System Design', 'Python', 'Java'],
+  'git & github': ['Git'],
+  git: ['Git'],
+  apis: ['REST APIs', 'Node.js'],
+  'practical experience': ['Git', 'REST APIs'],
+  'networking basics': ['Networking', 'Linux', 'Cybersecurity'],
+  linux: ['Linux'],
+  'cryptography basics': ['Cybersecurity'],
+  'hands-on security practice': ['Cybersecurity', 'Linux'],
+  'web vulnerabilities': ['Cybersecurity'],
+  'os & network security': ['Cybersecurity', 'Linux', 'Networking'],
+  spreadsheets: ['Excel', 'Data Analysis'],
+  sql: ['SQL'],
+  'python/r for analysis': ['Python', 'Pandas', 'Data Analysis'],
+  visualization: ['Data Analysis', 'Excel'],
+  statistics: ['Data Analysis', 'Python'],
+  'data cleaning': ['Python', 'Pandas', 'SQL'],
+};
+
+/** Expand student profile skills into market-comparable skill tokens. */
+export function expandStudentSkills(studentSkills: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of studentSkills || []) {
+    const n = normalizeSkillName(raw);
+    if (n) out.push(n);
+    const key = String(raw || '')
+      .trim()
+      .toLowerCase();
+    const extra = STUDENT_SKILL_EXPAND[key];
+    if (extra) out.push(...extra);
+  }
+  return normalizeSkillList(out);
+}
+
 export const SEED_JOBS: MarketJob[] = [
   {
     externalId: 'demo-1',
@@ -223,6 +260,7 @@ export function filterJobs(jobs: MarketJob[], f: JobFilters): MarketJob[] {
   });
 }
 
+/** Demand % = share of jobs that mention the skill (all sources). */
 export function computeSkillDemand(jobs: MarketJob[]): SkillDemandRow[] {
   const total = jobs.length || 1;
   const counts = new Map<string, number>();
@@ -245,28 +283,60 @@ export function computeSkillDemand(jobs: MarketJob[]): SkillDemandRow[] {
   return rows.sort((a, b) => b.jobCount - a.jobCount);
 }
 
+/** Rising list grounded on live job demand (not AI invent). */
+export function risingFromDemand(jobs: MarketJob[], limit = 6): {
+  skill: string;
+  demandScore: number;
+  trend: string;
+  note: string;
+}[] {
+  const demand = computeSkillDemand(jobs).slice(0, limit);
+  const maxPct = demand[0]?.demandPct || 1;
+  return demand.map((d) => ({
+    skill: d.skill,
+    demandScore: Math.min(95, Math.round(40 + (d.demandPct / maxPct) * 55)),
+    trend: 'rising',
+    note: `${d.jobCount} jobs · ${d.demandPct}% share`,
+  }));
+}
+
+/**
+ * Match student skills to market demand from ALL collected jobs.
+ * Match score = weighted coverage of top demand skills (0–100).
+ */
 export function matchStudentToMarket(
   studentSkills: string[],
   jobs: MarketJob[],
   market?: MarketSnapshot | null,
 ): StudentMarketMatch {
-  const mine = normalizeSkillList(studentSkills);
+  const mineRaw = normalizeSkillList(studentSkills);
+  const mine = expandStudentSkills(studentSkills);
   const demand = computeSkillDemand(jobs);
-  const topMarket =
-    market?.risingSkills?.map((s) => normalizeSkillName(s.skill)).filter(Boolean) ||
-    demand.slice(0, 12).map((d) => d.skill);
+  const topN = demand.slice(0, 12);
 
-  const matched = mine.filter(
-    (s) => topMarket.some((m) => skillsMatch(s, m)) || demand.some((d) => skillsMatch(d.skill, s)),
+  // Matched = market skills the student covers (expanded)
+  const matchedMarket = topN
+    .filter((d) => mine.some((s) => skillsMatch(s, d.skill)))
+    .map((d) => d.skill);
+
+  // Also keep original student labels that hit something in demand
+  const matchedLabels = mineRaw.filter(
+    (s) =>
+      demand.some((d) => skillsMatch(d.skill, s)) ||
+      expandStudentSkills([s]).some((e) => demand.some((d) => skillsMatch(d.skill, e))),
   );
 
-  const gapCandidates = demand.filter((d) => !mine.some((s) => skillsMatch(s, d.skill))).slice(0, 10);
+  const matched = normalizeSkillList([...matchedMarket, ...matchedLabels]);
+
+  const gapCandidates = demand
+    .filter((d) => !mine.some((s) => skillsMatch(s, d.skill)))
+    .slice(0, 10);
   const gaps = gapCandidates.map((g) => g.skill);
 
   const priority = gapCandidates.slice(0, 5).map((g) => ({
     skill: g.skill,
     demandPct: g.demandPct,
-    reason: `Appears in ${g.jobCount} of ${jobs.length} filtered job(s) (${g.demandPct}% demand share)`,
+    reason: `Appears in ${g.jobCount} of ${jobs.length} job(s) (${g.demandPct}% demand share across Adzuna + data.gov + curated)`,
   }));
 
   const recommendations = priority.map((p) => ({
@@ -275,13 +345,22 @@ export function matchStudentToMarket(
     roadmapTo: roadmapLinkForSkill(p.skill),
   }));
 
-  const matchScore =
-    topMarket.length === 0
-      ? 0
-      : Math.round((matched.length / Math.max(1, Math.min(topMarket.length, 8))) * 100);
+  // Weighted match score: sum of demand weights for skills student has / sum of top weights
+  const focus = topN.slice(0, 8);
+  const weightSum = focus.reduce((s, d) => s + Math.max(1, d.demandPct), 0) || 1;
+  const earned = focus.reduce((s, d) => {
+    const has = mine.some((m) => skillsMatch(m, d.skill));
+    return s + (has ? Math.max(1, d.demandPct) : 0);
+  }, 0);
+  let matchScore = Math.round((earned / weightSum) * 100);
+  if (mine.length === 0) matchScore = 0;
+  matchScore = Math.min(100, Math.max(0, matchScore));
 
   const latest =
-    jobs.map((j) => j.collectedAt).sort().reverse()[0] ||
+    jobs
+      .map((j) => j.collectedAt)
+      .sort()
+      .reverse()[0] ||
     market?.updatedAt ||
     new Date().toISOString();
 
@@ -293,22 +372,41 @@ export function matchStudentToMarket(
     gaps,
     priority,
     recommendations,
-    matchScore: Math.min(100, matchScore),
+    matchScore,
     computedAt: new Date().toISOString(),
     dataAsOf: latest,
     sourceNote:
       hasAdzuna || hasGov
-        ? `Live sources: ${hasAdzuna ? 'Adzuna' : ''}${hasAdzuna && hasGov ? ' + ' : ''}${hasGov ? 'data.gov.in' : ''} + curated-public + admin AI grounded on collected demand. No restricted scraping.`
+        ? `Live sources: ${hasAdzuna ? 'Adzuna' : ''}${hasAdzuna && hasGov ? ' + ' : ''}${hasGov ? 'data.gov.in' : ''} + curated-public. Match score weighted by job demand share.`
         : 'Curated public demo jobs + admin AI. Configure ADZUNA_* and DATA_GOV_API_KEY on Netlify, then Collect jobs → Refresh AI trends.',
   };
 }
 
+/** Build chart bars: market = demand intensity 0–100, student = level if has skill. */
+export function buildComparisonBars(
+  jobs: MarketJob[],
+  studentSkills: string[],
+  limit = 8,
+): { skill: string; market: number; student: number }[] {
+  const demand = computeSkillDemand(jobs).slice(0, limit);
+  const mine = expandStudentSkills(studentSkills);
+  const maxPct = demand[0]?.demandPct || 1;
+  return demand.map((d) => {
+    const has = mine.some((s) => skillsMatch(s, d.skill));
+    const market = Math.min(100, Math.round((d.demandPct / maxPct) * 100));
+    const student = has ? Math.min(95, Math.round(55 + (d.demandPct / maxPct) * 35)) : 18;
+    return { skill: d.skill, market, student };
+  });
+}
+
 function roadmapLinkForSkill(skill: string): string {
   const s = skill.toLowerCase();
-  if (/dsa|algorithm|data structure/.test(s)) return '/dsa-sheet';
-  if (/react|typescript|javascript|node|frontend|backend|python|java|sql|cloud|aws|devops/.test(s)) {
+  if (/dsa|algorithm|data structure|system design/.test(s)) return '/dsa-sheet';
+  if (/react|typescript|javascript|node|frontend|backend|python|java|sql|cloud|aws|devops|docker|kubernetes/.test(s)) {
     return `/ai-course-designer?interest=${encodeURIComponent(skill)}&title=${encodeURIComponent(skill + ' fundamentals')}`;
   }
+  if (/cyber|linux|network/.test(s)) return '/roadmaps/cybersecurity';
+  if (/data|pandas|excel|analysis/.test(s)) return '/roadmaps/data-analyst';
   return `/roadmaps`;
 }
 

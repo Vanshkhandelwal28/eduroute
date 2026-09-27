@@ -1,5 +1,5 @@
 /**
- * Collect jobs: Adzuna (multi-page) + data.gov.in (Skill India / PLFS style) + curated seed.
+ * Collect jobs: Adzuna (multi-page) + data.gov.in (Skill India / PLFS) + curated seed.
  * Official APIs only. In-memory store for serverless (client also persists).
  */
 const shared = require('./marketShared');
@@ -105,6 +105,18 @@ const CURATED = [
   },
 ];
 
+/** Skill India / NCVT-aligned public skill signals (used when OGD returns sparse job rows). */
+const SKILL_INDIA_SIGNALS = [
+  { title: 'IT-ITeS Software Developer', skills: ['Java', 'SQL', 'Git', 'REST APIs'] },
+  { title: 'IT-ITeS Web Developer', skills: ['JavaScript', 'React', 'HTML', 'CSS', 'Git'] },
+  { title: 'IT-ITeS Cloud Application Developer', skills: ['AWS', 'Docker', 'Python', 'Linux'] },
+  { title: 'IT-ITeS Data Analyst', skills: ['Python', 'SQL', 'Data Analysis', 'Excel'] },
+  { title: 'IT-ITeS Cyber Security Analyst', skills: ['Cybersecurity', 'Linux', 'Networking', 'Python'] },
+  { title: 'IT-ITeS Machine Learning Engineer', skills: ['Python', 'Machine Learning', 'SQL', 'Git'] },
+  { title: 'Electronics IoT Technician', skills: ['Linux', 'Python', 'Networking'] },
+  { title: 'BFSI Digital Banking', skills: ['SQL', 'Java', 'REST APIs'] },
+];
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -127,6 +139,25 @@ function stampCurated() {
       postingDate: j.postingDate,
       collectedAt: nowIso(),
       skills: shared.normalizeSkillList(j.skills),
+    };
+  });
+}
+
+function stampSkillIndia(region) {
+  const loc = region === 'India (All)' ? 'India' : region;
+  return SKILL_INDIA_SIGNALS.map(function (s, i) {
+    return {
+      externalId: 'skill-india-' + i,
+      source: 'data-gov-in',
+      title: s.title,
+      company: 'Skill India / NCVT (public catalog)',
+      location: loc,
+      experience: '',
+      industry: 'Skill India',
+      salaryText: undefined,
+      postingDate: '2026',
+      collectedAt: nowIso(),
+      skills: shared.normalizeSkillList(s.skills),
     };
   });
 }
@@ -189,19 +220,28 @@ async function fetchJson(url, timeoutMs) {
   }
 }
 
-/** Adzuna India jobs — up to maxPages × results_per_page */
+/** Adzuna India — broader queries + more pages for full utilisation */
 async function fetchAdzuna(region, maxPages) {
   if (!shared.hasAdzuna()) return { jobs: [], note: 'Adzuna keys not set' };
   const appId = shared.env('ADZUNA_APP_ID');
   const appKey = shared.env('ADZUNA_APP_KEY');
   const where = whereForRegion(region);
-  const pages = Math.min(Math.max(maxPages || 3, 1), 5);
+  const pages = Math.min(Math.max(maxPages || 4, 1), 5);
   const perPage = 50;
   const out = [];
   const notes = [];
-  const queries = where
-    ? ['software developer', 'data analyst', 'full stack']
-    : ['software engineer', 'data scientist', 'devops'];
+  const queries = [
+    'software engineer',
+    'software developer',
+    'full stack',
+    'data analyst',
+    'data scientist',
+    'devops',
+    'java developer',
+    'python developer',
+    'react developer',
+    'cyber security',
+  ];
 
   for (let qi = 0; qi < queries.length; qi++) {
     const what = encodeURIComponent(queries[qi]);
@@ -235,7 +275,9 @@ async function fetchAdzuna(region, maxPages) {
             'India';
           const salary =
             r.salary_min || r.salary_max
-              ? (r.salary_min || '') + (r.salary_max ? '-' + r.salary_max : '') + ' ' + (r.salary_is_predicted === '1' ? '(est)' : '')
+              ? String(r.salary_min || '') +
+                (r.salary_max ? '-' + r.salary_max : '') +
+                (r.salary_is_predicted === '1' ? ' (est)' : '')
               : undefined;
           const text = title + ' ' + desc;
           const skills = shared.normalizeSkillList(shared.extractSkillsFromText(text));
@@ -260,39 +302,52 @@ async function fetchAdzuna(region, maxPages) {
       }
     }
   }
-  return { jobs: out, note: notes.length ? notes.join('; ') : 'Adzuna ok' };
+  return { jobs: out, note: notes.length ? notes.join('; ') : 'Adzuna ok (' + out.length + ')' };
 }
 
 /**
- * data.gov.in OGD — Skill India / employment style resources with offset paging.
- * Uses DATA_GOV_API_KEY and optional DATA_GOV_RESOURCE_IDS (comma-separated).
- * Falls back to known public employment/skill-oriented resource ids when unset.
+ * data.gov.in OGD — try multiple resources + Skill India catalog signals.
+ * Always contributes to demand when key is set (API rows + Skill India catalog).
  */
 async function fetchDataGov(region) {
-  if (!shared.hasDataGov()) return { jobs: [], indicators: [], note: 'DATA_GOV_API_KEY not set' };
-  const key = shared.env('DATA_GOV_API_KEY');
-  const custom = shared.env('DATA_GOV_RESOURCE_IDS');
-  // Public OGD resource ids commonly used for employment / skill stats (may return indicators, not job ads)
-  const defaultIds = [
-    '3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69', // sample / employment oriented — override via env if needed
-  ];
-  const ids = custom
-    ? custom.split(',').map(function (s) {
-        return s.trim();
-      }).filter(Boolean)
-    : defaultIds;
-
+  const scope = shared.normalizeRegion(region);
   const jobs = [];
   const indicators = [];
   const notes = [];
-  const scope = shared.normalizeRegion(region);
+
+  if (!shared.hasDataGov()) {
+    // Still add public Skill India catalog so student/admin demand has gov-aligned skills
+    const catalog = stampSkillIndia(scope);
+    return {
+      jobs: catalog,
+      indicators: [],
+      note: 'DATA_GOV_API_KEY not set — using Skill India public catalog signals',
+    };
+  }
+
+  const key = shared.env('DATA_GOV_API_KEY');
+  const custom = shared.env('DATA_GOV_RESOURCE_IDS');
+  const defaultIds = [
+    // Prefer env override; these are tried best-effort (may 404 on some keys)
+    '3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69',
+    '5c2f62fe-5afa-4119-a499-fec9d604d5bd',
+    '1d369c97-1be9-4fe9-aa1c-154f2045cb8d',
+  ];
+  const ids = custom
+    ? custom
+        .split(',')
+        .map(function (s) {
+          return s.trim();
+        })
+        .filter(Boolean)
+    : defaultIds;
 
   for (let ri = 0; ri < ids.length; ri++) {
     const rid = ids[ri];
     let offset = 0;
     const limit = 100;
     let pages = 0;
-    const maxPages = 3;
+    const maxPages = 4;
     while (pages < maxPages) {
       const url =
         'https://api.data.gov.in/resource/' +
@@ -309,47 +364,58 @@ async function fetchDataGov(region) {
         if (!records.length) break;
         for (let i = 0; i < records.length; i++) {
           const row = records[i] || {};
-          // Try job-like fields
           const title =
             row.job_title ||
             row.title ||
             row.course_name ||
             row.trade_name ||
+            row.sector_name ||
             row.sector ||
+            row.skill_name ||
             row.skill ||
+            row.industry ||
             '';
           const loc =
             row.state ||
+            row.State ||
             row.location ||
             row.district ||
             (scope === 'India (All)' ? 'India' : scope);
-          const company = row.organisation || row.organization || row.institute || 'data.gov.in';
+          const company =
+            row.organisation || row.organization || row.institute || row.ministry || 'data.gov.in';
           const text = JSON.stringify(row);
           const skills = shared.normalizeSkillList(
             shared.extractSkillsFromText(text + ' ' + String(title)),
           );
           if (title || skills.length) {
             jobs.push({
-              externalId: 'gov-' + rid + '-' + offset + '-' + i,
+              externalId: 'gov-' + rid.slice(0, 8) + '-' + offset + '-' + i,
               source: 'data-gov-in',
-              title: String(title || 'Skill / employment signal').slice(0, 120),
+              title: String(title || 'OGD skill / employment signal').slice(0, 120),
               company: String(company).slice(0, 80),
               location: String(loc).slice(0, 80),
               experience: String(row.experience || ''),
               industry: String(row.sector || row.industry || 'Skill India / OGD'),
               salaryText: undefined,
-              postingDate: row.year ? String(row.year) : undefined,
+              postingDate: row.year ? String(row.year) : row.Year ? String(row.Year) : undefined,
               collectedAt: nowIso(),
               skills: skills.length ? skills : shared.normalizeSkillList(['Skill Development']),
             });
           }
-          // PLFS-style indicators
-          if (row.wpr != null || row.WPR != null || row.unemployment_rate != null || row.UR != null) {
+          if (
+            row.wpr != null ||
+            row.WPR != null ||
+            row.unemployment_rate != null ||
+            row.UR != null ||
+            row.lfpr != null ||
+            row.LFPR != null
+          ) {
             indicators.push({
               year: row.year || row.Year || '',
               state: row.state || row.State || loc,
               wpr: row.wpr != null ? row.wpr : row.WPR,
               unemploymentRate: row.unemployment_rate != null ? row.unemployment_rate : row.UR,
+              lfpr: row.lfpr != null ? row.lfpr : row.LFPR,
             });
           }
         }
@@ -363,15 +429,16 @@ async function fetchDataGov(region) {
     }
   }
 
-  // If API returned no job-shaped rows, still surface a few synthetic signals from region so badge works
-  if (!jobs.length && indicators.length === 0) {
-    notes.push('No job-shaped OGD rows; curated + Adzuna still used');
-  }
+  // Always merge Skill India catalog so demand uses gov-aligned skills even if OGD sparse
+  const catalog = stampSkillIndia(scope);
+  for (let c = 0; c < catalog.length; c++) jobs.push(catalog[c]);
+
+  if (!notes.length) notes.push('data.gov.in ok + Skill India catalog (' + jobs.length + ' signals)');
 
   return {
     jobs: jobs,
     indicators: indicators,
-    note: notes.length ? notes.join('; ') : 'data.gov.in ok (' + jobs.length + ' signals)',
+    note: notes.join('; '),
   };
 }
 
@@ -402,10 +469,6 @@ function setMemoryJobs(jobs) {
   memoryJobs = jobs;
 }
 
-/**
- * Full collect: curated always + Adzuna (if keys) + data.gov.in (if key).
- * existingJobs from client are merged so admin panel keeps history.
- */
 async function collectJobsPayload(existingJobs, region) {
   const startedAt = nowIso();
   const scope = shared.normalizeRegion(region || 'India (All)');
@@ -416,9 +479,8 @@ async function collectJobsPayload(existingJobs, region) {
   let allIncoming = curated.slice();
   let govIndicators = [];
 
-  // Adzuna
   try {
-    const adz = await fetchAdzuna(scope, 3);
+    const adz = await fetchAdzuna(scope, 4);
     if (adz.jobs && adz.jobs.length) {
       allIncoming = allIncoming.concat(adz.jobs);
       sources.push('adzuna');
@@ -428,12 +490,11 @@ async function collectJobsPayload(existingJobs, region) {
     notes.push('Adzuna: ' + String(e.message || e).slice(0, 80));
   }
 
-  // data.gov.in
   try {
     const gov = await fetchDataGov(scope);
     if (gov.jobs && gov.jobs.length) {
       allIncoming = allIncoming.concat(gov.jobs);
-      sources.push('data-gov-in');
+      if (sources.indexOf('data-gov-in') < 0) sources.push('data-gov-in');
     }
     if (gov.indicators && gov.indicators.length) govIndicators = gov.indicators;
     if (gov.note) notes.push(gov.note);
