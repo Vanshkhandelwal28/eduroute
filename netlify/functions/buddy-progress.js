@@ -13,35 +13,74 @@ function json(statusCode, body) {
   };
 }
 
+const DEFAULT_PROGRESS = {
+  points: 0,
+  level: 1,
+  achievements: ['Welcome to Buddy 🚀'],
+  weeklyChallenges: [
+    'Complete 3 DSA problems',
+    'Ship 1 portfolio section update',
+    'Apply to 2 internships',
+  ],
+  missingSkills: [],
+  preferredLanguage: 'english',
+};
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return json(200, { ok: true });
 
   try {
-    const userId = event.queryStringParameters?.userId || JSON.parse(event.body || '{}')?.userId;
+    let userId;
+    try {
+      userId = event.queryStringParameters?.userId || JSON.parse(event.body || '{}')?.userId;
+    } catch {
+      userId = event.queryStringParameters?.userId;
+    }
     if (!userId) return json(400, { ok: false, error: 'userId is required.' });
 
-    await connectDatabase();
+    // Graceful offline when Mongo is not configured (common on fresh Netlify deploys)
+    if (!process.env.MONGODB_URI) {
+      console.warn('buddy-progress: MONGODB_URI missing — returning defaults');
+      return json(200, {
+        ok: true,
+        progress: DEFAULT_PROGRESS,
+        history: [],
+        offline: true,
+      });
+    }
+
+    try {
+      await connectDatabase();
+    } catch (dbErr) {
+      console.warn('buddy-progress: DB connect failed — returning defaults:', dbErr.message);
+      return json(200, {
+        ok: true,
+        progress: DEFAULT_PROGRESS,
+        history: [],
+        offline: true,
+      });
+    }
 
     const profile = await UserProgress.findOneAndUpdate(
       { userId },
       {
         $setOnInsert: {
           userId,
-          weeklyChallenges: [
-            'Complete 3 DSA problems',
-            'Ship 1 portfolio section update',
-            'Apply to 2 internships',
-          ],
-          achievements: ['Welcome to Buddy 🚀'],
+          weeklyChallenges: DEFAULT_PROGRESS.weeklyChallenges,
+          achievements: DEFAULT_PROGRESS.achievements,
         },
       },
       { upsert: true, new: true }
     );
 
     if (event.httpMethod === 'POST') {
-      const { missingSkills = [] } = JSON.parse(event.body || '{}');
-      profile.missingSkills = missingSkills;
-      await profile.save();
+      try {
+        const { missingSkills = [] } = JSON.parse(event.body || '{}');
+        profile.missingSkills = missingSkills;
+        await profile.save();
+      } catch (saveErr) {
+        console.warn('buddy-progress POST save failed:', saveErr.message);
+      }
     }
 
     return json(200, {
@@ -54,10 +93,17 @@ exports.handler = async (event) => {
         missingSkills: profile.missingSkills,
         preferredLanguage: profile.preferredLanguage,
       },
-      history: profile.chatHistory.slice(-20),
+      history: (profile.chatHistory || []).slice(-20),
     });
   } catch (error) {
     console.error('buddy-progress error', error);
-    return json(500, { ok: false, error: error.message || 'Failed to fetch progress.' });
+    // Never 500 for progress — client has localStorage fallback; keep UX clean
+    return json(200, {
+      ok: true,
+      progress: DEFAULT_PROGRESS,
+      history: [],
+      offline: true,
+      error: error.message || 'Failed to fetch progress (served defaults).',
+    });
   }
 };
