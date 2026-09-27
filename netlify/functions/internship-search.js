@@ -1,7 +1,7 @@
 /**
- * Live internship/job search via Adzuna India API.
- * POST { query?: string, where?: string, page?: number }
- * GET  ?what=internship&where=Maharashtra
+ * Live internship/job search via Adzuna API (India + international country codes).
+ * POST { query?: string, where?: string, page?: number, country?: string }
+ * GET  ?what=internship&where=Maharashtra&country=in
  */
 function env(name) {
   try {
@@ -56,17 +56,20 @@ function mapAdzunaJob(j) {
   };
 }
 
-async function fetchAdzuna({ what, where, page }) {
+async function fetchAdzuna({ what, where, page, country }) {
   const appId = env('ADZUNA_APP_ID');
   const appKey = env('ADZUNA_APP_KEY');
   if (!appId || !appKey) {
     return { ok: false, error: 'ADZUNA_APP_ID / ADZUNA_APP_KEY not set on Netlify', jobs: [] };
   }
   const q = encodeURIComponent(what || 'internship software');
-  const loc = encodeURIComponent(where || 'India');
+  const loc = encodeURIComponent(where || (country === 'in' || !country ? 'India' : ''));
   const pg = Math.max(1, Number(page) || 1);
+  const cc = country || 'in';
   const url =
-    'https://api.adzuna.com/v1/api/jobs/in/search/' +
+    'https://api.adzuna.com/v1/api/jobs/' +
+    cc +
+    '/search/' +
     pg +
     '?app_id=' +
     encodeURIComponent(appId) +
@@ -74,8 +77,7 @@ async function fetchAdzuna({ what, where, page }) {
     encodeURIComponent(appKey) +
     '&results_per_page=12&what=' +
     q +
-    '&where=' +
-    loc +
+    (loc ? '&where=' + loc : '') +
     '&content-type=application/json';
   const res = await fetch(url);
   const data = await res.json().catch(function () {
@@ -106,24 +108,26 @@ exports.handler = async function (event) {
     let what = 'internship';
     let where = 'Maharashtra';
     let page = 1;
+    let country = 'in';
     if (event.httpMethod === 'GET') {
       const q = event.queryStringParameters || {};
       what = q.what || q.query || what;
       where = q.where || where;
       page = q.page || 1;
+      country = q.country || country;
     } else if (event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
       what = body.what || body.query || what;
       where = body.where || where;
       page = body.page || 1;
+      country = body.country || country;
     } else {
       return json(405, { ok: false, error: 'Method not allowed' });
     }
 
-    // Prefer internship-focused query
     if (!/intern/i.test(what)) what = what + ' internship';
 
-    const result = await fetchAdzuna({ what: what, where: where, page: page });
+    const result = await fetchAdzuna({ what: what, where: where, page: page, country: country });
     return json(200, result);
   } catch (e) {
     return json(200, {
