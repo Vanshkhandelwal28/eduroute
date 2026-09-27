@@ -8,7 +8,6 @@ import {
   Code2,
   Instagram,
   Mail,
-  Map,
   MessageCircle,
   Route,
   Trophy,
@@ -269,7 +268,6 @@ export const LandingPage = () => {
       id="home"
       className="kb-root min-h-screen bg-[#0a0a0a] text-[#f5f5f0] antialiased selection:bg-[#d4ff00] selection:text-[#0a0a0a]"
     >
-      {/* Scoped kinetic-brutalism styles */}
       <style>{`
         .kb-root {
           --kb-black: #0a0a0a;
@@ -336,7 +334,6 @@ export const LandingPage = () => {
 
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
 
-      {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 border-b-2 border-[#f5f5f0] bg-[#0a0a0a]">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <a href="#home" className="flex items-center gap-3 group">
@@ -407,7 +404,6 @@ export const LandingPage = () => {
         )}
       </header>
 
-      {/* ── HERO ── */}
       <section className="relative overflow-hidden border-b-2 border-[#f5f5f0]">
         <GhostIndex n="01" />
         <div className="relative z-10 mx-auto max-w-7xl px-4 pb-16 pt-14 sm:px-6 sm:pt-20 lg:px-8 lg:pt-24">
@@ -449,7 +445,6 @@ export const LandingPage = () => {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="relative z-10 mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
           <div ref={statsRef} className="grid grid-cols-2 gap-0 border-2 border-[#f5f5f0] sm:grid-cols-4">
             {STATS.map((s, i) => (
@@ -459,10 +454,8 @@ export const LandingPage = () => {
         </div>
       </section>
 
-      {/* ── MARQUEE 1 ── */}
       <Marquee items={MARQUEE_A} />
 
-      {/* ── HOW IT WORKS ── */}
       <section id="how-it-works" className="relative border-b-2 border-[#f5f5f0] py-20 sm:py-24">
         <GhostIndex n="02" />
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -498,7 +491,6 @@ export const LandingPage = () => {
         </div>
       </section>
 
-      {/* ── FEATURES STRIP ── */}
       <section id="features" className="relative border-b-2 border-[#f5f5f0] py-20 sm:py-24">
         <GhostIndex n="03" />
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -554,10 +546,8 @@ export const LandingPage = () => {
         </div>
       </section>
 
-      {/* ── MARQUEE 2 ── */}
       <Marquee items={MARQUEE_B} reverse />
 
-      {/* ── JOURNEY ── */}
       <section id="journey" className="relative border-b-2 border-[#f5f5f0] py-20 sm:py-24">
         <GhostIndex n="04" />
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -591,7 +581,6 @@ export const LandingPage = () => {
         </div>
       </section>
 
-      {/* ── CTA BAND ── */}
       <section className="relative border-b-2 border-[#f5f5f0] bg-[#d4ff00] py-16 text-[#0a0a0a] sm:py-20">
         <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
           <h2 className="kb-section-title mx-auto max-w-3xl">
@@ -618,7 +607,6 @@ export const LandingPage = () => {
         </div>
       </section>
 
-      {/* ── CONTACT / FOOTER ── */}
       <footer id="contact" className="relative border-t-2 border-[#f5f5f0] bg-[#0a0a0a]">
         <GhostIndex n="05" />
         <div className="relative z-10 mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8">
