@@ -5,12 +5,9 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Briefcase,
-  ClipboardCheck,
   Database,
-  Filter,
   Loader2,
   MapPin,
-  MessageSquare,
   RefreshCw,
   Sparkles,
   Target,
@@ -18,23 +15,6 @@ import {
   Zap,
 } from 'lucide-react';
 import { StarfieldBackground } from '../../components/StarfieldBackground';
-import {
-  DISTRICTS,
-  EXPERIENCE_LEVELS,
-  JOB_SIGNALS,
-  SECTORS,
-  aggregateDistricts,
-  aggregateRoles,
-  aggregateSkills,
-  filterSignals,
-  kpiFromSignals,
-  type DistrictKey,
-  type ExperienceKey,
-  type JobSignal,
-  type SectorKey,
-  type WindowKey,
-} from './demandIntelligenceData';
-import { validationSummary } from '../../utils/employerValidationStore';
 import {
   apiCollectJobs,
   computeSkillDemand,
@@ -51,82 +31,103 @@ import {
   type MarketSnapshot,
 } from '../../utils/marketTrendStore';
 
-const EMERGING_COLORS: Record<string, string> = {
-  AI: 'bg-violet-500/15 text-violet-700 ring-violet-300/50 dark:text-violet-300 dark:ring-violet-500/40',
-  EV: 'bg-emerald-500/15 text-emerald-700 ring-emerald-300/50 dark:text-emerald-300 dark:ring-emerald-500/40',
-  Green: 'bg-teal-500/15 text-teal-700 ring-teal-300/50 dark:text-teal-300 dark:ring-teal-500/40',
+/** Top tech / hiring hubs per state (up to 8). Used for heatmap when region changes. */
+const STATE_DISTRICTS: Record<string, string[]> = {
+  'India (All)': ['Bengaluru', 'Hyderabad', 'Pune', 'Mumbai', 'Noida', 'Gurugram', 'Chennai', 'Ahmedabad'],
+  Maharashtra: ['Pune', 'Mumbai', 'Nagpur', 'Nashik', 'Thane', 'Aurangabad', 'Kolhapur', 'Solapur'],
+  Karnataka: ['Bengaluru', 'Mysuru', 'Hubli', 'Mangaluru', 'Belagavi', 'Davangere', 'Tumakuru', 'Udupi'],
+  'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Tiruppur', 'Erode', 'Vellore'],
+  Telangana: ['Hyderabad', 'Warangal', 'Nizamabad', 'Karimnagar', 'Khammam', 'Nalgonda', 'Mahbubnagar', 'Adilabad'],
+  'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada', 'Guntur', 'Tirupati', 'Nellore', 'Kurnool', 'Rajahmundry', 'Kakinada'],
+  'Delhi NCR': ['Delhi', 'Noida', 'Gurugram', 'Ghaziabad', 'Faridabad', 'Greater Noida', 'Gautam Buddh Nagar', 'Meerut'],
+  'Uttar Pradesh': ['Noida', 'Lucknow', 'Kanpur', 'Ghaziabad', 'Agra', 'Varanasi', 'Prayagraj', 'Meerut'],
+  Gujarat: ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Gandhinagar', 'Bhavnagar', 'Jamnagar', 'Anand'],
+  Rajasthan: ['Jaipur', 'Udaipur', 'Jodhpur', 'Kota', 'Ajmer', 'Bikaner', 'Alwar', 'Sikar'],
+  'West Bengal': ['Kolkata', 'Howrah', 'Durgapur', 'Asansol', 'Siliguri', 'Kharagpur', 'Haldia', 'Bardhaman'],
+  Kerala: ['Kochi', 'Thiruvananthapuram', 'Kozhikode', 'Thrissur', 'Kannur', 'Kollam', 'Alappuzha', 'Palakkad'],
+  'Madhya Pradesh': ['Indore', 'Bhopal', 'Gwalior', 'Jabalpur', 'Ujjain', 'Sagar', 'Rewa', 'Satna'],
+  Haryana: ['Gurugram', 'Faridabad', 'Panchkula', 'Ambala', 'Karnal', 'Hisar', 'Rohtak', 'Sonipat'],
+  Punjab: ['Chandigarh', 'Mohali', 'Ludhiana', 'Amritsar', 'Jalandhar', 'Patiala', 'Bathinda', 'Pathankot'],
+  Bihar: ['Patna', 'Gaya', 'Muzaffarpur', 'Bhagalpur', 'Purnia', 'Darbhanga', 'Begusarai', 'Ara'],
+  Odisha: ['Bhubaneswar', 'Cuttack', 'Rourkela', 'Berhampur', 'Sambalpur', 'Puri', 'Balasore', 'Jharsuguda'],
+  Assam: ['Guwahati', 'Dibrugarh', 'Silchar', 'Jorhat', 'Tezpur', 'Nagaon', 'Tinsukia', 'Bongaigaon'],
+  Jharkhand: ['Ranchi', 'Jamshedpur', 'Dhanbad', 'Bokaro', 'Hazaribagh', 'Deoghar', 'Giridih', 'Ramgarh'],
+  Chhattisgarh: ['Raipur', 'Bhilai', 'Bilaspur', 'Durg', 'Korba', 'Rajnandgaon', 'Raigarh', 'Jagdalpur'],
+  Uttarakhand: ['Dehradun', 'Haridwar', 'Haldwani', 'Roorkee', 'Rudrapur', 'Nainital', 'Rishikesh', 'Kashipur'],
+  'Himachal Pradesh': ['Shimla', 'Solan', 'Baddi', 'Dharamshala', 'Mandi', 'Kullu', 'Hamirpur', 'Una'],
+  Goa: ['Panaji', 'Margao', 'Vasco', 'Mapusa', 'Ponda', 'Calangute', 'Canacona', 'Bicholim'],
+  'Jammu & Kashmir': ['Srinagar', 'Jammu', 'Anantnag', 'Baramulla', 'Udhampur', 'Kathua', 'Sopore', 'Pulwama'],
+  Puducherry: ['Puducherry', 'Oulgaret', 'Karaikal', 'Mahe', 'Yanam', 'Villianur', 'Bahour', 'Ariankuppam'],
+  Chandigarh: ['Chandigarh', 'Sector 17', 'Sector 22', 'Industrial Area', 'Manimajra', 'Panchkula', 'Mohali', 'Zirakpur'],
 };
 
-function mapLocationToDistrict(loc: string): DistrictKey {
-  const l = loc.toLowerCase();
-  if (l.includes('pune')) return 'Pune';
-  if (l.includes('mumbai') || l.includes('bombay')) return 'Mumbai';
-  if (l.includes('nagpur')) return 'Nagpur';
-  if (l.includes('nashik') || l.includes('nasik')) return 'Nashik';
-  if (l.includes('aurangabad') || l.includes('chhatrapati sambhajinagar')) return 'Aurangabad';
-  if (l.includes('thane') || l.includes('navi mumbai')) return 'Thane';
-  if (l.includes('kolhapur')) return 'Kolhapur';
-  if (l.includes('solapur')) return 'Solapur';
-  return 'Pune';
+function districtsForRegion(region: string): string[] {
+  const r = String(region || 'India (All)').trim();
+  if (STATE_DISTRICTS[r]) return STATE_DISTRICTS[r];
+  // fallback: use region name + generic hubs
+  return [r, 'Capital', 'Tech park', 'Industrial', 'IT zone', 'City center', 'Suburb', 'Remote'];
 }
 
-function mapSector(industry: string, title: string): Exclude<SectorKey, 'all'> {
-  const t = `${industry} ${title}`.toLowerCase();
-  if (/bfsi|bank|fintech|finance/.test(t)) return 'BFSI';
-  if (/health|hospital|clinical|pharma/.test(t)) return 'Healthcare';
-  if (/manufactur|cnc|plc|auto|industrial/.test(t)) return 'Manufacturing';
-  if (/logistics|warehouse|supply/.test(t)) return 'Logistics';
-  if (/ev|solar|green|renewable|battery/.test(t)) return 'EV / Green';
-  return 'IT / Software';
+/** Match job location string to one of the state's districts. */
+function matchDistrict(location: string, districts: string[]): string | null {
+  const loc = String(location || '').toLowerCase();
+  if (!loc) return null;
+  for (const d of districts) {
+    if (loc.includes(d.toLowerCase())) return d;
+  }
+  // common aliases
+  if (loc.includes('bangalore') || loc.includes('bengaluru')) {
+    const b = districts.find((x) => /bengaluru|bangalore/i.test(x));
+    if (b) return b;
+  }
+  if (loc.includes('gurgaon') || loc.includes('gurugram')) {
+    const g = districts.find((x) => /gurugram|gurgaon/i.test(x));
+    if (g) return g;
+  }
+  if (loc.includes('bombay') || loc.includes('mumbai')) {
+    const m = districts.find((x) => /mumbai/i.test(x));
+    if (m) return m;
+  }
+  if (loc.includes('madras') || loc.includes('chennai')) {
+    const c = districts.find((x) => /chennai/i.test(x));
+    if (c) return c;
+  }
+  if (loc.includes('calcutta') || loc.includes('kolkata')) {
+    const k = districts.find((x) => /kolkata/i.test(x));
+    if (k) return k;
+  }
+  if (loc.includes('trivandrum') || loc.includes('thiruvananthapuram')) {
+    const t = districts.find((x) => /thiruvananthapuram|trivandrum/i.test(x));
+    if (t) return t;
+  }
+  return null;
 }
 
-function mapExperience(exp: string): Exclude<ExperienceKey, 'all'> {
-  const e = (exp || '').toLowerCase();
-  if (/intern|fresher|0\s*-\s*0|trainee/.test(e)) return 'Intern';
-  if (/0\s*-\s*2|1\s*-\s*2|junior|entry/.test(e)) return '0-2 yrs';
-  if (/2\s*-\s*5|3\s*-\s*5|mid/.test(e)) return '2-5 yrs';
-  if (/5\+|5\s*-|senior|lead/.test(e)) return '5+ yrs';
-  return '0-2 yrs';
-}
-
-function marketJobsToSignals(jobs: MarketJob[]): JobSignal[] {
-  return jobs.map((j, i) => {
-    const district = mapLocationToDistrict(j.location || '');
-    const skills = (j.skills || []).slice(0, 6);
-    const emerging: string[] = [];
-    const blob = `${j.title} ${skills.join(' ')}`.toLowerCase();
-    if (/ai|ml|machine learning|genai|llm/.test(blob)) emerging.push('AI');
-    if (/ev|electric vehicle|battery/.test(blob)) emerging.push('EV');
-    if (/solar|green|sustainab/.test(blob)) emerging.push('Green');
-    return {
-      id: `live-${j.source}-${j.externalId || i}`,
-      title: j.title || 'Job',
-      company: j.company || 'Unknown',
-      district,
-      sector: mapSector(j.industry || '', j.title || ''),
-      skills: skills.length ? skills : ['Software'],
-      proficiency: 'Intermediate' as const,
-      experience: mapExperience(j.experience || ''),
-      salaryBand: j.salaryText || '—',
-      openings: 1,
-      postedDaysAgo: j.postingDate
-        ? Math.min(
-            89,
-            Math.max(0, Math.floor((Date.now() - new Date(j.postingDate).getTime()) / 86400000) || 7),
-          )
-        : 7,
-      emerging: emerging.length ? emerging : undefined,
-      trend: 'rising' as const,
-    };
+function aggregateDistrictHeat(jobs: MarketJob[], districts: string[]) {
+  const counts: Record<string, number> = {};
+  districts.forEach((d) => {
+    counts[d] = 0;
   });
+  let unmatched = 0;
+  jobs.forEach((j) => {
+    const d = matchDistrict(j.location || '', districts);
+    if (d) counts[d] = (counts[d] || 0) + 1;
+    else unmatched += 1;
+  });
+  // If almost nothing matched, distribute unmatched into first district so UI is not all zeros
+  const totalMatched = Object.values(counts).reduce((a, b) => a + b, 0);
+  if (totalMatched === 0 && jobs.length > 0 && districts[0]) {
+    counts[districts[0]] = jobs.length;
+  }
+  const max = Math.max(...Object.values(counts), 1);
+  return districts.map((district) => ({
+    district,
+    openings: counts[district] || 0,
+    intensity: Math.round(((counts[district] || 0) / max) * 100),
+  }));
 }
 
 export function DemandIntelligence() {
-  const [sector, setSector] = useState<SectorKey>('all');
-  const [district, setDistrict] = useState<DistrictKey | 'all'>('all');
-  const [experience, setExperience] = useState<ExperienceKey>('all');
-  const [timeWindow, setTimeWindow] = useState<WindowKey>('90d');
-  const [vSummary, setVSummary] = useState(() => validationSummary());
   const [jobs, setJobs] = useState<MarketJob[]>(() => readJobs());
   const [market, setMarket] = useState<MarketSnapshot | null>(() => readMarketSnapshot());
   const [region, setRegion] = useState(() => readPreferredRegion() || 'Maharashtra');
@@ -137,13 +138,6 @@ export function DemandIntelligence() {
   const reloadLive = useCallback(() => {
     setJobs(readJobs());
     setMarket(readMarketSnapshot());
-  }, []);
-
-  useEffect(() => {
-    const refresh = () => setVSummary(validationSummary());
-    refresh();
-    window.addEventListener('eduroute:employer-validation-updated', refresh);
-    return () => window.removeEventListener('eduroute:employer-validation-updated', refresh);
   }, []);
 
   useEffect(() => {
@@ -160,50 +154,67 @@ export function DemandIntelligence() {
     };
   }, [reloadLive]);
 
+  // Same region filter as student Skill Trend Analysis
   const regionJobs = useMemo(() => jobsForRegion(jobs, region), [jobs, region]);
-  const liveSignals = useMemo(() => marketJobsToSignals(regionJobs), [regionJobs]);
-  const useLive = liveSignals.length >= 8;
-  const baseSignals: JobSignal[] = useLive ? liveSignals : JOB_SIGNALS;
+  const districts = useMemo(() => districtsForRegion(region), [region]);
+  const heat = useMemo(() => aggregateDistrictHeat(regionJobs, districts), [regionJobs, districts]);
 
-  const filtered = useMemo(
-    () => filterSignals(baseSignals, { sector, district, experience, window: timeWindow }),
-    [baseSignals, sector, district, experience, timeWindow],
-  );
+  const demandRows = useMemo(() => computeSkillDemand(regionJobs).slice(0, 12), [regionJobs]);
+  const maxPct = demandRows[0]?.demandPct || 1;
 
-  const kpis = useMemo(() => kpiFromSignals(filtered), [filtered]);
-  const skills = useMemo(() => {
-    if (useLive && regionJobs.length) {
-      const demand = computeSkillDemand(regionJobs).slice(0, 12);
-      const maxPct = demand[0]?.demandPct || 1;
-      return demand.map((d) => ({
+  const skills = useMemo(
+    () =>
+      demandRows.map((d) => ({
         skill: d.skill,
         openings: d.jobCount,
         demand: Math.min(99, Math.round((d.demandPct / maxPct) * 95)),
-        trend: 'rising' as const,
-        emerging: /ai|ml|cloud|kubernetes|genai/i.test(d.skill),
-      }));
-    }
-    return aggregateSkills(filtered);
-  }, [useLive, regionJobs, filtered]);
+        emerging: /ai|ml|cloud|kubernetes|genai|docker/i.test(d.skill),
+      })),
+    [demandRows, maxPct],
+  );
 
   const roles = useMemo(() => {
     if (market?.topRoles?.length) {
       return market.topRoles.slice(0, 8).map((r) => ({
         role: r.role,
         score: r.openingsIndex,
-        direction: 'rising' as const,
         delta: Math.max(5, Math.round(r.openingsIndex / 10)),
       }));
     }
-    return aggregateRoles(filtered);
-  }, [market, filtered]);
+    // derive from job titles in region
+    const counts: Record<string, number> = {};
+    regionJobs.forEach((j) => {
+      let role = (j.title || 'Job').slice(0, 60);
+      if (/full\s*stack/i.test(role)) role = 'Full Stack Developer';
+      else if (/front\s*end|frontend/i.test(role)) role = 'Frontend Engineer';
+      else if (/back\s*end|backend/i.test(role)) role = 'Backend Engineer';
+      else if (/data\s*analyst/i.test(role)) role = 'Data Analyst';
+      else if (/devops|sre/i.test(role)) role = 'DevOps / SRE';
+      else if (/software\s*(engineer|developer)/i.test(role)) role = 'Software Engineer';
+      counts[role] = (counts[role] || 0) + 1;
+    });
+    const total = regionJobs.length || 1;
+    return Object.entries(counts)
+      .map(([role, n]) => ({
+        role,
+        score: Math.min(99, Math.round((n / total) * 100 + n)),
+        delta: Math.max(3, Math.round((n / total) * 20)),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+  }, [market, regionJobs]);
 
-  const heat = useMemo(() => aggregateDistricts(filtered), [filtered]);
   const risingSkills = market?.risingSkills?.slice(0, 6) || [];
   const decliningSkills = market?.decliningSkills?.slice(0, 4) || [];
 
+  const uniqueRoles = new Set(regionJobs.map((j) => j.title)).size;
+  const uniqueSkills = new Set(regionJobs.flatMap((j) => j.skills || [])).size;
+  const emergingCount = regionJobs.filter((j) =>
+    /ai|ml|genai|cloud|kubernetes/i.test(`${j.title} ${(j.skills || []).join(' ')}`),
+  ).length;
+
   const selectCls =
-    'rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-[var(--accent)]';
+    'rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2.5 text-sm font-semibold text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-indigo-500/40';
 
   const collect = async () => {
     setBusy(true);
@@ -217,12 +228,7 @@ export function DemandIntelligence() {
         return;
       }
       reloadLive();
-      setMsg(
-        `Collected live jobs for ${region}. Sources: Adzuna + data.gov.in + curated. ${res.note || ''}`.slice(
-          0,
-          200,
-        ),
-      );
+      setMsg(`Collected live jobs for ${region}. ${res.note || ''}`.slice(0, 180));
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Collect error');
     } finally {
@@ -243,7 +249,7 @@ export function DemandIntelligence() {
         return;
       }
       reloadLive();
-      setMsg(`AI trends refreshed for ${region} via ${res.provider || 'AI'} on live API job data.`);
+      setMsg(`AI trends refreshed for ${region} (${res.provider || 'AI'}).`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Refresh error');
     } finally {
@@ -262,7 +268,6 @@ export function DemandIntelligence() {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
           className="flex flex-wrap items-end justify-between gap-4"
         >
           <div>
@@ -271,14 +276,14 @@ export function DemandIntelligence() {
             </p>
             <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">Demand Intelligence</h1>
             <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-              Live job signals from the same pipeline as Market Trend Engine (Adzuna + data.gov.in +
-              curated). Collect / AI refresh pulls real API data. Mock signals only if no live jobs yet.
+              Live Adzuna + data.gov.in + curated jobs — same pool as Skill Trend Analysis. District heatmap
+              switches with the selected state (top tech hubs).
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 px-3 py-2 text-xs font-bold shadow-[var(--shadow-card)] backdrop-blur-sm">
-              <Activity className={`h-3.5 w-3.5 ${useLive ? 'text-emerald-500' : 'text-amber-500'}`} />
-              {useLive ? `Live · ${filtered.length} postings` : `Mock · ${filtered.length} postings`}
+            <div className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 px-3 py-2 text-xs font-bold">
+              <Activity className={`h-3.5 w-3.5 ${regionJobs.length ? 'text-emerald-500' : 'text-amber-500'}`} />
+              {regionJobs.length ? `Live · ${regionJobs.length} jobs` : 'No live jobs'}
             </div>
             <button
               type="button"
@@ -293,7 +298,7 @@ export function DemandIntelligence() {
               type="button"
               disabled={busy}
               onClick={() => void refreshAi()}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-lg disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Refresh AI
@@ -313,9 +318,9 @@ export function DemandIntelligence() {
         )}
 
         <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4">
-          <label className="flex min-w-[200px] flex-1 flex-col gap-1">
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-[var(--text-muted)]">
-              <MapPin className="h-3 w-3" /> Region (live data)
+          <label className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase text-[var(--text-muted)]">
+              <MapPin className="h-3.5 w-3.5" /> State / region
             </span>
             <select
               className={selectCls}
@@ -334,96 +339,23 @@ export function DemandIntelligence() {
             </select>
           </label>
           <p className="pb-2 text-xs text-[var(--text-muted)]">
-            {useLive
-              ? `${regionJobs.length} live jobs in scope · same pool as admin Market Trend Engine`
-              : 'No live jobs yet — showing mock signals. Click Collect jobs.'}
+            Heatmap shows top tech districts for <strong>{region}</strong> · demand from{' '}
+            {regionJobs.length} jobs (same filter as student trend analysis).
           </p>
         </div>
 
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-emerald-500/30 bg-[var(--bg-card)]/90 p-4 shadow-[var(--shadow-card)] backdrop-blur-sm"
-        >
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-300">
-              <ClipboardCheck className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold">Employer validation results</h2>
-              <p className="text-xs text-[var(--text-muted)]">From Industry workspace</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {[
-              { label: 'Course ratings', value: vSummary.ratingsCount, sub: vSummary.avgRating ? `avg ${vSummary.avgRating}/5` : '—' },
-              { label: 'Skills tagged', value: vSummary.skillsCount, sub: `${vSummary.mustHave} must` },
-              { label: 'Curriculum OK', value: vSummary.approved, sub: 'approved' },
-              { label: 'Curriculum no', value: vSummary.rejected, sub: 'rejected' },
-              { label: 'Surveys', value: vSummary.surveysCount, sub: 'employer' },
-              { label: 'Job-ready', value: vSummary.avgRating || '—', sub: 'avg rating' },
-            ].map((k) => (
-              <div key={k.label} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-3 py-2.5">
-                <p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">{k.label}</p>
-                <p className="text-xl font-black">{k.value}</p>
-                <p className="text-[10px] text-[var(--text-muted)]">{k.sub}</p>
-              </div>
-            ))}
-          </div>
-          {vSummary.ratingsCount === 0 && vSummary.surveysCount === 0 && (
-            <p className="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]">
-              <MessageSquare className="h-3.5 w-3.5" /> No employer input yet.
-            </p>
-          )}
-        </motion.section>
-
-        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4">
-          <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase text-[var(--text-muted)]">
-            <Filter className="h-3.5 w-3.5" /> Filters
-          </div>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase text-[var(--text-muted)]">Sector</span>
-              <select className={selectCls} value={sector} onChange={(e) => setSector(e.target.value as SectorKey)}>
-                {SECTORS.map((s) => (
-                  <option key={s} value={s}>{s === 'all' ? 'All sectors' : s}</option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase text-[var(--text-muted)]">District</span>
-              <select className={selectCls} value={district} onChange={(e) => setDistrict(e.target.value as DistrictKey | 'all')}>
-                <option value="all">All districts</option>
-                {DISTRICTS.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase text-[var(--text-muted)]">Experience</span>
-              <select className={selectCls} value={experience} onChange={(e) => setExperience(e.target.value as ExperienceKey)}>
-                {EXPERIENCE_LEVELS.map((x) => (
-                  <option key={x} value={x}>{x === 'all' ? 'All levels' : x}</option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase text-[var(--text-muted)]">Window</span>
-              <select className={selectCls} value={timeWindow} onChange={(e) => setTimeWindow(e.target.value as WindowKey)}>
-                <option value="30d">Last 30 days</option>
-                <option value="90d">Last 90 days</option>
-              </select>
-            </label>
-          </div>
-        </section>
-
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           {[
-            { label: 'Openings', value: kpis.totalOpenings, icon: Briefcase, tone: 'bg-indigo-500/20 text-indigo-300' },
-            { label: 'Unique roles', value: kpis.roles, icon: Target, tone: 'bg-violet-500/20 text-violet-300' },
-            { label: 'Skills in demand', value: kpis.skills, icon: Zap, tone: 'bg-amber-500/20 text-amber-300' },
-            { label: 'Emerging-tagged', value: kpis.emerging, icon: Sparkles, tone: 'bg-emerald-500/20 text-emerald-300' },
-            { label: 'Rising roles', value: kpis.rising, icon: TrendingUp, tone: 'bg-sky-500/20 text-sky-300' },
+            { label: 'Jobs in region', value: regionJobs.length, icon: Briefcase, tone: 'bg-indigo-500/20 text-indigo-300' },
+            { label: 'Unique roles', value: uniqueRoles, icon: Target, tone: 'bg-violet-500/20 text-violet-300' },
+            { label: 'Skills in demand', value: uniqueSkills, icon: Zap, tone: 'bg-amber-500/20 text-amber-300' },
+            { label: 'AI/Cloud tagged', value: emergingCount, icon: Sparkles, tone: 'bg-emerald-500/20 text-emerald-300' },
+            {
+              label: 'Top skill share',
+              value: demandRows[0] ? `${demandRows[0].demandPct}%` : '—',
+              icon: TrendingUp,
+              tone: 'bg-sky-500/20 text-sky-300',
+            },
           ].map((k) => (
             <div key={k.label} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4">
               <div className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl ${k.tone}`}>
@@ -468,101 +400,118 @@ export function DemandIntelligence() {
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
           <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 xl:col-span-3">
-            <h2 className="mb-1 text-sm font-bold">Top skills in demand</h2>
+            <h2 className="mb-1 text-sm font-bold">Top skills in demand — {region}</h2>
             <p className="mb-4 text-xs text-[var(--text-muted)]">
-              {useLive ? 'From live Adzuna + data.gov + curated' : 'From mock signals'}
+              Demand % from live jobs (same calculation as student Skill Trend Analysis).
             </p>
             {skills.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">No signals match.</p>
+              <p className="text-sm text-[var(--text-muted)]">Collect jobs to see demand for this state.</p>
             ) : (
               <ul className="space-y-3">
                 {skills.map((row) => (
                   <li key={row.skill}>
                     <div className="mb-1 flex justify-between text-xs font-bold">
-                      <span>{row.skill}{row.emerging ? ' · EMERGING' : ''}</span>
-                      <span className="text-[var(--text-muted)]">{row.openings} · {row.demand}%</span>
+                      <span>
+                        {row.skill}
+                        {row.emerging ? ' · EMERGING' : ''}
+                      </span>
+                      <span className="text-[var(--text-muted)]">
+                        {row.openings} jobs · {row.demand}%
+                      </span>
                     </div>
                     <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
-                      <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500" style={{ width: `${Math.max(6, row.demand)}%` }} />
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500"
+                        style={{ width: `${Math.max(6, row.demand)}%` }}
+                      />
                     </div>
                   </li>
                 ))}
               </ul>
             )}
           </section>
+
           <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 xl:col-span-2">
-            <h2 className="mb-3 text-sm font-bold">Roles</h2>
+            <h2 className="mb-3 text-sm font-bold">Top roles — {region}</h2>
             <ul className="space-y-2.5">
-              {roles.map((r) => (
-                <li key={r.role} className="flex items-center justify-between rounded-xl border border-[var(--border-default)] px-3 py-2.5">
-                  <div>
-                    <p className="text-xs font-bold">{r.role}</p>
-                    <p className="text-[10px] text-[var(--text-muted)]">Score {r.score}</p>
-                  </div>
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-emerald-600 dark:text-emerald-300">
-                    <ArrowUpRight className="h-3 w-3" />+{r.delta}%
-                  </span>
-                </li>
-              ))}
+              {roles.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">No roles yet.</p>
+              ) : (
+                roles.map((r) => (
+                  <li
+                    key={r.role}
+                    className="flex items-center justify-between rounded-xl border border-[var(--border-default)] px-3 py-2.5"
+                  >
+                    <div>
+                      <p className="text-xs font-bold">{r.role}</p>
+                      <p className="text-[10px] text-[var(--text-muted)]">Score {r.score}</p>
+                    </div>
+                    <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-emerald-600 dark:text-emerald-300">
+                      <ArrowUpRight className="h-3 w-3" />+{r.delta}%
+                    </span>
+                  </li>
+                ))
+              )}
             </ul>
           </section>
         </div>
 
         <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5">
-          <h2 className="mb-4 text-sm font-bold">District heatmap</h2>
+          <div className="mb-4 flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-sky-400" />
+            <div>
+              <h2 className="text-sm font-bold">District heatmap — {region}</h2>
+              <p className="text-xs text-[var(--text-muted)]">
+                Top tech districts for this state. Counts = jobs whose location matches each hub.
+              </p>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {heat.map((d) => (
-              <button
+              <div
                 key={d.district}
-                type="button"
-                onClick={() => setDistrict(d.district)}
-                className={`rounded-2xl border p-4 text-left ${
-                  district === d.district ? 'border-indigo-400 ring-2 ring-indigo-400/40' : 'border-[var(--border-default)]'
-                }`}
-                style={{ background: `linear-gradient(135deg, rgba(99,102,241,${0.08 + d.intensity / 200}) 0%, rgba(139,92,246,${0.05 + d.intensity / 250}) 100%)` }}
+                className="rounded-2xl border border-[var(--border-default)] p-4"
+                style={{
+                  background: `linear-gradient(135deg, rgba(99,102,241,${0.08 + d.intensity / 200}) 0%, rgba(139,92,246,${0.05 + d.intensity / 250}) 100%)`,
+                }}
               >
                 <p className="text-sm font-bold">{d.district}</p>
                 <p className="mt-1 text-2xl font-black">{d.openings}</p>
-              </button>
+                <p className="text-[10px] text-[var(--text-muted)]">intensity {d.intensity}</p>
+              </div>
             ))}
           </div>
         </section>
 
         <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5">
-          <h2 className="mb-3 text-sm font-bold">Job postings sample</h2>
+          <h2 className="mb-3 text-sm font-bold">Job sample — {region}</h2>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-xs">
+            <table className="w-full min-w-[560px] text-left text-xs">
               <thead>
                 <tr className="border-b border-[var(--border-default)] text-[10px] uppercase text-[var(--text-muted)]">
                   <th className="py-2 pr-2">Role</th>
                   <th className="py-2 pr-2">Company</th>
-                  <th className="py-2 pr-2">District</th>
-                  <th className="py-2 pr-2">Skills</th>
-                  <th className="py-2">Flags</th>
+                  <th className="py-2 pr-2">Location</th>
+                  <th className="py-2">Skills</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 20).map((job) => (
-                  <tr key={job.id} className="border-b border-[var(--border-default)]/60">
-                    <td className="py-2.5 pr-2 font-bold">{job.title}</td>
-                    <td className="py-2.5 pr-2 text-[var(--text-secondary)]">{job.company}</td>
-                    <td className="py-2.5 pr-2">{job.district}</td>
-                    <td className="py-2.5 pr-2 text-[var(--text-muted)]">{job.skills.slice(0, 4).join(', ')}</td>
-                    <td className="py-2.5">
-                      <div className="flex flex-wrap gap-1">
-                        {(job.emerging || []).map((tag) => (
-                          <span key={tag} className={`rounded-full px-2 py-0.5 text-[10px] font-black ring-1 ${EMERGING_COLORS[tag] || EMERGING_COLORS.AI}`}>
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
+                {regionJobs.slice(0, 15).map((j) => (
+                  <tr key={`${j.source}-${j.externalId}`} className="border-b border-[var(--border-default)]/60">
+                    <td className="py-2.5 pr-2 font-bold">{j.title}</td>
+                    <td className="py-2.5 pr-2 text-[var(--text-secondary)]">{j.company}</td>
+                    <td className="py-2.5 pr-2">{j.location}</td>
+                    <td className="py-2.5 text-[var(--text-muted)]">
+                      {(j.skills || []).slice(0, 4).join(', ')}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {filtered.length === 0 && (
-              <p className="py-6 text-center text-sm text-[var(--text-muted)]">No postings match.</p>
+            {regionJobs.length === 0 && (
+              <p className="py-6 text-center text-sm text-[var(--text-muted)]">
+                No jobs for this state — click Collect jobs.
+              </p>
             )}
           </div>
         </section>
