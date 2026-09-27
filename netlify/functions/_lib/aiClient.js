@@ -15,13 +15,18 @@ async function performWebSearch() {
   return { results: [], answer: '' };
 }
 
+function isValidGeminiModel(m) {
+  if (!m || typeof m !== 'string') return false;
+  if (/3\.8|gemini-pro$/i.test(m)) return false;
+  return true;
+}
 const GEMINI_MODELS = [
   env('GEMINI_MODEL') || '',
   'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
   'gemini-1.5-flash',
   'gemini-1.5-flash-latest',
-  'gemini-2.0-flash-lite',
-].filter(Boolean);
+].filter(isValidGeminiModel);
 
 const GROQ_MODELS = [
   env('GROQ_MODEL') || '',
