@@ -1,6 +1,6 @@
 /**
  * Skill Market Trend Engine — client cache + local matching.
- * Server collect: Adzuna (multi-page) + data.gov.in Skill India/PLFS + curated seed.
+ * Full utilisation: Adzuna + data.gov.in + curated + gov indicators.
  */
 import { normalizeSkillList, normalizeSkillName, skillsMatch } from './skillNormalize';
 import { readMarketSnapshot, type MarketSnapshot } from './marketTrendStore';
@@ -29,6 +29,15 @@ export type CollectionRun = {
   jobsInserted: number;
   jobsDuplicate: number;
   errorMessage?: string;
+  note?: string;
+};
+
+export type GovIndicator = {
+  year?: string;
+  state?: string;
+  wpr?: number | string;
+  unemploymentRate?: number | string;
+  lfpr?: number | string;
 };
 
 export type SkillDemandRow = {
@@ -52,8 +61,9 @@ export type StudentMarketMatch = {
 
 const JOBS_KEY = 'eduroute:mt-jobs-v1';
 const RUNS_KEY = 'eduroute:mt-runs-v1';
+const GOV_KEY = 'eduroute:mt-gov-v1';
+const LAST_NOTE_KEY = 'eduroute:mt-last-note-v1';
 
-/** Map onboarding / soft skill labels → market skill tokens for matching. */
 const STUDENT_SKILL_EXPAND: Record<string, string[]> = {
   'project building': ['React', 'Node.js', 'Git', 'JavaScript'],
   'programming fundamentals': ['Python', 'Java', 'JavaScript'],
@@ -76,7 +86,6 @@ const STUDENT_SKILL_EXPAND: Record<string, string[]> = {
   'data cleaning': ['Python', 'Pandas', 'SQL'],
 };
 
-/** Expand student profile skills into market-comparable skill tokens. */
 export function expandStudentSkills(studentSkills: string[]): string[] {
   const out: string[] = [];
   for (const raw of studentSkills || []) {
@@ -220,6 +229,42 @@ export function writeJobs(jobs: MarketJob[]) {
   }
 }
 
+export function readGovIndicators(): GovIndicator[] {
+  try {
+    const raw = localStorage.getItem(GOV_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeGovIndicators(list: GovIndicator[]) {
+  try {
+    localStorage.setItem(GOV_KEY, JSON.stringify(list || []));
+    window.dispatchEvent(new Event('eduroute:mt-gov-updated'));
+  } catch {
+    /* */
+  }
+}
+
+export function readLastCollectNote(): string {
+  try {
+    return localStorage.getItem(LAST_NOTE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function writeLastCollectNote(note: string) {
+  try {
+    localStorage.setItem(LAST_NOTE_KEY, note || '');
+  } catch {
+    /* */
+  }
+}
+
 export function readRuns(): CollectionRun[] {
   try {
     const raw = localStorage.getItem(RUNS_KEY);
@@ -260,7 +305,6 @@ export function filterJobs(jobs: MarketJob[], f: JobFilters): MarketJob[] {
   });
 }
 
-/** Demand % = share of jobs that mention the skill (all sources). */
 export function computeSkillDemand(jobs: MarketJob[]): SkillDemandRow[] {
   const total = jobs.length || 1;
   const counts = new Map<string, number>();
@@ -283,27 +327,17 @@ export function computeSkillDemand(jobs: MarketJob[]): SkillDemandRow[] {
   return rows.sort((a, b) => b.jobCount - a.jobCount);
 }
 
-/** Rising list grounded on live job demand (not AI invent). */
-export function risingFromDemand(jobs: MarketJob[], limit = 6): {
-  skill: string;
-  demandScore: number;
-  trend: string;
-  note: string;
-}[] {
+export function risingFromDemand(jobs: MarketJob[], limit = 6) {
   const demand = computeSkillDemand(jobs).slice(0, limit);
   const maxPct = demand[0]?.demandPct || 1;
   return demand.map((d) => ({
     skill: d.skill,
     demandScore: Math.min(95, Math.round(40 + (d.demandPct / maxPct) * 55)),
-    trend: 'rising',
+    trend: 'rising' as const,
     note: `${d.jobCount} jobs · ${d.demandPct}% share`,
   }));
 }
 
-/**
- * Match student skills to market demand from ALL collected jobs.
- * Match score = weighted coverage of top demand skills (0–100).
- */
 export function matchStudentToMarket(
   studentSkills: string[],
   jobs: MarketJob[],
@@ -314,12 +348,10 @@ export function matchStudentToMarket(
   const demand = computeSkillDemand(jobs);
   const topN = demand.slice(0, 12);
 
-  // Matched = market skills the student covers (expanded)
   const matchedMarket = topN
     .filter((d) => mine.some((s) => skillsMatch(s, d.skill)))
     .map((d) => d.skill);
 
-  // Also keep original student labels that hit something in demand
   const matchedLabels = mineRaw.filter(
     (s) =>
       demand.some((d) => skillsMatch(d.skill, s)) ||
@@ -336,7 +368,7 @@ export function matchStudentToMarket(
   const priority = gapCandidates.slice(0, 5).map((g) => ({
     skill: g.skill,
     demandPct: g.demandPct,
-    reason: `Appears in ${g.jobCount} of ${jobs.length} job(s) (${g.demandPct}% demand share across Adzuna + data.gov + curated)`,
+    reason: `Appears in ${g.jobCount} of ${jobs.length} job(s) (${g.demandPct}% across all sources)`,
   }));
 
   const recommendations = priority.map((p) => ({
@@ -345,7 +377,6 @@ export function matchStudentToMarket(
     roadmapTo: roadmapLinkForSkill(p.skill),
   }));
 
-  // Weighted match score: sum of demand weights for skills student has / sum of top weights
   const focus = topN.slice(0, 8);
   const weightSum = focus.reduce((s, d) => s + Math.max(1, d.demandPct), 0) || 1;
   const earned = focus.reduce((s, d) => {
@@ -377,12 +408,11 @@ export function matchStudentToMarket(
     dataAsOf: latest,
     sourceNote:
       hasAdzuna || hasGov
-        ? `Live sources: ${hasAdzuna ? 'Adzuna' : ''}${hasAdzuna && hasGov ? ' + ' : ''}${hasGov ? 'data.gov.in' : ''} + curated-public. Match score weighted by job demand share.`
-        : 'Curated public demo jobs + admin AI. Configure ADZUNA_* and DATA_GOV_API_KEY on Netlify, then Collect jobs → Refresh AI trends.',
+        ? `Live sources: ${hasAdzuna ? 'Adzuna' : ''}${hasAdzuna && hasGov ? ' + ' : ''}${hasGov ? 'data.gov.in' : ''} + curated-public.`
+        : 'Curated public demo jobs. Configure ADZUNA_* and DATA_GOV_API_KEY, then Collect jobs.',
   };
 }
 
-/** Build chart bars: market = demand intensity 0–100, student = level if has skill. */
 export function buildComparisonBars(
   jobs: MarketJob[],
   studentSkills: string[],
@@ -414,6 +444,8 @@ export async function apiCollectJobs(region?: string): Promise<{
   ok: boolean;
   jobs?: MarketJob[];
   run?: CollectionRun;
+  govIndicators?: GovIndicator[];
+  note?: string;
   error?: string;
 }> {
   const existing = readJobs();
@@ -437,6 +469,7 @@ export async function apiCollectJobs(region?: string): Promise<{
       jobsFetched: SEED_JOBS.length,
       jobsInserted: 0,
       jobsDuplicate: 0,
+      note: 'Server unavailable — curated seed only',
     };
     const key = (j: MarketJob) => `${j.source}::${j.externalId}`;
     const map = new Map(existing.map((j) => [key(j), j]));
@@ -444,9 +477,8 @@ export async function apiCollectJobs(region?: string): Promise<{
     let dup = 0;
     for (const j of SEED_JOBS) {
       const k = key(j);
-      if (map.has(k)) {
-        dup += 1;
-      } else {
+      if (map.has(k)) dup += 1;
+      else {
         map.set(k, { ...j, skills: normalizeSkillList(j.skills), collectedAt: new Date().toISOString() });
         inserted += 1;
       }
@@ -455,13 +487,22 @@ export async function apiCollectJobs(region?: string): Promise<{
     run.jobsDuplicate = dup;
     const merged = Array.from(map.values());
     writeJobs(merged);
-    const runs = [run, ...readRuns()];
-    writeRuns(runs);
-    return { ok: true, jobs: merged, run };
+    writeRuns([run, ...readRuns()]);
+    writeLastCollectNote(run.note || '');
+    return { ok: true, jobs: merged, run, note: run.note };
   }
   if (Array.isArray(data.jobs)) writeJobs(data.jobs);
+  if (Array.isArray(data.govIndicators)) writeGovIndicators(data.govIndicators);
+  if (data.note) writeLastCollectNote(String(data.note));
   if (data.run) {
-    writeRuns([data.run as CollectionRun, ...readRuns()]);
+    const run = { ...(data.run as CollectionRun), note: data.note };
+    writeRuns([run, ...readRuns()]);
   }
-  return { ok: true, jobs: data.jobs, run: data.run };
+  return {
+    ok: true,
+    jobs: data.jobs,
+    run: data.run,
+    govIndicators: data.govIndicators,
+    note: data.note,
+  };
 }

@@ -1,33 +1,42 @@
 /**
  * Market trends + Skill Market Trend Engine
  * Actions: refresh_market | analyze_student | collect_jobs | list_jobs
- * Job pipeline: Adzuna (multi-page) + data.gov.in + curated → demand → AI
+ * Job pipeline: Adzuna + data.gov.in + curated → full demand utilisation → AI
  */
 const shared = require('./_lib/marketShared');
 const collect = require('./_lib/marketCollect');
 const demand = require('./_lib/marketDemand');
 
-/** Always prefer live demand for rising list when jobs exist. */
-function groundRisingOnJobs(market, demandRows, jobs) {
-  if (!demandRows || !demandRows.length) return market;
-  const maxPct = demandRows[0].demandPct || 1;
-  market.risingSkills = demandRows.slice(0, 6).map(function (d) {
-    return {
-      skill: d.skill,
-      demandScore: Math.min(95, Math.round(40 + (d.demandPct / maxPct) * 55)),
-      trend: 'rising',
-      note: d.jobCount + ' jobs · ' + d.demandPct + '% share',
-    };
-  });
-  market.demandTop = demandRows.slice(0, 8);
+/** Ground rising + roles + sectors on ALL collected jobs. */
+function groundOnJobs(market, demandRows, jobs, govIndicators) {
+  if (demandRows && demandRows.length) {
+    const maxPct = demandRows[0].demandPct || 1;
+    market.risingSkills = demandRows.slice(0, 6).map(function (d) {
+      return {
+        skill: d.skill,
+        demandScore: Math.min(95, Math.round(40 + (d.demandPct / maxPct) * 55)),
+        trend: 'rising',
+        note: d.jobCount + ' jobs · ' + d.demandPct + '% share',
+      };
+    });
+    market.demandTop = demandRows.slice(0, 10);
+  }
+  const roles = demand.rolesFromJobs(jobs || []);
+  if (roles.length) market.topRoles = roles.slice(0, 5);
+  const sectors = demand.sectorsFromJobs(jobs || []);
+  if (sectors.length) market.sectors = sectors.slice(0, 5);
   market.jobCount = (jobs && jobs.length) || market.jobCount || 0;
-  if (!market.sourcesNote) {
-    market.sourcesNote =
-      'Rising skills from live demand across ' +
-      JSON.stringify(demand.sourceCounts(jobs || [])) +
-      ' (' +
-      ((jobs && jobs.length) || 0) +
-      ' jobs)';
+  const src = demand.sourceCounts(jobs || []);
+  market.sourcesNote =
+    'Utilised ' +
+    market.jobCount +
+    ' jobs: ' +
+    JSON.stringify(src) +
+    (govIndicators && govIndicators.length
+      ? ' + ' + govIndicators.length + ' gov/PLFS indicators'
+      : '');
+  if (govIndicators && govIndicators.length) {
+    market.govIndicators = govIndicators.slice(0, 12);
   }
   return market;
 }
@@ -71,6 +80,10 @@ exports.handler = async (event) => {
           sources: result.sources,
           note: result.note,
           govIndicators: result.govIndicators || [],
+          sourceCounts: demand.sourceCounts(result.jobs),
+          demandTop: demand.demandFromJobs(result.jobs).slice(0, 12),
+          topRoles: demand.rolesFromJobs(result.jobs).slice(0, 5),
+          sectors: demand.sectorsFromJobs(result.jobs).slice(0, 5),
         });
       } catch (e) {
         return shared.json(200, {
@@ -109,10 +122,8 @@ exports.handler = async (event) => {
           : demand.marketTemplate(region);
 
       const applyDemandFallback = function (market, errMsg) {
-        const m = groundRisingOnJobs(market, demandRows, jobsForAi);
-        if (errMsg) {
-          m.sourcesNote = (m.sourcesNote || '') + ' (' + errMsg + ')';
-        }
+        const m = groundOnJobs(market, demandRows, jobsForAi, govInd);
+        if (errMsg) m.sourcesNote = (m.sourcesNote || '') + ' (' + errMsg + ')';
         return m;
       };
 
@@ -124,6 +135,7 @@ exports.handler = async (event) => {
           market: market,
           provider: 'local-fallback',
           demandFromJobs: demandRows.slice(0, 12),
+          sourcesUsed: demand.sourceCounts(jobsForAi),
         });
       }
 
@@ -144,21 +156,14 @@ exports.handler = async (event) => {
             provider: 'local-fallback',
             warning: 'AI non-JSON',
             demandFromJobs: demandRows.slice(0, 12),
+            sourcesUsed: demand.sourceCounts(jobsForAi),
           });
         }
         out.parsed.updatedAt = out.parsed.updatedAt || new Date().toISOString();
         if (!out.parsed.region) out.parsed.region = shared.regionField(region);
         out.parsed.provider = out.provider;
-        out.parsed.jobCount = jobsForAi.length;
-        // Always overwrite rising with live demand so student/admin see real job-based scores
-        groundRisingOnJobs(out.parsed, demandRows, jobsForAi);
-        if (!out.parsed.sourcesNote) {
-          out.parsed.sourcesNote =
-            'Grounded on ' +
-            jobsForAi.length +
-            ' collected jobs: ' +
-            JSON.stringify(demand.sourceCounts(jobsForAi));
-        }
+        // Always ground rising/roles/sectors on real collected data so nothing is wasted
+        groundOnJobs(out.parsed, demandRows, jobsForAi, govInd);
         demand.setMemoryMarket(out.parsed);
         return shared.json(200, {
           ok: true,
@@ -179,11 +184,22 @@ exports.handler = async (event) => {
           provider: 'local-fallback',
           warning: String(e.message || e).slice(0, 200),
           demandFromJobs: demandRows.slice(0, 12),
+          sourcesUsed: demand.sourceCounts(jobsForAi),
         });
       }
     }
 
     if (action === 'analyze_student') {
+      const jobsForStudent =
+        Array.isArray(body.existingJobs) && body.existingJobs.length
+          ? body.existingJobs
+          : collect.getMemoryJobs() || [];
+      const demandRows = demand.demandFromJobs(jobsForStudent).slice(0, 12);
+      const demandHint = demandRows
+        .map(function (d) {
+          return d.skill + ':' + d.demandPct + '%';
+        })
+        .join(',');
       const payload = {
         skills: Array.isArray(body.skills) ? body.skills : [],
         strengths: Array.isArray(body.strengths) ? body.strengths : [],
@@ -191,6 +207,7 @@ exports.handler = async (event) => {
         field: body.field || 'Software Engineering',
         interests: Array.isArray(body.interests) ? body.interests : [],
         region: region,
+        demandHint: demandHint,
       };
       if (!shared.env('GEMINI_API_KEY') && !shared.env('GROQ_API_KEY')) {
         return shared.json(200, {
@@ -198,6 +215,7 @@ exports.handler = async (event) => {
           analysis: demand.localStudentFallback(payload),
           market: demand.getMemoryMarket() || demand.localMarketFallback(region),
           provider: 'local-fallback',
+          demandFromJobs: demandRows,
         });
       }
       try {
@@ -214,6 +232,7 @@ exports.handler = async (event) => {
             analysis: demand.localStudentFallback(payload),
             market: demand.getMemoryMarket(),
             provider: 'local-fallback',
+            demandFromJobs: demandRows,
           });
         }
         out.parsed.generatedAt = out.parsed.generatedAt || new Date().toISOString();
@@ -223,6 +242,7 @@ exports.handler = async (event) => {
           analysis: out.parsed,
           market: demand.getMemoryMarket(),
           provider: out.provider,
+          demandFromJobs: demandRows,
         });
       } catch (e) {
         return shared.json(200, {
@@ -231,6 +251,7 @@ exports.handler = async (event) => {
           market: demand.getMemoryMarket(),
           provider: 'local-fallback',
           warning: String(e.message || e).slice(0, 200),
+          demandFromJobs: demandRows,
         });
       }
     }
