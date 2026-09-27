@@ -1,8 +1,6 @@
 /**
  * Client cache for market trends + student trend analysis.
- * Admin controls shared market snapshot (region/state + AI).
- * Students may refresh personal analysis anytime (no cooldown).
- * Market snapshot is shared; only admin collects jobs / refreshes AI trends.
+ * Sends ALL collected jobs + gov indicators so server utilises full data.
  */
 
 export type MarketSkill = {
@@ -19,12 +17,21 @@ export type MarketSnapshot = {
   risingSkills?: MarketSkill[];
   stableSkills?: MarketSkill[];
   decliningSkills?: MarketSkill[];
-  topRoles?: { role: string; openingsIndex: number; avgSalaryLpa?: number }[];
-  sectors?: { name: string; demandScore: number }[];
+  topRoles?: { role: string; openingsIndex: number; avgSalaryLpa?: number; jobCount?: number }[];
+  sectors?: { name: string; demandScore: number; jobCount?: number }[];
   emergingTech?: string[];
   sourcesNote?: string;
   provider?: string;
   isSeed?: boolean;
+  jobCount?: number;
+  demandTop?: { skill: string; demandPct: number; jobCount: number }[];
+  govIndicators?: {
+    year?: string;
+    state?: string;
+    wpr?: number | string;
+    unemploymentRate?: number | string;
+    lfpr?: number | string;
+  }[];
 };
 
 export type StudentAnalysis = {
@@ -44,7 +51,6 @@ export type StudentAnalysis = {
   provider?: string;
 };
 
-/** India + major states/UTs for market scope selector */
 export const MARKET_REGIONS = [
   'India (All)',
   'Maharashtra',
@@ -79,7 +85,6 @@ export type MarketRegion = (typeof MARKET_REGIONS)[number] | string;
 const MARKET_KEY = 'eduroute:market-trends-v1';
 const ANALYSIS_KEY = 'eduroute:student-trend-analysis-v1';
 const REGION_KEY = 'eduroute:market-region-v1';
-/** Admin AI refresh nudge after 24 hours. */
 const ADMIN_DUE_MS = 24 * 60 * 60 * 1000;
 
 export const SEED_MARKET: MarketSnapshot = {
@@ -115,10 +120,32 @@ export const SEED_MARKET: MarketSnapshot = {
   ],
   emergingTech: ['GenAI apps', 'Edge computing', 'Platform engineering'],
   sourcesNote:
-    'Seed only until admin Collect jobs. Live: Adzuna + data.gov.in (Skill India Mission + PLFS) + curated-public + AI (Groq/Gemini). Official OGD APIs — not note-only alignment.',
+    'Seed only until admin Collect jobs. Live: Adzuna + data.gov.in (Skill India Mission + PLFS) + curated-public + AI (Groq/Gemini).',
   provider: 'seed',
   isSeed: true,
 };
+
+function readStoredJobs(): unknown[] {
+  try {
+    const raw = localStorage.getItem('eduroute:mt-jobs-v1');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredGov(): unknown[] {
+  try {
+    const raw = localStorage.getItem('eduroute:mt-gov-v1');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 export function readPreferredRegion(): string {
   try {
@@ -175,31 +202,21 @@ export function writeStudentAnalysis(data: StudentAnalysis) {
   }
 }
 
-/** Always 0 — student personal analysis has no timeout. */
 export function studentRefreshDaysLeft(): number {
   return 0;
 }
 
-/** Always true — students may refresh analysis anytime. */
 export function canStudentRefresh(): boolean {
   return true;
 }
 
+/** Refresh AI market — sends ALL jobs + gov indicators so nothing is wasted. */
 export async function apiRefreshMarket(
   region?: string,
 ): Promise<{ ok: boolean; market?: MarketSnapshot; error?: string; provider?: string }> {
   const scope = (region || readPreferredRegion() || 'India (All)').trim();
-  // Send collected jobs so AI trends are grounded on Adzuna + data.gov.in + curated
-  let existingJobs: unknown[] = [];
-  try {
-    const raw = localStorage.getItem('eduroute:mt-jobs-v1');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) existingJobs = parsed;
-    }
-  } catch {
-    /* */
-  }
+  const existingJobs = readStoredJobs();
+  const govIndicators = readStoredGov();
   const res = await fetch('/api/market-trends', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -207,6 +224,7 @@ export async function apiRefreshMarket(
       action: 'refresh_market',
       region: scope,
       existingJobs,
+      govIndicators,
     }),
   });
   const data = await res.json().catch(() => ({}));
@@ -223,6 +241,7 @@ export async function apiRefreshMarket(
   return { ok: true, market: data.market, provider: data.provider };
 }
 
+/** Student analysis — includes live job demand context. */
 export async function apiAnalyzeStudent(payload: {
   skills: string[];
   strengths: string[];
@@ -231,6 +250,7 @@ export async function apiAnalyzeStudent(payload: {
   interests: string[];
   region?: string;
 }): Promise<{ ok: boolean; analysis?: StudentAnalysis; error?: string }> {
+  const existingJobs = readStoredJobs();
   const res = await fetch('/api/market-trends', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -238,6 +258,7 @@ export async function apiAnalyzeStudent(payload: {
       action: 'analyze_student',
       ...payload,
       region: payload.region || readPreferredRegion(),
+      existingJobs,
     }),
   });
   const data = await res.json().catch(() => ({}));
@@ -249,7 +270,6 @@ export async function apiAnalyzeStudent(payload: {
   return { ok: true, analysis: data.analysis };
 }
 
-/** Admin AI snapshot due after 24h (or seed / missing). */
 export function monthDueForRefresh(lastUpdated?: string | null): boolean {
   if (!lastUpdated) return true;
   const d = new Date(lastUpdated);
