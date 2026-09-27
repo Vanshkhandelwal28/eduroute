@@ -23,10 +23,8 @@ import {
 } from 'recharts';
 import {
   apiAnalyzeStudent,
-  canStudentRefresh,
   readMarketSnapshot,
   readStudentAnalysis,
-  studentRefreshDaysLeft,
   type MarketSnapshot,
   type StudentAnalysis,
 } from '../../utils/marketTrendStore';
@@ -50,9 +48,6 @@ export function TrendAnalyse() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
-
-  const daysLeft = studentRefreshDaysLeft();
-  const canRefresh = canStudentRefresh();
 
   const reload = useCallback(() => {
     setMarket(readMarketSnapshot());
@@ -85,10 +80,6 @@ export function TrendAnalyse() {
   );
 
   const runAnalysis = async () => {
-    if (!canRefresh && analysis) {
-      setErr(`You can refresh again in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`);
-      return;
-    }
     setBusy(true);
     setErr('');
     setMsg('');
@@ -153,24 +144,18 @@ export function TrendAnalyse() {
             Skill Trend Analysis
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Compare your interests, skills, and career goal with job-market demand. Charts show demand %; data source
-            and collection date are listed below.
+            Compare your skills with job-market demand (shared admin snapshot + public/API jobs). Refresh analysis
+            anytime — no cooldown. Charts show demand %; data source and date are listed below.
           </p>
         </div>
         <button
           type="button"
-          disabled={busy || (!canRefresh && Boolean(analysis))}
+          disabled={busy}
           onClick={runAnalysis}
           className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {busy
-            ? 'Analyzing…'
-            : !analysis
-              ? 'Generate analysis'
-              : canRefresh
-                ? 'Refresh analysis'
-                : `Refresh in ${daysLeft}d`}
+          {busy ? 'Analyzing…' : !analysis ? 'Generate analysis' : 'Refresh analysis'}
         </button>
       </div>
 
@@ -315,7 +300,7 @@ export function TrendAnalyse() {
             </ResponsiveContainer>
           </div>
           <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-            Source: admin market snapshot + curated public jobs. Collection / snapshot date shown in “Data as of”.
+            Source: admin market snapshot + curated public / API jobs. Collection / snapshot date shown in “Data as of”.
           </p>
         </div>
       )}

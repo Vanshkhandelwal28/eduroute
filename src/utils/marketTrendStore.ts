@@ -1,7 +1,8 @@
 /**
  * Client cache for market trends + student trend analysis.
- * Admin refresh anytime (region/state); student personal analysis every 3 days.
- * Market snapshot is shared; only personal AI analysis is rate-limited.
+ * Admin controls shared market snapshot (region/state + AI).
+ * Students may refresh personal analysis anytime (no cooldown).
+ * Market snapshot is shared; only admin collects jobs / refreshes AI trends.
  */
 
 export type MarketSkill = {
@@ -78,8 +79,6 @@ export type MarketRegion = (typeof MARKET_REGIONS)[number] | string;
 const MARKET_KEY = 'eduroute:market-trends-v1';
 const ANALYSIS_KEY = 'eduroute:student-trend-analysis-v1';
 const REGION_KEY = 'eduroute:market-region-v1';
-/** Personal AI analysis cooldown — 3 days (market snapshot itself is always shared). */
-const STUDENT_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
 /** Admin AI refresh nudge after 24 hours. */
 const ADMIN_DUE_MS = 24 * 60 * 60 * 1000;
 
@@ -87,7 +86,7 @@ export const SEED_MARKET: MarketSnapshot = {
   updatedAt: '2026-09-01T00:00:00.000Z',
   region: 'India / Maharashtra',
   summary:
-    'Placeholder market snapshot. Admin: select region → Collect jobs (Adzuna + curated public) → Refresh AI trends. Students then see demand, gaps, and actions in Trend Analyse.',
+    'Placeholder market snapshot. Admin: select region → Collect jobs (Adzuna + curated public) → Refresh AI trends. Students then see demand, gaps, and actions in Trend Analyse anytime.',
   risingSkills: [
     { skill: 'React / Next.js', demandScore: 88, trend: 'rising', note: 'Frontend hiring strong' },
     { skill: 'Python / AI basics', demandScore: 86, trend: 'rising', note: 'GenAI + automation' },
@@ -116,7 +115,7 @@ export const SEED_MARKET: MarketSnapshot = {
   ],
   emergingTech: ['GenAI apps', 'Edge computing', 'Platform engineering'],
   sourcesNote:
-    'Seed only. Live: Adzuna Jobs API (India) + curated-public postings + AI (Groq/Gemini). Aligns with open skill/employment signals (data.gov.in / PLFS-style themes).',
+    'Seed only. Live: Adzuna Jobs API (India) + curated-public postings + AI (Groq/Gemini). Themes align with open skill/employment signals (data.gov.in / PLFS-style).',
   provider: 'seed',
   isSeed: true,
 };
@@ -176,16 +175,14 @@ export function writeStudentAnalysis(data: StudentAnalysis) {
   }
 }
 
+/** Always 0 — student personal analysis has no timeout. */
 export function studentRefreshDaysLeft(): number {
-  const a = readStudentAnalysis();
-  if (!a?.generatedAt) return 0;
-  const elapsed = Date.now() - new Date(a.generatedAt).getTime();
-  if (elapsed >= STUDENT_COOLDOWN_MS) return 0;
-  return Math.ceil((STUDENT_COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+  return 0;
 }
 
+/** Always true — students may refresh analysis anytime. */
 export function canStudentRefresh(): boolean {
-  return studentRefreshDaysLeft() === 0;
+  return true;
 }
 
 export async function apiRefreshMarket(
