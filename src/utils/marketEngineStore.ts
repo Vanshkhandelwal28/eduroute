@@ -318,10 +318,15 @@ export async function apiCollectJobs(region?: string): Promise<{
   run?: CollectionRun;
   error?: string;
 }> {
+  const existing = readJobs();
   const res = await fetch('/api/market-trends', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'collect_jobs', region: region || 'India (All)' }),
+    body: JSON.stringify({
+      action: 'collect_jobs',
+      region: region || 'India (All)',
+      existingJobs: existing,
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
@@ -335,7 +340,6 @@ export async function apiCollectJobs(region?: string): Promise<{
       jobsInserted: 0,
       jobsDuplicate: 0,
     };
-    const existing = readJobs();
     const key = (j: MarketJob) => `${j.source}::${j.externalId}`;
     const map = new Map(existing.map((j) => [key(j), j]));
     let inserted = 0;
