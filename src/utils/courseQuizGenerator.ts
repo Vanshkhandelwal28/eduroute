@@ -1,6 +1,7 @@
 /**
  * Final course assessment — AI-generated MCQ / True-False / short answers.
  * Primary: /api/course-quiz (Gemini → Groq). Fallback: buddy-chat, then knowledge banks.
+ * MCQ options are always shuffled so the correct answer is not always A.
  */
 
 import type { AiDesignedCourse } from './aiCourseStore';
@@ -22,6 +23,24 @@ export type QuizConfig = {
   timerSeconds: number;
   passPercent: number;
 };
+
+/** Shuffle MCQ options so the correct answer is not always index 0 (A). */
+function shuffleMcq(q: QuizQuestion): QuizQuestion {
+  if (q.type !== 'mcq' || !q.options || q.options.length < 2) return q;
+  const correctIdx = Math.min(q.options.length - 1, Math.max(0, parseInt(String(q.answer), 10) || 0));
+  const correctText = q.options[correctIdx];
+  const opts = [...q.options];
+  for (let i = opts.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [opts[i], opts[j]] = [opts[j], opts[i]];
+  }
+  const newIdx = opts.indexOf(correctText);
+  return { ...q, options: opts, answer: String(newIdx >= 0 ? newIdx : 0) };
+}
+
+function shuffleQuiz(questions: QuizQuestion[]): QuizQuestion[] {
+  return questions.map(shuffleMcq);
+}
 
 export function quizConfigForDays(days: number): QuizConfig {
   const d = Math.max(1, days || 15);
@@ -171,6 +190,15 @@ const KNOWLEDGE_BANKS: { keys: string[]; questions: BankQ[] }[] = [
       { prompt: 'True or False: Big-O describes how runtime grows with input size.', options: ['True', 'False'], answer: 'true', type: 'true_false' },
     ],
   },
+  {
+    keys: ['unit testing', 'integration testing', 'postman', 'debugging', 'test'],
+    questions: [
+      { prompt: 'Unit tests typically focus on:', options: ['Isolated functions or modules', 'Only the production database', 'Manual UI screenshots only', 'DNS configuration'], answer: '0' },
+      { prompt: 'Integration tests verify:', options: ['How multiple components work together', 'Only CSS pixel values', 'Compiler flags', 'Keyboard layout'], answer: '0' },
+      { prompt: 'True or False: Postman can send HTTP requests to test APIs.', options: ['True', 'False'], answer: 'true', type: 'true_false' },
+      { prompt: 'Name a common assertion library used with JS tests.', options: [], answer: 'jest', type: 'short' },
+    ],
+  },
 ];
 
 function bankForTopic(topic: string): BankQ[] {
@@ -249,8 +277,21 @@ function templateQuestions(course: AiDesignedCourse, count: number): QuizQuestio
         topic,
       });
     } else {
-      const keyword = topic.split(/[:\-–|,]/).map((s) => s.trim()).find((s) => s.length > 2) || topic.split(/\s+/).find((s) => s.length > 3) || topic;
-      qs.push({ id, type: 'short', prompt: `Name one important concept or technique from ${topic}.`, options: [], answer: keyword.toLowerCase(), topic });
+      const keyword =
+        topic
+          .split(/[:\-–|,]/)
+          .map((s) => s.trim())
+          .find((s) => s.length > 2) ||
+        topic.split(/\s+/).find((s) => s.length > 3) ||
+        topic;
+      qs.push({
+        id,
+        type: 'short',
+        prompt: `Name one important concept or technique from ${topic}.`,
+        options: [],
+        answer: keyword.toLowerCase(),
+        topic,
+      });
     }
   }
   return qs;
@@ -259,9 +300,19 @@ function templateQuestions(course: AiDesignedCourse, count: number): QuizQuestio
 function extractJson(text: string): unknown | null {
   if (!text) return null;
   const cleaned = String(text).replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-  try { return JSON.parse(cleaned); } catch { /* */ }
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    /* */
+  }
   const m = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-  if (m) { try { return JSON.parse(m[0]); } catch { return null; } }
+  if (m) {
+    try {
+      return JSON.parse(m[0]);
+    } catch {
+      return null;
+    }
+  }
   return null;
 }
 
@@ -291,18 +342,42 @@ function normalizeAiQuestions(raw: unknown, course: AiDesignedCourse, count: num
       let answer = String(q.answer ?? '0');
       if (/^[A-Da-d]$/.test(answer)) answer = String(answer.toUpperCase().charCodeAt(0) - 65);
       const idx = Math.min(3, Math.max(0, parseInt(answer, 10) || 0));
-      out.push({ id, type: 'mcq', prompt, options, answer: String(idx), topic, explanation: q.explanation ? String(q.explanation) : undefined });
+      out.push({
+        id,
+        type: 'mcq',
+        prompt,
+        options,
+        answer: String(idx),
+        topic,
+        explanation: q.explanation ? String(q.explanation) : undefined,
+      });
     } else if (type === 'true_false') {
       let answer = String(q.answer ?? 'true').toLowerCase();
       if (answer === 't' || answer === 'yes' || answer === '1') answer = 'true';
       if (answer === 'f' || answer === 'no' || answer === '0') answer = 'false';
       if (answer !== 'true' && answer !== 'false') answer = 'true';
-      out.push({ id, type: 'true_false', prompt, options: ['True', 'False'], answer, topic, explanation: q.explanation ? String(q.explanation) : undefined });
+      out.push({
+        id,
+        type: 'true_false',
+        prompt,
+        options: ['True', 'False'],
+        answer,
+        topic,
+        explanation: q.explanation ? String(q.explanation) : undefined,
+      });
     } else {
-      out.push({ id, type: 'short', prompt, options: [], answer: String(q.answer || '').toLowerCase().trim() || topic.toLowerCase().split(/\s+/)[0], topic, explanation: q.explanation ? String(q.explanation) : undefined });
+      out.push({
+        id,
+        type: 'short',
+        prompt,
+        options: [],
+        answer: String(q.answer || '').toLowerCase().trim() || topic.toLowerCase().split(/\s+/)[0],
+        topic,
+        explanation: q.explanation ? String(q.explanation) : undefined,
+      });
     }
   }
-  return out.length >= Math.min(6, count) ? out.slice(0, count) : null;
+  return out.length >= Math.min(4, Math.max(3, Math.floor(count * 0.4))) ? out.slice(0, count) : null;
 }
 
 async function callBuddy(message: string, userId: string): Promise<string | null> {
@@ -321,34 +396,65 @@ async function callBuddy(message: string, userId: string): Promise<string | null
   }
 }
 
-async function callCourseQuizApi(course: AiDesignedCourse, topics: string[], questionCount: number): Promise<unknown | null> {
-  try {
-    const res = await fetch('/api/course-quiz', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        course: { title: course.title, field: course.field, durationDays: course.durationDays, summary: course.summary },
-        topics,
-        questionCount,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data?.ok) return null;
-    return data.data ?? null;
-  } catch {
-    return null;
+async function callCourseQuizApi(
+  course: AiDesignedCourse,
+  topics: string[],
+  questionCount: number,
+): Promise<unknown | null> {
+  const body = JSON.stringify({
+    course: {
+      title: course.title,
+      field: course.field,
+      durationDays: course.durationDays,
+      summary: course.summary,
+      interests: course.interests || [],
+    },
+    topics,
+    questionCount,
+  });
+  const urls = ['/api/course-quiz', '/.netlify/functions/course-quiz'];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+      const data = await res.json().catch(() => null);
+      if (!data) continue;
+      if (data.ok && data.data) {
+        if (data.data.questions) return data.data;
+        return data.data;
+      }
+      if (data.ok && Array.isArray(data.questions)) return { questions: data.questions };
+      console.warn('[course-quiz]', url, data?.error || data?.source || res.status, data?.errors);
+    } catch (e) {
+      console.warn('[course-quiz] fetch failed', url, e);
+    }
   }
+  return null;
 }
 
-function buildQuizPrompt(course: AiDesignedCourse, topics: string[], config: QuizConfig, mcqN: number, tfN: number, shortN: number): string {
-  const topicLines = course.topics.slice(0, 10).map((t, i) => `${i + 1}. ${cleanTopicLabel(t.title)} — ${(t.description || '').slice(0, 80)}`).join('\n');
+function buildQuizPrompt(
+  course: AiDesignedCourse,
+  topics: string[],
+  config: QuizConfig,
+  mcqN: number,
+  tfN: number,
+  shortN: number,
+): string {
+  const topicLines = course.topics
+    .slice(0, 10)
+    .map((t, i) => `${i + 1}. ${cleanTopicLabel(t.title)} — ${(t.description || '').slice(0, 80)}`)
+    .join('\n');
   return (
     `You are an expert exam writer for a software/tech course on EduRoute.\n` +
     `Write a FINAL ASSESSMENT quiz that tests real understanding (not generic filler).\n\n` +
     `Course title: ${course.title}\nField: ${course.field}\nDuration: ${course.durationDays} days\n` +
     `Modules:\n${topicLines || topics.join(', ')}\n\n` +
-    `Return ONLY valid JSON (no markdown): {"questions":[{"id":"q1","type":"mcq","prompt":"...","options":["A","B","C","D"],"answer":"0","topic":"...","explanation":"..."}]}\n` +
+    `Return ONLY valid JSON (no markdown): {"questions":[{"id":"q1","type":"mcq","prompt":"...","options":["optA","optB","optC","optD"],"answer":"2","topic":"...","explanation":"..."}]}\n` +
     `Exactly ${config.questionCount} questions (~${mcqN} mcq, ~${tfN} true_false, ~${shortN} short).\n` +
+    `MCQ answer is INDEX "0"|"1"|"2"|"3" — put correct option at a RANDOM position, not always first.\n` +
     `Specific knowledge questions only. Never write "In the context of X, which statement is most accurate?"\n`
   );
 }
@@ -369,28 +475,49 @@ export async function generateCourseQuiz(
     const normalized = normalizeAiQuestions(apiData, course, config.questionCount);
     if (normalized?.length) {
       if (normalized.length < config.questionCount) {
-        const pad = templateQuestions(course, config.questionCount - normalized.length).map((q, i) => ({ ...q, id: `pad-${i + 1}` }));
-        return { questions: [...normalized, ...pad].slice(0, config.questionCount), config, source: 'ai' };
+        const pad = templateQuestions(course, config.questionCount - normalized.length).map((q, i) => ({
+          ...q,
+          id: `pad-${i + 1}`,
+        }));
+        return {
+          questions: shuffleQuiz([...normalized, ...pad].slice(0, config.questionCount)),
+          config,
+          source: 'ai',
+        };
       }
-      return { questions: normalized, config, source: 'ai' };
+      return { questions: shuffleQuiz(normalized), config, source: 'ai' };
     }
   }
 
   const prompt = buildQuizPrompt(course, topics, config, mcqN, tfN, shortN);
   for (let attempt = 0; attempt < 2; attempt++) {
-    const reply = await callBuddy(attempt === 0 ? prompt : prompt + '\n\nReturn ONLY the JSON object.', userId || 'course-quiz');
+    const reply = await callBuddy(
+      attempt === 0 ? prompt : prompt + '\n\nReturn ONLY the JSON object.',
+      userId || 'course-quiz',
+    );
     if (!reply) continue;
     const normalized = normalizeAiQuestions(extractJson(reply), course, config.questionCount);
     if (normalized?.length) {
       if (normalized.length < config.questionCount) {
-        const pad = templateQuestions(course, config.questionCount - normalized.length).map((q, i) => ({ ...q, id: `pad-${i + 1}` }));
-        return { questions: [...normalized, ...pad].slice(0, config.questionCount), config, source: 'ai' };
+        const pad = templateQuestions(course, config.questionCount - normalized.length).map((q, i) => ({
+          ...q,
+          id: `pad-${i + 1}`,
+        }));
+        return {
+          questions: shuffleQuiz([...normalized, ...pad].slice(0, config.questionCount)),
+          config,
+          source: 'ai',
+        };
       }
-      return { questions: normalized, config, source: 'ai' };
+      return { questions: shuffleQuiz(normalized), config, source: 'ai' };
     }
   }
 
-  return { questions: templateQuestions(course, config.questionCount), config, source: 'template' };
+  return {
+    questions: shuffleQuiz(templateQuestions(course, config.questionCount)),
+    config,
+    source: 'template',
+  };
 }
 
 export function scoreAnswer(q: QuizQuestion, userAnswer: string): boolean {
@@ -411,9 +538,20 @@ export function scoreAnswer(q: QuizQuestion, userAnswer: string): boolean {
   return et.some((t) => ut.includes(t) && t.length > 2);
 }
 
-export type QuizResult = { score: number; total: number; percent: number; passed: boolean; gapTopics: string[]; wrongIds: string[] };
+export type QuizResult = {
+  score: number;
+  total: number;
+  percent: number;
+  passed: boolean;
+  gapTopics: string[];
+  wrongIds: string[];
+};
 
-export function evaluateQuiz(questions: QuizQuestion[], answers: Record<string, string>, passPercent = 60): QuizResult {
+export function evaluateQuiz(
+  questions: QuizQuestion[],
+  answers: Record<string, string>,
+  passPercent = 60,
+): QuizResult {
   let score = 0;
   const wrongIds: string[] = [];
   const gapSet = new Set<string>();
@@ -426,5 +564,12 @@ export function evaluateQuiz(questions: QuizQuestion[], answers: Record<string, 
   }
   const total = questions.length || 1;
   const percent = Math.round((score / total) * 100);
-  return { score, total, percent, passed: percent >= passPercent, gapTopics: Array.from(gapSet), wrongIds };
+  return {
+    score,
+    total,
+    percent,
+    passed: percent >= passPercent,
+    gapTopics: Array.from(gapSet),
+    wrongIds,
+  };
 }
