@@ -7,6 +7,31 @@ const shared = require('./_lib/marketShared');
 const collect = require('./_lib/marketCollect');
 const demand = require('./_lib/marketDemand');
 
+/** Always prefer live demand for rising list when jobs exist. */
+function groundRisingOnJobs(market, demandRows, jobs) {
+  if (!demandRows || !demandRows.length) return market;
+  const maxPct = demandRows[0].demandPct || 1;
+  market.risingSkills = demandRows.slice(0, 6).map(function (d) {
+    return {
+      skill: d.skill,
+      demandScore: Math.min(95, Math.round(40 + (d.demandPct / maxPct) * 55)),
+      trend: 'rising',
+      note: d.jobCount + ' jobs · ' + d.demandPct + '% share',
+    };
+  });
+  market.demandTop = demandRows.slice(0, 8);
+  market.jobCount = (jobs && jobs.length) || market.jobCount || 0;
+  if (!market.sourcesNote) {
+    market.sourcesNote =
+      'Rising skills from live demand across ' +
+      JSON.stringify(demand.sourceCounts(jobs || [])) +
+      ' (' +
+      ((jobs && jobs.length) || 0) +
+      ' jobs)';
+  }
+  return market;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return shared.json(200, { ok: true });
 
@@ -84,25 +109,11 @@ exports.handler = async (event) => {
           : demand.marketTemplate(region);
 
       const applyDemandFallback = function (market, errMsg) {
-        if (demandRows.length) {
-          market.risingSkills = demandRows.slice(0, 6).map(function (d) {
-            return {
-              skill: d.skill,
-              demandScore: Math.min(95, 50 + Math.round(d.demandPct)),
-              trend: 'rising',
-              note: d.jobCount + ' jobs (' + d.demandPct + '%)',
-            };
-          });
-          market.jobCount = jobsForAi.length;
-          market.demandTop = demandRows.slice(0, 8);
-          market.sourcesNote =
-            'Demand from ' +
-            jobsForAi.length +
-            ' collected jobs ' +
-            JSON.stringify(demand.sourceCounts(jobsForAi)) +
-            (errMsg ? ' (' + errMsg + ')' : '');
+        const m = groundRisingOnJobs(market, demandRows, jobsForAi);
+        if (errMsg) {
+          m.sourcesNote = (m.sourcesNote || '') + ' (' + errMsg + ')';
         }
-        return market;
+        return m;
       };
 
       if (!shared.env('GEMINI_API_KEY') && !shared.env('GROQ_API_KEY')) {
@@ -139,7 +150,8 @@ exports.handler = async (event) => {
         if (!out.parsed.region) out.parsed.region = shared.regionField(region);
         out.parsed.provider = out.provider;
         out.parsed.jobCount = jobsForAi.length;
-        if (!out.parsed.demandTop && demandRows.length) out.parsed.demandTop = demandRows.slice(0, 8);
+        // Always overwrite rising with live demand so student/admin see real job-based scores
+        groundRisingOnJobs(out.parsed, demandRows, jobsForAi);
         if (!out.parsed.sourcesNote) {
           out.parsed.sourcesNote =
             'Grounded on ' +

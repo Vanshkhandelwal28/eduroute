@@ -36,9 +36,11 @@ import {
   type OnboardingProfile,
 } from '../../utils/onboardingStore';
 import {
+  buildComparisonBars,
   computeSkillDemand,
   matchStudentToMarket,
   readJobs,
+  risingFromDemand,
   type MarketJob,
   type SkillDemandRow,
 } from '../../utils/marketEngineStore';
@@ -105,7 +107,6 @@ export function TrendAnalyse() {
     [strengths, gaps],
   );
 
-  // Same demand engine as Admin Market Trend panel (from collected jobs)
   const demandRows: SkillDemandRow[] = useMemo(() => computeSkillDemand(jobs), [jobs]);
   const maxDemand = demandRows[0]?.demandPct || 1;
 
@@ -113,6 +114,12 @@ export function TrendAnalyse() {
     () => matchStudentToMarket(allSkills, jobs, market),
     [allSkills, jobs, market],
   );
+
+  // Prefer live job-demand rising over seed/AI invent
+  const risingDisplay = useMemo(() => {
+    if (jobs.length > 0) return risingFromDemand(jobs, 6);
+    return market?.risingSkills || [];
+  }, [jobs, market]);
 
   const sourceBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -158,13 +165,12 @@ export function TrendAnalyse() {
     }
   }, []);
 
-  // When skills change, recompute local gaps immediately and soft-refresh AI (debounced)
   useEffect(() => {
     const key = allSkills.slice().sort().join('|') + '::' + gaps.join(',');
     if (key === skillKeyRef.current) return;
     const prev = skillKeyRef.current;
     skillKeyRef.current = key;
-    if (!prev) return; // initial mount — don't auto-call AI
+    if (!prev) return;
     if (autoAiTimer.current) clearTimeout(autoAiTimer.current);
     autoAiTimer.current = setTimeout(() => {
       void runAnalysis({ silent: true });
@@ -174,33 +180,22 @@ export function TrendAnalyse() {
     };
   }, [allSkills, gaps, runAnalysis]);
 
+  // Correct chart: market = relative demand intensity; student = has skill vs not
   const chartData = useMemo(() => {
-    if (analysis?.comparisonBars?.length) {
-      return analysis.comparisonBars.map((b) => ({
+    const bars = buildComparisonBars(jobs, allSkills, 8);
+    if (bars.length) {
+      return bars.map((b) => ({
         skill: b.skill.length > 14 ? b.skill.slice(0, 12) + '…' : b.skill,
         full: b.skill,
         market: b.market,
         student: b.student,
       }));
     }
-    if (analysis?.marketSkills?.length) {
-      return analysis.marketSkills.slice(0, 10).map((s) => ({
-        skill: s.skill.length > 14 ? s.skill.slice(0, 12) + '…' : s.skill,
-        full: s.skill,
-        market: s.marketDemand,
-        student: s.studentLevel,
-      }));
-    }
-    // Bars from admin job demand + whether student has the skill
-    return demandRows.slice(0, 8).map((d) => ({
-      skill: d.skill.length > 14 ? d.skill.slice(0, 12) + '…' : d.skill,
-      full: d.skill,
-      market: Math.min(100, Math.round(d.demandPct * 1.5 + 20)),
-      student: allSkills.some((s) => s.toLowerCase() === d.skill.toLowerCase()) ? 72 : 22,
-    }));
-  }, [analysis, demandRows, allSkills]);
+    return [];
+  }, [jobs, allSkills]);
 
-  const displayScore = analysis?.matchScore ?? localMatch.matchScore;
+  // Always prefer local weighted match score (recomputes when skills/jobs change)
+  const displayScore = localMatch.matchScore;
 
   return (
     <div className="er-page mx-auto max-w-5xl space-y-6">
@@ -213,9 +208,8 @@ export function TrendAnalyse() {
             Skill Trend Analysis
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Your skills are matched against the <strong>same job demand</strong> Admin collects (Adzuna +
-            data.gov.in + curated). Gaps update automatically when you change skills (onboarding / skill
-            profile).
+            Match score and gaps use <strong>all collected jobs</strong> (Adzuna + data.gov.in / Skill India +
+            curated). Updates when you change skills or admin collects jobs.
           </p>
         </div>
         <button
@@ -259,9 +253,8 @@ export function TrendAnalyse() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="er-card p-4">
           <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Match score</p>
-          <p className="mt-1 text-3xl font-black text-[var(--text-primary)]">
-            {displayScore != null ? `${displayScore}%` : '—'}
-          </p>
+          <p className="mt-1 text-3xl font-black text-[var(--text-primary)]">{displayScore}%</p>
+          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Weighted by top job demand</p>
         </div>
         <div className="er-card p-4">
           <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Your track</p>
@@ -287,23 +280,19 @@ export function TrendAnalyse() {
         </div>
       </div>
 
-      {/* Admin demand — same numbers as Market Trend Engine */}
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
           <Database className="h-4 w-4" /> Skill demand from admin job pool
         </h2>
         <p className="mb-4 text-xs text-[var(--text-muted)]">
-          Same demand % Admin sees after Collect jobs (Adzuna + data.gov.in + curated). Used to rank your
-          gaps.
+          Demand % = share of jobs mentioning each skill (Adzuna + data.gov.in + curated).
         </p>
         {demandRows.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">
-            Admin has not collected jobs yet — showing curated seed when available.
-          </p>
+          <p className="text-sm text-[var(--text-muted)]">Admin has not collected jobs yet.</p>
         ) : (
           <ul className="space-y-3">
             {demandRows.slice(0, 10).map((row) => {
-              const have = allSkills.some((s) => s.toLowerCase() === row.skill.toLowerCase());
+              const have = localMatch.matched.some((s) => s.toLowerCase() === row.skill.toLowerCase());
               return (
                 <li key={row.skill}>
                   <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -311,7 +300,7 @@ export function TrendAnalyse() {
                       {row.skill}{' '}
                       {have ? (
                         <span className="ml-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">
-                          you have
+                          matched
                         </span>
                       ) : (
                         <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800 dark:text-amber-200">
@@ -341,7 +330,6 @@ export function TrendAnalyse() {
         )}
       </div>
 
-      {/* Matched → Gaps → Priority → Roadmap */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-2 text-sm font-black uppercase text-emerald-600 dark:text-emerald-400">
@@ -383,7 +371,7 @@ export function TrendAnalyse() {
             <p className="text-sm text-[var(--text-muted)]">No major gaps against current job demand.</p>
           )}
           <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-            Updates automatically when you retake the skill quiz or admin refreshes jobs.
+            Recalculates whenever skills or admin jobs update.
           </p>
         </div>
       </div>
@@ -437,7 +425,10 @@ export function TrendAnalyse() {
                 <XAxis dataKey="skill" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                 <Tooltip
-                  formatter={(value: number, name: string) => [value, name === 'market' ? 'Market' : 'You']}
+                  formatter={(value: number, name: string) => [
+                    value,
+                    name === 'market' ? 'Market demand' : 'Your level',
+                  ]}
                   labelFormatter={(_, payload) => payload?.[0]?.payload?.full || ''}
                 />
                 <Legend />
@@ -447,7 +438,8 @@ export function TrendAnalyse() {
             </ResponsiveContainer>
           </div>
           <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-            Market bars track admin job demand share. Student bars update when your skills change.
+            Market = relative demand intensity (top skill = 100). You = high if you match that skill, low if
+            gap. Recalculates when skills or jobs change.
           </p>
         </div>
       )}
@@ -455,29 +447,24 @@ export function TrendAnalyse() {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
-            <TrendingUp className="h-4 w-4" /> In-demand / rising (admin AI)
+            <TrendingUp className="h-4 w-4" /> In-demand / rising (from jobs)
           </h2>
-          {market?.risingSkills?.length ? (
+          {risingDisplay.length ? (
             <ul className="mt-1 space-y-2">
-              {market.risingSkills.slice(0, 6).map((s) => (
-                <li key={s.skill} className="flex justify-between text-sm">
+              {risingDisplay.slice(0, 6).map((s) => (
+                <li key={s.skill} className="flex justify-between gap-2 text-sm">
                   <span className="font-semibold">{s.skill}</span>
-                  <span className="text-[var(--text-muted)]">{s.demandScore}</span>
+                  <span className="shrink-0 tabular-nums text-[var(--text-muted)]">
+                    {s.demandScore}
+                    {'note' in s && s.note ? (
+                      <span className="ml-1 text-[10px] opacity-70">{String(s.note).slice(0, 24)}</span>
+                    ) : null}
+                  </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-[var(--text-muted)]">Admin has not refreshed AI trends yet.</p>
-          )}
-          {market?.decliningSkills && market.decliningSkills.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs font-bold uppercase text-rose-600 dark:text-rose-400">Declining</p>
-              <ul className="mt-1 space-y-1 text-sm text-[var(--text-secondary)]">
-                {market.decliningSkills.slice(0, 4).map((s) => (
-                  <li key={s.skill}>{s.skill}</li>
-                ))}
-              </ul>
-            </div>
+            <p className="text-sm text-[var(--text-muted)]">Collect jobs in Admin to populate rising skills.</p>
           )}
           {market?.sourcesNote && (
             <p className="mt-3 text-[11px] text-[var(--text-muted)]">{market.sourcesNote}</p>
@@ -486,9 +473,23 @@ export function TrendAnalyse() {
 
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
-            <Target className="h-4 w-4" /> AI skill gaps
+            <Target className="h-4 w-4" /> Priority gaps
           </h2>
-          {analysis?.skillGaps && analysis.skillGaps.length > 0 ? (
+          {localMatch.priority.length > 0 ? (
+            <ul className="space-y-3">
+              {localMatch.priority.map((g) => (
+                <li key={g.skill} className="text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-[var(--text-primary)]">{g.skill}</span>
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
+                      {g.demandPct}%
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[var(--text-secondary)]">{g.reason}</p>
+                </li>
+              ))}
+            </ul>
+          ) : analysis?.skillGaps && analysis.skillGaps.length > 0 ? (
             <ul className="space-y-3">
               {analysis.skillGaps.map((g) => (
                 <li key={g.skill} className="text-sm">
@@ -504,9 +505,7 @@ export function TrendAnalyse() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-[var(--text-muted)]">
-              Gaps refresh when skills change; click Refresh for a full AI narrative.
-            </p>
+            <p className="text-sm text-[var(--text-muted)]">No priority gaps against current demand.</p>
           )}
         </div>
       </div>
