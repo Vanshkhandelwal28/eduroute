@@ -14,9 +14,8 @@ import { clearAuthSession, getAuthUser } from '../utils/rbacAuth';
 import { clearAdminSession, isAdminSessionActive } from '../utils/adminSession';
 import { ThemeToggle } from '../components/ThemeToggle';
 
-/** Slim admin nav: core ops (students, courses, curriculum, districts, market). */
 const NAV = [
-  { name: 'Student Management', path: '/admin/students', icon: Users },
+  { name: 'Students', path: '/admin/students', icon: Users },
   { name: 'Courses', path: '/admin/courses', icon: BookOpen },
   { name: 'Curriculum Gaps', path: '/admin/curriculum-gaps', icon: Target },
   { name: 'District Plans', path: '/admin/district-plans', icon: Map },
@@ -41,18 +40,20 @@ export const AdminLayout = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-[var(--border-default)] bg-[var(--bg-card)]">
-        <div className="flex h-16 items-center gap-2 border-b border-[var(--border-default)] px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-sm font-black text-white">
+    <div className="flex min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] kb-animate-fade">
+      <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r-2 border-[var(--border-default)] bg-[var(--bg-sidebar)]">
+        <div className="flex h-14 items-center gap-3 border-b-2 border-[var(--border-default)] px-4">
+          <div className="flex h-9 w-9 items-center justify-center border-2 border-[var(--accent)] bg-[var(--accent)] text-xs font-black text-[var(--text-inverse)]">
             E
           </div>
           <div>
-            <p className="text-sm font-black tracking-tight">EDUROUTE</p>
-            <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">Admin</p>
+            <p className="text-sm font-black uppercase tracking-[0.12em]">
+              EDU<span className="text-[var(--accent)]">ROUTE</span>
+            </p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-[var(--accent)]">Admin</p>
           </div>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
           {NAV.map((item) => {
             const active = location.pathname.startsWith(item.path);
             const Icon = item.icon;
@@ -60,11 +61,7 @@ export const AdminLayout = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                  active
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
-                }`}
+                className={`er-nav-item ${active ? 'active' : ''}`}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {item.name}
@@ -72,11 +69,11 @@ export const AdminLayout = () => {
             );
           })}
         </nav>
-        <div className="border-t border-[var(--border-default)] p-3">
+        <div className="border-t-2 border-[var(--border-default)] p-2">
           <button
             type="button"
             onClick={logout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-500/10"
+            className="er-nav-item w-full text-left hover:!bg-transparent hover:!text-red-500 hover:!border-red-500"
           >
             <LogOut className="h-4 w-4" /> Logout
           </button>
@@ -84,27 +81,30 @@ export const AdminLayout = () => {
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col pl-64">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-[var(--border-default)] bg-[var(--bg-card)]/90 px-6 backdrop-blur">
-          <div className="flex max-w-md flex-1 items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-4 border-b-2 border-[var(--border-default)] bg-[var(--bg-sidebar)] px-5">
+          <div className="flex max-w-md flex-1 items-center gap-2 border-2 border-[var(--border-default)] bg-transparent px-3 py-2">
             <Search className="h-4 w-4 text-[var(--text-muted)]" />
             <input
               type="search"
-              placeholder="Search admin…"
-              className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
+              placeholder="SEARCH ADMIN"
+              className="w-full bg-transparent text-xs font-bold uppercase tracking-wider outline-none placeholder:text-[var(--text-muted)]"
             />
           </div>
           <div className="flex items-center gap-3">
-            <button type="button" className="rounded-xl p-2 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]">
+            <button
+              type="button"
+              className="border-2 border-[var(--border-default)] p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--text-primary)] hover:text-[var(--bg-primary)]"
+            >
               <Bell className="h-4 w-4" />
             </button>
             <ThemeToggle />
             <div className="text-right">
-              <p className="text-xs font-bold">{authUser?.name || 'Admin'}</p>
-              <p className="text-[10px] text-[var(--text-muted)]">Administrator</p>
+              <p className="text-xs font-black uppercase tracking-wide">{authUser?.name || 'Admin'}</p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--accent)]">Administrator</p>
             </div>
           </div>
         </header>
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 kb-animate-in">
           <Outlet />
         </main>
       </div>
