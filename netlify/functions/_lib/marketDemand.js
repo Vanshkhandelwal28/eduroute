@@ -1,5 +1,5 @@
 /**
- * AI prompts + demand aggregation grounded on collected jobs
+ * AI prompts + demand aggregation grounded on ALL collected jobs + gov indicators
  */
 const shared = require('./marketShared');
 const normalizeRegion = shared.normalizeRegion;
@@ -32,10 +32,11 @@ function marketTemplate(region) {
 
 function studentTemplate(p) {
   const region = normalizeRegion(p.region);
+  const demandHint = p.demandHint || '';
   return (
     'Student vs ' +
     region +
-    ' tech market. JSON: {"generatedAt":"ISO","summary":"2 sentences","matchScore":0,' +
+    ' tech market. Use LIVE demand if provided. JSON: {"generatedAt":"ISO","summary":"2 sentences","matchScore":0,' +
     '"marketSkills":[{"skill":"","marketDemand":0,"studentLevel":0,"status":"strong|gap|missing"}],' +
     '"skillGaps":[{"skill":"","priority":"high|medium|low","why":"","action":""}],' +
     '"strengths":[""],"recommendations":[""],' +
@@ -45,6 +46,7 @@ function studentTemplate(p) {
     (p.strengths || p.skills || []).slice(0, 8).join(',') +
     ' Gaps:' +
     (p.gaps || []).slice(0, 6).join(',') +
+    (demandHint ? ' LiveDemand:' + demandHint : '') +
     '.'
   );
 }
@@ -175,7 +177,9 @@ function demandFromJobs(jobs) {
         demandPct: Math.round((counts[skill] / total) * 1000) / 10,
       };
     })
-    .sort(function (a, b) { return b.jobCount - a.jobCount; });
+    .sort(function (a, b) {
+      return b.jobCount - a.jobCount;
+    });
 }
 
 function sourceCounts(jobs) {
@@ -187,31 +191,120 @@ function sourceCounts(jobs) {
   return c;
 }
 
-/** Build AI prompt grounded in real collected job + gov data. */
+/** Aggregate top roles from job titles (all sources). */
+function rolesFromJobs(jobs) {
+  const counts = {};
+  (jobs || []).forEach(function (j) {
+    const t = String(j.title || '')
+      .trim()
+      .slice(0, 80);
+    if (!t) return;
+    // Normalize common patterns
+    let role = t;
+    if (/full\s*stack/i.test(t)) role = 'Full Stack Developer';
+    else if (/front\s*end|frontend/i.test(t)) role = 'Frontend Engineer';
+    else if (/back\s*end|backend/i.test(t)) role = 'Backend Engineer';
+    else if (/data\s*analyst/i.test(t)) role = 'Data Analyst';
+    else if (/data\s*scientist/i.test(t)) role = 'Data Scientist';
+    else if (/devops|sre|site reliability/i.test(t)) role = 'DevOps / SRE';
+    else if (/machine\s*learning|ml\s*engineer/i.test(t)) role = 'ML Engineer';
+    else if (/cyber|security/i.test(t)) role = 'Cybersecurity';
+    else if (/software\s*(engineer|developer)/i.test(t)) role = 'Software Engineer';
+    else if (/java/i.test(t)) role = 'Java Developer';
+    else if (/python/i.test(t)) role = 'Python Developer';
+    else if (/react/i.test(t)) role = 'React Developer';
+    counts[role] = (counts[role] || 0) + 1;
+  });
+  const total = (jobs || []).length || 1;
+  return Object.keys(counts)
+    .map(function (role) {
+      return {
+        role: role,
+        openingsIndex: Math.min(99, Math.round((counts[role] / total) * 100 + counts[role])),
+        avgSalaryLpa: undefined,
+        jobCount: counts[role],
+      };
+    })
+    .sort(function (a, b) {
+      return b.jobCount - a.jobCount;
+    })
+    .slice(0, 6);
+}
+
+/** Aggregate sectors/industries from all jobs. */
+function sectorsFromJobs(jobs) {
+  const counts = {};
+  (jobs || []).forEach(function (j) {
+    const ind = String(j.industry || 'IT').trim() || 'IT';
+    counts[ind] = (counts[ind] || 0) + 1;
+  });
+  const total = (jobs || []).length || 1;
+  return Object.keys(counts)
+    .map(function (name) {
+      return {
+        name: name,
+        demandScore: Math.min(95, Math.round((counts[name] / total) * 100)),
+        jobCount: counts[name],
+      };
+    })
+    .sort(function (a, b) {
+      return b.jobCount - a.jobCount;
+    })
+    .slice(0, 6);
+}
+
+/** Build AI prompt grounded in real collected job + gov data — uses ALL fields. */
 function marketTemplateFromJobs(region, jobs, govIndicators) {
   const scope = normalizeRegion(region);
   const r = regionField(scope);
-  const demand = demandFromJobs(jobs).slice(0, 18);
+  const demand = demandFromJobs(jobs).slice(0, 20);
   const sources = sourceCounts(jobs);
+  const roles = rolesFromJobs(jobs).slice(0, 6);
+  const sectors = sectorsFromJobs(jobs).slice(0, 5);
   const sampleTitles = (jobs || [])
-    .filter(function (j) { return j.source === 'adzuna'; })
-    .slice(0, 8)
-    .map(function (j) { return (j.title || '').slice(0, 60); })
+    .slice(0, 12)
+    .map(function (j) {
+      return (j.source || '') + ':' + String(j.title || '').slice(0, 50);
+    })
     .filter(Boolean);
   const demandLines = demand
-    .map(function (d) { return d.skill + ':' + d.demandPct + '%(' + d.jobCount + ')'; })
+    .map(function (d) {
+      return d.skill + ':' + d.demandPct + '%(' + d.jobCount + ')';
+    })
     .join(', ');
   const srcLine = Object.keys(sources)
-    .map(function (k) { return k + '=' + sources[k]; })
+    .map(function (k) {
+      return k + '=' + sources[k];
+    })
+    .join(', ');
+  const roleLine = roles
+    .map(function (x) {
+      return x.role + '(' + x.jobCount + ')';
+    })
+    .join(', ');
+  const sectorLine = sectors
+    .map(function (x) {
+      return x.name + '(' + x.jobCount + ')';
+    })
     .join(', ');
   let govLine = '';
   if (govIndicators && govIndicators.length) {
     govLine =
       ' PLFS/gov signals: ' +
       govIndicators
-        .slice(0, 4)
+        .slice(0, 6)
         .map(function (g) {
-          return String(g.year || '') + ' WPR=' + String(g.wpr != null ? g.wpr : '?') + ' UR=' + String(g.unemploymentRate != null ? g.unemploymentRate : '?');
+          return (
+            String(g.year || '') +
+            ' ' +
+            String(g.state || '') +
+            ' WPR=' +
+            String(g.wpr != null ? g.wpr : '?') +
+            ' UR=' +
+            String(g.unemploymentRate != null ? g.unemploymentRate : '?') +
+            ' LFPR=' +
+            String(g.lfpr != null ? g.lfpr : '?')
+          );
         })
         .join('; ') +
       '.';
@@ -219,7 +312,7 @@ function marketTemplateFromJobs(region, jobs, govIndicators) {
   return (
     'India tech hiring for region: ' +
     scope +
-    '. You MUST ground rising/declining skills and scores in the LIVE collected data below. ' +
+    '. You MUST ground rising/declining skills, roles, sectors in the LIVE collected data below. ' +
     'Do not invent skills absent from the demand list unless clearly legacy/declining. ' +
     'Collected jobs: ' +
     (jobs ? jobs.length : 0) +
@@ -227,18 +320,22 @@ function marketTemplateFromJobs(region, jobs, govIndicators) {
     srcLine +
     ']. Skill demand share: ' +
     (demandLines || 'none') +
-    '. Sample Adzuna titles: ' +
+    '. Roles from titles: ' +
+    (roleLine || 'n/a') +
+    '. Sectors: ' +
+    (sectorLine || 'n/a') +
+    '. Sample titles: ' +
     (sampleTitles.join(' | ') || 'n/a') +
     '.' +
     govLine +
     ' Return JSON: {"updatedAt":"ISO","region":"' +
     r +
-    '","summary":"2 sentences citing live sources","risingSkills":[{"skill":"","demandScore":0,"trend":"rising","note":""}],' +
+    '","summary":"2 sentences citing live sources and job counts","risingSkills":[{"skill":"","demandScore":0,"trend":"rising","note":""}],' +
     '"decliningSkills":[{"skill":"","demandScore":0,"trend":"declining","note":""}],' +
     '"topRoles":[{"role":"","openingsIndex":0,"avgSalaryLpa":0}],' +
     '"sectors":[{"name":"","demandScore":0}],"emergingTech":[""],' +
     '"sourcesNote":"Adzuna+data.gov.in+curated","jobCount":0,"demandTop":[{"skill":"","demandPct":0,"jobCount":0}]}. ' +
-    '6 rising from demand list, 2 declining, 4 roles, 3 sectors. demandScore 40-95. Include jobCount and top 8 demandTop from data.'
+    '6 rising from demand list, 2 declining, 4 roles from role list, 3 sectors from sector list. demandScore 40-95. Include jobCount and top 8 demandTop from data.'
   );
 }
 
@@ -251,14 +348,20 @@ async function aiJson(messages, temperature) {
 }
 
 module.exports = {
-  getMemoryMarket: function () { return memoryMarket; },
-  setMemoryMarket: function (m) { memoryMarket = m; },
+  getMemoryMarket: function () {
+    return memoryMarket;
+  },
+  setMemoryMarket: function (m) {
+    memoryMarket = m;
+  },
   marketTemplate: marketTemplate,
   studentTemplate: studentTemplate,
   localMarketFallback: localMarketFallback,
   localStudentFallback: localStudentFallback,
   demandFromJobs: demandFromJobs,
   sourceCounts: sourceCounts,
+  rolesFromJobs: rolesFromJobs,
+  sectorsFromJobs: sectorsFromJobs,
   marketTemplateFromJobs: marketTemplateFromJobs,
   aiJson: aiJson,
 };
