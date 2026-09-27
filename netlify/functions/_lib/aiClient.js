@@ -1,4 +1,4 @@
-/** AI client — Gemini first (multi-model), Groq fallback. */
+/** AI client — Buddy defaults to Groq first, then Gemini fallback. */
 function env(name) {
   try {
     return (typeof process !== 'undefined' && process.env && process.env[name]) || '';
@@ -17,9 +17,11 @@ async function performWebSearch() {
 
 function isValidGeminiModel(m) {
   if (!m || typeof m !== 'string') return false;
+  // Skip invalid / non-existent model ids (e.g. gemini-3.8-flash)
   if (/3\.8|gemini-pro$/i.test(m)) return false;
   return true;
 }
+
 const GEMINI_MODELS = [
   env('GEMINI_MODEL') || '',
   'gemini-2.0-flash',
@@ -41,7 +43,8 @@ async function generateBuddyReply({ messages, language }) {
   const geminiKey = env('GEMINI_API_KEY');
   const groqKey = env('GROQ_API_KEY');
   const sys =
-    "You are Buddy, EDUROUTE's AI assistant. Answer helpfully. Language: " + (language || 'english');
+    "You are Buddy, EDUROUTE's friendly AI learning assistant. Give clear, practical answers for students. Language: " +
+    (language || 'english');
 
   async function gemini(prompt) {
     let lastErr = null;
@@ -123,7 +126,16 @@ async function generateBuddyReply({ messages, language }) {
     throw lastErr || new Error('Groq failed');
   }
 
+  // Buddy default: Groq first (fast + reliable), then Gemini fallback
   try {
+    if (groqKey) {
+      try {
+        const reply = await groq(last);
+        return { reply: reply, usedWebSearch: false, sources: [] };
+      } catch (e) {
+        console.warn('groq fail', e.message);
+      }
+    }
     if (geminiKey) {
       try {
         const reply = await gemini(last);
@@ -132,13 +144,10 @@ async function generateBuddyReply({ messages, language }) {
         console.warn('gemini fail', e.message);
       }
     }
-    if (groqKey) {
-      const reply = await groq(last);
-      return { reply: reply, usedWebSearch: false, sources: [] };
-    }
   } catch (e) {
     console.warn('AI fail', e.message);
   }
+
   return {
     reply:
       'I am Buddy in limited mode (AI keys or network unavailable). You asked: "' +
