@@ -100,6 +100,12 @@ export function AiCourseDesigner() {
   }, [refresh]);
 
   useEffect(() => {
+    const onProg = () => setProgressTick((n) => n + 1);
+    window.addEventListener('eduroute:course-progress-updated', onProg);
+    return () => window.removeEventListener('eduroute:course-progress-updated', onProg);
+  }, []);
+
+  useEffect(() => {
     const onAssess = () => setAssessTick((n) => n + 1);
     window.addEventListener('eduroute:course-assessment-updated', onAssess);
     window.addEventListener('eduroute:course-achievements-updated', onAssess);
@@ -120,7 +126,10 @@ export function AiCourseDesigner() {
 
   const stats = useMemo(() => {
     if (!active) return { done: 0, total: 0, percent: 0 };
-    return courseCompletionStats(active.id, active.topics.length);
+    return courseCompletionStats(
+      active.id,
+      active.topics.map((t) => t.id),
+    );
   }, [active, progressTick]);
 
   const watchLabel = useMemo(() => {
