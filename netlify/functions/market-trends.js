@@ -1,130 +1,305 @@
 /**
- * Market trends + student trend analysis — always Gemini via marketAi.js
- * POST { action: 'refresh_market' | 'analyze_student', skills?, strengths?, gaps?, field?, interests? }
- * GET  → last in-memory market snapshot
+ * Market trends + Skill Market Trend Engine
+ * Actions: refresh_market | analyze_student | collect_jobs | list_jobs
+ * Region-aware: rising / top roles / declining from jobs in selected state or India (All)
  */
-const { generateWithGemini, extractJsonObject } = require('./_lib/marketAi');
+const shared = require('./_lib/marketShared');
+const collect = require('./_lib/marketCollect');
+const demand = require('./_lib/marketDemand');
 
-function json(statusCode, body) {
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    },
-    body: JSON.stringify(body),
-  };
-}
-
-const MARKET_TEMPLATE =
-  'You are a labour-market analyst for India (tech / digital jobs, Maharashtra + pan-India). ' +
-  'Be realistic. Return ONLY valid JSON (no markdown) with shape: ' +
-  '{"updatedAt":"ISO","region":"India / Maharashtra","summary":"...",' +
-  '"risingSkills":[{"skill":"","demandScore":0,"trend":"rising","note":""}],' +
-  '"stableSkills":[{"skill":"","demandScore":0,"trend":"stable","note":""}],' +
-  '"decliningSkills":[{"skill":"","demandScore":0,"trend":"declining","note":""}],' +
-  '"topRoles":[{"role":"","openingsIndex":0,"avgSalaryLpa":0}],' +
-  '"sectors":[{"name":"","demandScore":0}],' +
-  '"emergingTech":[""],"sourcesNote":""}. ' +
-  'Include 8-12 risingSkills, 3-6 decliningSkills, 5-8 topRoles, 4-6 sectors.';
-
-function studentTemplate(p) {
-  return (
-    'Compare this student to India tech job market. Return ONLY valid JSON (no markdown): ' +
-    '{"generatedAt":"ISO","summary":"...","matchScore":0,' +
-    '"marketSkills":[{"skill":"","marketDemand":0,"studentLevel":0,"status":"strong|gap|missing"}],' +
-    '"skillGaps":[{"skill":"","priority":"high|medium|low","why":"","action":""}],' +
-    '"strengths":[""],"recommendations":[""],' +
-    '"comparisonBars":[{"skill":"","market":0,"student":0}]}. ' +
-    'Field: ' + (p.field || 'General') +
-    '. Interests: ' + (p.interests || []).join(', ') +
-    '. Strengths: ' + (p.strengths || p.skills || []).join(', ') +
-    '. Gaps: ' + (p.gaps || []).join(', ') +
-    '. comparisonBars: 6-10 skills, realistic scores 0-100.'
-  );
-}
-
-let memoryMarket = null;
-
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return json(200, { ok: true });
-  if (event.httpMethod === 'GET') {
-    return json(200, {
-      ok: true,
-      market: memoryMarket,
-      provider: 'gemini',
-      hasGemini: Boolean(process.env.GEMINI_API_KEY),
+/** Ground rising + roles + sectors + declining on REGION-FILTERED jobs. */
+function groundOnJobs(market, demandRows, jobs, govIndicators, region) {
+  const scope = shared.normalizeRegion(region);
+  if (demandRows && demandRows.length) {
+    const maxPct = demandRows[0].demandPct || 1;
+    market.risingSkills = demandRows.slice(0, 6).map(function (d) {
+      return {
+        skill: d.skill,
+        demandScore: Math.min(95, Math.round(40 + (d.demandPct / maxPct) * 55)),
+        trend: 'rising',
+        note: d.jobCount + ' jobs · ' + d.demandPct + '% in ' + scope,
+      };
+    });
+    market.demandTop = demandRows.slice(0, 10);
+  }
+  const roles = demand.rolesFromJobs(jobs || []);
+  if (roles.length) {
+    market.topRoles = roles.slice(0, 5).map(function (r) {
+      return {
+        role: r.role,
+        openingsIndex: r.openingsIndex,
+        avgSalaryLpa: r.avgSalaryLpa,
+        jobCount: r.jobCount,
+      };
     });
   }
-  if (event.httpMethod !== 'POST') return json(405, { ok: false, error: 'Method not allowed' });
+  const sectors = demand.sectorsFromJobs(jobs || []);
+  if (sectors.length) market.sectors = sectors.slice(0, 5);
+
+  // Declining: keep AI list if present, else soft legacy defaults tagged with region
+  if (!market.decliningSkills || !market.decliningSkills.length) {
+    market.decliningSkills = [
+      { skill: 'jQuery-only stacks', demandScore: 28, trend: 'declining', note: 'Legacy · ' + scope },
+      { skill: 'Flash / outdated UI', demandScore: 12, trend: 'declining', note: 'Legacy · ' + scope },
+    ];
+  } else {
+    market.decliningSkills = market.decliningSkills.slice(0, 3).map(function (d) {
+      return {
+        skill: d.skill,
+        demandScore: d.demandScore || 25,
+        trend: 'declining',
+        note: (d.note || 'Low demand') + ' · ' + scope,
+      };
+    });
+  }
+
+  market.region = shared.regionField(scope);
+  market.jobCount = (jobs && jobs.length) || market.jobCount || 0;
+  const src = demand.sourceCounts(jobs || []);
+  market.sourcesNote =
+    scope +
+    ' — utilised ' +
+    market.jobCount +
+    ' jobs: ' +
+    JSON.stringify(src) +
+    (govIndicators && govIndicators.length
+      ? ' + ' + govIndicators.length + ' gov/PLFS'
+      : '');
+  if (govIndicators && govIndicators.length) {
+    market.govIndicators = govIndicators.slice(0, 12);
+  }
+  return market;
+}
+
+exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return shared.json(200, { ok: true });
+
+  if (event.httpMethod === 'GET') {
+    return shared.json(200, {
+      ok: true,
+      market: demand.getMemoryMarket(),
+      jobsCount: (collect.getMemoryJobs() || []).length,
+      hasGemini: Boolean(shared.env('GEMINI_API_KEY')),
+      hasGroq: Boolean(shared.env('GROQ_API_KEY')),
+      hasAdzuna: shared.hasAdzuna(),
+      hasDataGov: shared.hasDataGov(),
+      sources: [
+        { code: 'curated-public', name: 'Curated public demo postings', permitted: true },
+        { code: 'adzuna', name: 'Adzuna Jobs API (India)', permitted: true, configured: shared.hasAdzuna() },
+        { code: 'data-gov-in', name: 'data.gov.in (Skill India + PLFS)', permitted: true, configured: shared.hasDataGov() },
+      ],
+    });
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return shared.json(405, { ok: false, error: 'Method not allowed' });
+  }
 
   try {
     const body = JSON.parse(event.body || '{}');
     const action = body.action || 'refresh_market';
+    const region = shared.normalizeRegion(body.region || 'Maharashtra');
 
-    if (!process.env.GEMINI_API_KEY) {
-      return json(503, {
-        ok: false,
-        error: 'GEMINI_API_KEY not configured in Netlify. Add env and redeploy.',
-        provider: 'gemini',
-      });
+    if (action === 'collect_jobs') {
+      try {
+        const result = await collect.collectJobsPayload(body.existingJobs, region);
+        const regionJobs = shared.jobsForRegion(result.jobs, region);
+        return shared.json(200, {
+          ok: true,
+          jobs: result.jobs,
+          run: result.run,
+          sources: result.sources,
+          note: result.note,
+          govIndicators: result.govIndicators || [],
+          sourceCounts: demand.sourceCounts(result.jobs),
+          demandTop: demand.demandFromJobs(regionJobs).slice(0, 12),
+          topRoles: demand.rolesFromJobs(regionJobs).slice(0, 5),
+          sectors: demand.sectorsFromJobs(regionJobs).slice(0, 5),
+          regionJobCount: regionJobs.length,
+        });
+      } catch (e) {
+        return shared.json(200, {
+          ok: true,
+          jobs: collect.getMemoryJobs() || [],
+          run: {
+            id: 'run-err-' + Date.now(),
+            startedAt: new Date().toISOString(),
+            finishedAt: new Date().toISOString(),
+            status: 'error',
+            source: 'error',
+            jobsFetched: 0,
+            jobsInserted: 0,
+            jobsDuplicate: 0,
+            errorMessage: String(e.message || e).slice(0, 200),
+          },
+          note: 'Collect failed: ' + String(e.message || e).slice(0, 120),
+        });
+      }
+    }
+
+    if (action === 'list_jobs') {
+      return shared.json(200, { ok: true, jobs: collect.getMemoryJobs() || [] });
     }
 
     if (action === 'refresh_market') {
-      const reply = await generateWithGemini(
-        [
-          { role: 'system', content: 'You output only valid JSON. No prose outside JSON.' },
-          { role: 'user', content: MARKET_TEMPLATE },
-        ],
-        0.35,
-      );
-      const parsed = extractJsonObject(reply);
-      if (!parsed) {
-        return json(502, {
-          ok: false,
-          error: 'Gemini returned non-JSON. Try again.',
-          rawPreview: String(reply).slice(0, 400),
+      const allJobs =
+        Array.isArray(body.existingJobs) && body.existingJobs.length
+          ? body.existingJobs
+          : collect.getMemoryJobs() || [];
+      // CRITICAL: only jobs in selected state (or all for India)
+      const jobsForAi = shared.jobsForRegion(allJobs, region);
+      const govAll = Array.isArray(body.govIndicators) ? body.govIndicators : [];
+      const govInd = shared.govForRegion(govAll, region);
+      const demandRows = demand.demandFromJobs(jobsForAi);
+      const prompt =
+        jobsForAi.length > 0
+          ? demand.marketTemplateFromJobs(region, jobsForAi, govInd)
+          : demand.marketTemplate(region);
+
+      const applyDemandFallback = function (market, errMsg) {
+        const m = groundOnJobs(market, demandRows, jobsForAi, govInd, region);
+        if (errMsg) m.sourcesNote = (m.sourcesNote || '') + ' (' + errMsg + ')';
+        return m;
+      };
+
+      if (!shared.env('GEMINI_API_KEY') && !shared.env('GROQ_API_KEY')) {
+        const market = applyDemandFallback(demand.localMarketFallback(region), 'no AI keys');
+        demand.setMemoryMarket(market);
+        return shared.json(200, {
+          ok: true,
+          market: market,
+          provider: 'local-fallback',
+          demandFromJobs: demandRows.slice(0, 12),
+          sourcesUsed: demand.sourceCounts(jobsForAi),
+          regionJobCount: jobsForAi.length,
         });
       }
-      parsed.updatedAt = parsed.updatedAt || new Date().toISOString();
-      parsed.provider = 'gemini';
-      memoryMarket = parsed;
-      return json(200, { ok: true, market: parsed, provider: 'gemini' });
+
+      try {
+        const out = await demand.aiJson(
+          [
+            { role: 'system', content: 'You output only one JSON object. No markdown. All skills/roles MUST match the region-specific data in the prompt.' },
+            { role: 'user', content: prompt },
+          ],
+          0.35,
+        );
+        if (!out.parsed) {
+          const market = applyDemandFallback(demand.localMarketFallback(region), 'AI non-JSON');
+          demand.setMemoryMarket(market);
+          return shared.json(200, {
+            ok: true,
+            market: market,
+            provider: 'local-fallback',
+            warning: 'AI non-JSON',
+            demandFromJobs: demandRows.slice(0, 12),
+            sourcesUsed: demand.sourceCounts(jobsForAi),
+            regionJobCount: jobsForAi.length,
+          });
+        }
+        out.parsed.updatedAt = out.parsed.updatedAt || new Date().toISOString();
+        out.parsed.provider = out.provider;
+        // Always re-ground rising/roles/sectors on region-filtered jobs
+        groundOnJobs(out.parsed, demandRows, jobsForAi, govInd, region);
+        demand.setMemoryMarket(out.parsed);
+        return shared.json(200, {
+          ok: true,
+          market: out.parsed,
+          provider: out.provider,
+          demandFromJobs: demandRows.slice(0, 12),
+          sourcesUsed: demand.sourceCounts(jobsForAi),
+          regionJobCount: jobsForAi.length,
+        });
+      } catch (e) {
+        const market = applyDemandFallback(
+          demand.localMarketFallback(region),
+          String(e.message || e).slice(0, 80),
+        );
+        demand.setMemoryMarket(market);
+        return shared.json(200, {
+          ok: true,
+          market: market,
+          provider: 'local-fallback',
+          warning: String(e.message || e).slice(0, 200),
+          demandFromJobs: demandRows.slice(0, 12),
+          sourcesUsed: demand.sourceCounts(jobsForAi),
+          regionJobCount: jobsForAi.length,
+        });
+      }
     }
 
     if (action === 'analyze_student') {
+      const allJobs =
+        Array.isArray(body.existingJobs) && body.existingJobs.length
+          ? body.existingJobs
+          : collect.getMemoryJobs() || [];
+      const jobsForStudent = shared.jobsForRegion(allJobs, region);
+      const demandRows = demand.demandFromJobs(jobsForStudent).slice(0, 12);
+      const demandHint = demandRows
+        .map(function (d) {
+          return d.skill + ':' + d.demandPct + '%';
+        })
+        .join(',');
       const payload = {
         skills: Array.isArray(body.skills) ? body.skills : [],
         strengths: Array.isArray(body.strengths) ? body.strengths : [],
         gaps: Array.isArray(body.gaps) ? body.gaps : [],
         field: body.field || 'Software Engineering',
         interests: Array.isArray(body.interests) ? body.interests : [],
+        region: region,
+        demandHint: demandHint,
       };
-      const reply = await generateWithGemini(
-        [
-          { role: 'system', content: 'You output only valid JSON. No prose outside JSON.' },
-          { role: 'user', content: studentTemplate(payload) },
-        ],
-        0.4,
-      );
-      const parsed = extractJsonObject(reply);
-      if (!parsed) {
-        return json(502, {
-          ok: false,
-          error: 'Gemini returned non-JSON. Try again.',
-          rawPreview: String(reply).slice(0, 400),
+      if (!shared.env('GEMINI_API_KEY') && !shared.env('GROQ_API_KEY')) {
+        return shared.json(200, {
+          ok: true,
+          analysis: demand.localStudentFallback(payload),
+          market: demand.getMemoryMarket() || demand.localMarketFallback(region),
+          provider: 'local-fallback',
+          demandFromJobs: demandRows,
         });
       }
-      parsed.generatedAt = parsed.generatedAt || new Date().toISOString();
-      parsed.provider = 'gemini';
-      return json(200, { ok: true, analysis: parsed, market: memoryMarket, provider: 'gemini' });
+      try {
+        const out = await demand.aiJson(
+          [
+            { role: 'system', content: 'You output only one JSON object. No markdown.' },
+            { role: 'user', content: demand.studentTemplate(payload) },
+          ],
+          0.4,
+        );
+        if (!out.parsed) {
+          return shared.json(200, {
+            ok: true,
+            analysis: demand.localStudentFallback(payload),
+            market: demand.getMemoryMarket(),
+            provider: 'local-fallback',
+            demandFromJobs: demandRows,
+          });
+        }
+        out.parsed.generatedAt = out.parsed.generatedAt || new Date().toISOString();
+        out.parsed.provider = out.provider;
+        return shared.json(200, {
+          ok: true,
+          analysis: out.parsed,
+          market: demand.getMemoryMarket(),
+          provider: out.provider,
+          demandFromJobs: demandRows,
+        });
+      } catch (e) {
+        return shared.json(200, {
+          ok: true,
+          analysis: demand.localStudentFallback(payload),
+          market: demand.getMemoryMarket(),
+          provider: 'local-fallback',
+          warning: String(e.message || e).slice(0, 200),
+          demandFromJobs: demandRows,
+        });
+      }
     }
 
-    return json(400, { ok: false, error: 'Unknown action. Use refresh_market or analyze_student.' });
+    return shared.json(400, {
+      ok: false,
+      error: 'Unknown action. Use refresh_market, analyze_student, collect_jobs, list_jobs.',
+    });
   } catch (err) {
-    console.error('market-trends error', err);
-    return json(500, { ok: false, error: err.message || 'Market trends failed', provider: 'gemini' });
+    return shared.json(500, { ok: false, error: err.message || 'Market trends failed' });
   }
 };

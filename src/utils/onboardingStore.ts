@@ -409,6 +409,8 @@ export function writeOnboarding(profile: OnboardingProfile) {
     if (email) {
       localStorage.setItem(emailKey(email), json);
     }
+    // Notify Skill Trend Analysis + Skill Profile to recompute gaps immediately
+    window.dispatchEvent(new Event('eduroute:onboarding-updated'));
   } catch {
     // ignore private mode
   }

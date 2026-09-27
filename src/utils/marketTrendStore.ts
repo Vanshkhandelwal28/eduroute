@@ -1,7 +1,6 @@
 /**
- * Client cache for Gemini market trends + student trend analysis.
- * Admin refresh anytime; student personal analysis refresh every 7 days.
- * Placeholder seed is shown until admin clicks Refresh (then real Gemini data).
+ * Client cache for market trends + student trend analysis.
+ * Sends ALL collected jobs + gov indicators so server utilises full data.
  */
 
 export type MarketSkill = {
@@ -18,12 +17,21 @@ export type MarketSnapshot = {
   risingSkills?: MarketSkill[];
   stableSkills?: MarketSkill[];
   decliningSkills?: MarketSkill[];
-  topRoles?: { role: string; openingsIndex: number; avgSalaryLpa?: number }[];
-  sectors?: { name: string; demandScore: number }[];
+  topRoles?: { role: string; openingsIndex: number; avgSalaryLpa?: number; jobCount?: number }[];
+  sectors?: { name: string; demandScore: number; jobCount?: number }[];
   emergingTech?: string[];
   sourcesNote?: string;
   provider?: string;
   isSeed?: boolean;
+  jobCount?: number;
+  demandTop?: { skill: string; demandPct: number; jobCount: number }[];
+  govIndicators?: {
+    year?: string;
+    state?: string;
+    wpr?: number | string;
+    unemploymentRate?: number | string;
+    lfpr?: number | string;
+  }[];
 };
 
 export type StudentAnalysis = {
@@ -43,16 +51,47 @@ export type StudentAnalysis = {
   provider?: string;
 };
 
+export const MARKET_REGIONS = [
+  'India (All)',
+  'Maharashtra',
+  'Karnataka',
+  'Tamil Nadu',
+  'Telangana',
+  'Andhra Pradesh',
+  'Delhi NCR',
+  'Uttar Pradesh',
+  'Gujarat',
+  'Rajasthan',
+  'West Bengal',
+  'Kerala',
+  'Madhya Pradesh',
+  'Haryana',
+  'Punjab',
+  'Bihar',
+  'Odisha',
+  'Assam',
+  'Jharkhand',
+  'Chhattisgarh',
+  'Uttarakhand',
+  'Himachal Pradesh',
+  'Goa',
+  'Jammu & Kashmir',
+  'Puducherry',
+  'Chandigarh',
+] as const;
+
+export type MarketRegion = (typeof MARKET_REGIONS)[number] | string;
+
 const MARKET_KEY = 'eduroute:market-trends-v1';
 const ANALYSIS_KEY = 'eduroute:student-trend-analysis-v1';
-const STUDENT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const REGION_KEY = 'eduroute:market-region-v1';
+const ADMIN_DUE_MS = 24 * 60 * 60 * 1000;
 
-/** Placeholder until admin refreshes with Gemini on Netlify. */
 export const SEED_MARKET: MarketSnapshot = {
   updatedAt: '2026-09-01T00:00:00.000Z',
   region: 'India / Maharashtra',
   summary:
-    'Placeholder market snapshot (not live AI). Admin: open Market Trends → Refresh to load current demand via Gemini. Students will then see that data in Trend Analyse.',
+    'Placeholder market snapshot. Admin: select region → Collect jobs (Adzuna + data.gov.in Skill India/PLFS + curated public) → Refresh AI trends. Students then see demand, gaps, and actions in Trend Analyse anytime.',
   risingSkills: [
     { skill: 'React / Next.js', demandScore: 88, trend: 'rising', note: 'Frontend hiring strong' },
     { skill: 'Python / AI basics', demandScore: 86, trend: 'rising', note: 'GenAI + automation' },
@@ -74,19 +113,60 @@ export const SEED_MARKET: MarketSnapshot = {
     { role: 'Cloud / DevOps', openingsIndex: 72, avgSalaryLpa: 9 },
     { role: 'Cybersecurity junior', openingsIndex: 65, avgSalaryLpa: 7 },
   ],
+  sectors: [
+    { name: 'Product SaaS', demandScore: 88 },
+    { name: 'IT Services', demandScore: 82 },
+    { name: 'BFSI / FinTech', demandScore: 78 },
+  ],
   emergingTech: ['GenAI apps', 'Edge computing', 'Platform engineering'],
-  sourcesNote: 'Seed data only — replace with Gemini refresh after deploy.',
+  sourcesNote:
+    'Seed only until admin Collect jobs. Live: Adzuna + data.gov.in (Skill India Mission + PLFS) + curated-public + AI (Groq/Gemini).',
   provider: 'seed',
   isSeed: true,
 };
 
+function readStoredJobs(): unknown[] {
+  try {
+    const raw = localStorage.getItem('eduroute:mt-jobs-v1');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredGov(): unknown[] {
+  try {
+    const raw = localStorage.getItem('eduroute:mt-gov-v1');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function readPreferredRegion(): string {
+  try {
+    return localStorage.getItem(REGION_KEY) || 'Maharashtra';
+  } catch {
+    return 'Maharashtra';
+  }
+}
+
+export function writePreferredRegion(region: string) {
+  try {
+    localStorage.setItem(REGION_KEY, region);
+  } catch {
+    /* */
+  }
+}
+
 export function readMarketSnapshot(): MarketSnapshot | null {
   try {
     const raw = localStorage.getItem(MARKET_KEY);
-    if (!raw) {
-      // Show seed so UI is not empty; first admin Gemini refresh overwrites.
-      return SEED_MARKET;
-    }
+    if (!raw) return SEED_MARKET;
     return JSON.parse(raw) as MarketSnapshot;
   } catch {
     return SEED_MARKET;
@@ -122,44 +202,64 @@ export function writeStudentAnalysis(data: StudentAnalysis) {
   }
 }
 
-/** Days until student may refresh again (0 = allowed now). */
 export function studentRefreshDaysLeft(): number {
-  const a = readStudentAnalysis();
-  if (!a?.generatedAt) return 0;
-  const elapsed = Date.now() - new Date(a.generatedAt).getTime();
-  if (elapsed >= STUDENT_COOLDOWN_MS) return 0;
-  return Math.ceil((STUDENT_COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+  return 0;
 }
 
 export function canStudentRefresh(): boolean {
-  return studentRefreshDaysLeft() === 0;
+  return true;
 }
 
-export async function apiRefreshMarket(): Promise<{ ok: boolean; market?: MarketSnapshot; error?: string }> {
+/** Refresh AI market — sends ALL jobs + gov indicators so nothing is wasted. */
+export async function apiRefreshMarket(
+  region?: string,
+): Promise<{ ok: boolean; market?: MarketSnapshot; error?: string; provider?: string }> {
+  const scope = (region || readPreferredRegion() || 'India (All)').trim();
+  const existingJobs = readStoredJobs();
+  const govIndicators = readStoredGov();
   const res = await fetch('/api/market-trends', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'refresh_market' }),
+    body: JSON.stringify({
+      action: 'refresh_market',
+      region: scope,
+      existingJobs,
+      govIndicators,
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
     return { ok: false, error: data.error || `HTTP ${res.status}` };
   }
-  if (data.market) writeMarketSnapshot(data.market);
-  return { ok: true, market: data.market };
+  if (data.market) {
+    writeMarketSnapshot(data.market);
+    if (data.market.region) {
+      const first = String(data.market.region).split('/')[0].trim();
+      writePreferredRegion(first || scope);
+    }
+  }
+  return { ok: true, market: data.market, provider: data.provider };
 }
 
+/** Student analysis — includes live job demand context. */
 export async function apiAnalyzeStudent(payload: {
   skills: string[];
   strengths: string[];
   gaps: string[];
   field: string;
   interests: string[];
+  region?: string;
 }): Promise<{ ok: boolean; analysis?: StudentAnalysis; error?: string }> {
+  const existingJobs = readStoredJobs();
   const res = await fetch('/api/market-trends', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'analyze_student', ...payload }),
+    body: JSON.stringify({
+      action: 'analyze_student',
+      ...payload,
+      region: payload.region || readPreferredRegion(),
+      existingJobs,
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
@@ -174,9 +274,13 @@ export function monthDueForRefresh(lastUpdated?: string | null): boolean {
   if (!lastUpdated) return true;
   const d = new Date(lastUpdated);
   if (Number.isNaN(d.getTime())) return true;
-  // Treat seed as always "due" so admin is nudged to refresh
   if (lastUpdated.startsWith('2026-09-01')) return true;
-  const next = new Date(d);
-  next.setMonth(next.getMonth() + 1);
-  return Date.now() >= next.getTime();
+  return Date.now() - d.getTime() >= ADMIN_DUE_MS;
+}
+
+export function hoursSinceMarketRefresh(lastUpdated?: string | null): number | null {
+  if (!lastUpdated) return null;
+  const d = new Date(lastUpdated);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / (60 * 60 * 1000));
 }

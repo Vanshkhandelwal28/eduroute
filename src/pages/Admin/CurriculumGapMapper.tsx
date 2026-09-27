@@ -86,7 +86,7 @@ export function CurriculumGapMapper() {
         >
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              SIH26134 · Curriculum alignment
+              Curriculum alignment
             </p>
             <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">
               Curriculum ↔ Skill Gap Mapper
@@ -313,7 +313,7 @@ export function CurriculumGapMapper() {
         </section>
 
         <p className="pb-2 text-center text-[10px] text-[var(--text-muted)]">
-          EDUROUTE · Curriculum gap mapper · SIH26134 mock data · Red badges = obsolete / oversupplied /
+          EDUROUTE · Curriculum gap mapper · Red badges = obsolete / oversupplied /
           low placement
         </p>
       </div>
