@@ -86,7 +86,7 @@ export const SEED_MARKET: MarketSnapshot = {
   updatedAt: '2026-09-01T00:00:00.000Z',
   region: 'India / Maharashtra',
   summary:
-    'Placeholder market snapshot. Admin: select region → Collect jobs (Adzuna + curated public) → Refresh AI trends. Students then see demand, gaps, and actions in Trend Analyse anytime.',
+    'Placeholder market snapshot. Admin: select region → Collect jobs (Adzuna + data.gov.in Skill India/PLFS + curated public) → Refresh AI trends. Students then see demand, gaps, and actions in Trend Analyse anytime.',
   risingSkills: [
     { skill: 'React / Next.js', demandScore: 88, trend: 'rising', note: 'Frontend hiring strong' },
     { skill: 'Python / AI basics', demandScore: 86, trend: 'rising', note: 'GenAI + automation' },
@@ -115,7 +115,7 @@ export const SEED_MARKET: MarketSnapshot = {
   ],
   emergingTech: ['GenAI apps', 'Edge computing', 'Platform engineering'],
   sourcesNote:
-    'Seed only. Live: Adzuna Jobs API (India) + curated-public postings + AI (Groq/Gemini). Themes align with open skill/employment signals (data.gov.in / PLFS-style).',
+    'Seed only until admin Collect jobs. Live: Adzuna + data.gov.in (Skill India Mission + PLFS) + curated-public + AI (Groq/Gemini). Official OGD APIs — not note-only alignment.',
   provider: 'seed',
   isSeed: true,
 };
