@@ -72,7 +72,9 @@ function loadYouTubeApi(): Promise<void> {
 export { extractYoutubeId };
 
 type Props = {
-  youtubeUrl: string;
+  youtubeUrl?: string;
+  /** Alias used by course designer */
+  url?: string;
   title?: string;
   onProgress?: (ratio: number) => void;
   /** Fired once with real video length in seconds when the player is ready */
@@ -82,11 +84,13 @@ type Props = {
 
 export function YouTubeCoursePlayer({
   youtubeUrl,
+  url,
   title,
   onProgress,
   onDuration,
   className = '',
 }: Props) {
+  const resolvedUrl = (youtubeUrl || url || '').trim();
   const reactId = useId().replace(/:/g, '');
   const containerId = `yt-player-${reactId}`;
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -98,7 +102,7 @@ export function YouTubeCoursePlayer({
   const durationReported = useRef(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
-  const videoId = extractYoutubeId(youtubeUrl);
+  const videoId = extractYoutubeId(resolvedUrl);
 
   useEffect(() => {
     onProgressRef.current = onProgress;
@@ -205,6 +209,7 @@ export function YouTubeCoursePlayer({
             modestbranding: 1,
             playsinline: 1,
             enablejsapi: 1,
+            origin: typeof window !== 'undefined' ? window.location.origin : undefined,
           },
           events: {
             onReady: (e) => {
@@ -259,7 +264,7 @@ export function YouTubeCoursePlayer({
         className={`rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600 ${className}`}
       >
         Cannot embed video — open externally:{' '}
-        <a href={youtubeUrl} target="_blank" rel="noreferrer" className="underline">
+        <a href={resolvedUrl || '#'} target="_blank" rel="noreferrer" className="underline">
           {title || 'YouTube'}
         </a>
       </div>
@@ -281,7 +286,7 @@ export function YouTubeCoursePlayer({
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-900 p-4 text-center text-sm text-rose-300">
             <span>{error}</span>
             <a
-              href={youtubeUrl}
+              href={resolvedUrl}
               target="_blank"
               rel="noreferrer"
               className="text-xs font-bold text-white underline"
