@@ -1,7 +1,7 @@
 /**
  * Market AI — prioritize reliability under Netlify 10s limit.
- * Order: Groq model A → Groq model B → Gemini once.
- * (Groq is already proven live for Buddy; Gemini often 503/timeout.)
+ * Order: Groq model A → Groq model B → Gemini (2.0-flash primary).
+ * (Groq is already proven live for Buddy; Gemini as backup.)
  */
 function env(name) {
   try {
@@ -11,7 +11,8 @@ function env(name) {
   }
 }
 
-const RETIRED = /gemini-1\.5|gemini-pro$|gemini-2\.5-flash|gemini-2\.0-flash/i;
+// Truly retired / invalid model ids — NOT gemini-2.0-flash (that is the current primary)
+const RETIRED = /gemini-1\.5-pro$|gemini-pro$|gemini-3\.8|gemini-2\.5-flash-preview/i;
 
 function withTimeout(promise, ms, label) {
   return new Promise(function (resolve, reject) {
@@ -93,7 +94,7 @@ async function callGroq({ apiKey, model, messages, temperature, useJsonMode }) {
 }
 
 async function tryGroq(apiKey, messages, temperature, errors) {
-  const preferred = (env('GROQ_MODEL') || 'llama-3.1-8b-instant').trim();
+  const preferred = (env('GROQ_MODEL') || 'llama-3.3-70b-versatile').trim();
   const models = [preferred, 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'].filter(
     function (m, i, arr) {
       return m && arr.indexOf(m) === i;
@@ -144,29 +145,40 @@ async function tryGroq(apiKey, messages, temperature, errors) {
 }
 
 async function tryGemini(apiKey, messages, temperature, errors) {
-  let model = (env('GEMINI_MODEL') || 'gemini-3.8-flash').trim();
-  if (RETIRED.test(model)) model = 'gemini-3.8-flash';
-  try {
-    const text = await withTimeout(
-      callGemini({
-        apiKey: apiKey,
-        model: model,
-        messages: messages,
-        temperature: temperature,
-      }),
-      5500,
-      'Gemini',
-    );
-    if (text && text.trim()) return { text: text, provider: 'gemini', model: model };
-  } catch (e) {
-    errors.push('gemini: ' + String(e.message || e).slice(0, 90));
-    console.warn('Gemini skip', e.message);
+  let preferred = (env('GEMINI_MODEL') || 'gemini-2.0-flash').trim();
+  if (RETIRED.test(preferred) || !preferred) preferred = 'gemini-2.0-flash';
+
+  // Try preferred first, then other live Flash models
+  const models = [preferred, 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'].filter(
+    function (m, i, arr) {
+      return m && !RETIRED.test(m) && arr.indexOf(m) === i;
+    },
+  );
+
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    try {
+      const text = await withTimeout(
+        callGemini({
+          apiKey: apiKey,
+          model: model,
+          messages: messages,
+          temperature: temperature,
+        }),
+        5500,
+        'Gemini',
+      );
+      if (text && text.trim()) return { text: text, provider: 'gemini', model: model };
+    } catch (e) {
+      errors.push('gemini-' + model + ': ' + String(e.message || e).slice(0, 90));
+      console.warn('Gemini skip', model, e.message);
+    }
   }
   return null;
 }
 
 /**
- * Live path: Groq x2 → Gemini x1 (best chance of non-baseline data on Netlify).
+ * Live path: Groq x2 → Gemini (2.0-flash primary).
  */
 async function generateMarketAi(messages, temperature) {
   const geminiKey = env('GEMINI_API_KEY');
