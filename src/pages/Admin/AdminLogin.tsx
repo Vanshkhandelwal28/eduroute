@@ -11,7 +11,7 @@ export const AdminLogin = () => {
 
   useEffect(() => {
     if (isAdminSessionActive()) {
-      navigate('/admin/pending-approvals', { replace: true });
+      navigate('/admin/students', { replace: true });
     }
   }, [navigate]);
 
@@ -22,7 +22,7 @@ export const AdminLogin = () => {
     // Open demo: unlock admin without password until Railway auth is connected
     setAdminSession(true);
     setIsSubmitting(false);
-    navigate('/admin/pending-approvals', { replace: true });
+    navigate('/admin/students', { replace: true });
   };
 
   return (
