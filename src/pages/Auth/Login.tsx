@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -84,7 +84,6 @@ export const Login = () => {
       const emailRaw = formData.email.trim();
       const password = formData.password;
 
-      // Student + Supabase: ALWAYS real auth — no passwordless demo
       if (studentNeedsRealAuth) {
         if (!emailRaw) {
           setError('Email is required.');
@@ -103,7 +102,6 @@ export const Login = () => {
         return;
       }
 
-      // Other roles (or Supabase not configured): demo mode only
       setUsedDemoMode(true);
       const email =
         emailRaw ||
@@ -181,7 +179,6 @@ export const Login = () => {
         return;
       }
 
-      // Student only when Supabase is NOT configured
       saveAuthSession(`open-student-${Date.now()}`, {
         id: `open-student-${Date.now()}`,
         name: displayName,
