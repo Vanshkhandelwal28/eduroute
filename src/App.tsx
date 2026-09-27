@@ -24,7 +24,7 @@ const RoleRoute = ({
   }
   if (user.role !== role) {
     if (user.role === 'college') return <Navigate to="/college/placements" replace />;
-    if (user.role === 'admin') return <Navigate to="/admin/pending-approvals" replace />;
+    if (user.role === 'admin') return <Navigate to="/admin/students" replace />;
     if (user.role === 'industry') return <Navigate to="/industry" replace />;
     if (user.role === 'faculty') return <Navigate to="/faculty" replace />;
     return <Navigate to="/dashboard" replace />;
@@ -56,7 +56,7 @@ const PublicOnlyRoute = ({ children }: { children: ReactElement }) => {
   if (isAuthenticated()) {
     const user = getAuthUser();
     if (user?.role === 'college') return <Navigate to="/college/placements" replace />;
-    if (user?.role === 'admin') return <Navigate to="/admin/pending-approvals" replace />;
+    if (user?.role === 'admin') return <Navigate to="/admin/students" replace />;
     if (user?.role === 'industry') return <Navigate to="/industry" replace />;
     if (user?.role === 'faculty') return <Navigate to="/faculty" replace />;
     return <Navigate to="/dashboard" replace />;
@@ -272,18 +272,14 @@ export function App() {
             }
           />
 
+          {/* Slim admin: Student Management · Courses · Curriculum Gaps · District Plans · Market Trends */}
           <Route element={<AdminAccessRoute><AdminLayout /></AdminAccessRoute>}>
-            <Route path="/admin" element={<PendingApprovals />} />
-            <Route path="/admin/pending-approvals" element={<PendingApprovals />} />
+            <Route path="/admin" element={<Navigate to="/admin/students" replace />} />
             <Route path="/admin/students" element={<PendingApprovals />} />
-            <Route path="/admin/verified" element={<AdminDashboard />} />
             <Route path="/admin/courses" element={<CourseManager />} />
             <Route path="/admin/curriculum-gaps" element={<CurriculumGapMapper />} />
             <Route path="/admin/district-plans" element={<DistrictTrainingPlan />} />
             <Route path="/admin/market-trends" element={<AdminMarketTrends />} />
-            <Route path="/admin/partners" element={<AdminDashboard />} />
-            <Route path="/admin/reports" element={<AdminDashboard />} />
-            <Route path="/admin/settings" element={<AdminDashboard />} />
           </Route>
 
           <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>

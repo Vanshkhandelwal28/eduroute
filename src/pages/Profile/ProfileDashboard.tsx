@@ -7,8 +7,8 @@ import {
   Sparkles,
   Target,
   Trophy,
-  Info,
   ArrowRight,
+  Download,
 } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { getProfileDashboardData } from '../../services/profileDashboardApi';
@@ -17,16 +17,21 @@ import { getAuthToken, getAuthUser, saveAuthSession } from '../../utils/rbacAuth
 import { getStoredUserProfile, saveUserProfile } from '../../utils/userProfile';
 import { readOnboarding } from '../../utils/onboardingStore';
 import { readCompletions } from '../../utils/internshipApplications';
+import {
+  listCourseAchievements,
+  getAllEarnedCourseSkills,
+  type CourseAchievement,
+} from '../../utils/courseAchievementsStore';
+import { syncMyPublicData, isSupabaseConfigured } from '../../utils/supabaseAuth';
 import { BuildCvCta } from '../../components/BuildCvCta';
 import { LivingLearningPath } from '../../components/LivingLearningPath';
+import { CourseCertificate } from '../../components/CourseCertificate';
 
 const difficultyColors = {
   easy: '#22c55e',
   medium: '#f59e0b',
   hard: '#ef4444',
 };
-
-const levelTitles = ['Beginner', 'Explorer', 'Advanced', 'Expert', 'Pro'];
 
 const statsMeta = [
   { key: 'totalProblems', label: 'Total Solved', icon: Target, description: 'All accepted problems.' },
@@ -44,6 +49,44 @@ export const ProfileDashboard = () => {
   const onboarding = useMemo(() => readOnboarding(), []);
   const skillGapCount = onboarding.missingSkills?.length || 0;
   const completions = useMemo(() => readCompletions(), []);
+  const [achievements, setAchievements] = useState<CourseAchievement[]>(() => listCourseAchievements());
+  const courseSkills = useMemo(() => getAllEarnedCourseSkills(), [achievements]);
+
+  // Keep public portfolio skills in sync from profile too
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const skills = Array.from(
+      new Set(
+        [...courseSkills]
+          .map((s) => String(s || '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (skills.length === 0 && achievements.length === 0) return;
+    void syncMyPublicData({
+      skills: skills.length ? skills : undefined,
+      certs: achievements.slice(0, 8).map((a) => ({
+        title: a.courseTitle,
+        issuer: 'EduRoute',
+        date: (a.completedAt || '').slice(0, 10),
+      })),
+    }).catch(() => {});
+  }, [courseSkills, achievements]);
+
+  const [certOpen, setCertOpen] = useState(false);
+  const [certData, setCertData] = useState<CourseAchievement | null>(null);
+
+  useEffect(() => {
+    const refreshAchievements = () => setAchievements(listCourseAchievements());
+    window.addEventListener('eduroute:course-achievements-updated', refreshAchievements);
+    window.addEventListener('eduroute:course-assessment-updated', refreshAchievements);
+    window.addEventListener('focus', refreshAchievements);
+    return () => {
+      window.removeEventListener('eduroute:course-achievements-updated', refreshAchievements);
+      window.removeEventListener('eduroute:course-assessment-updated', refreshAchievements);
+      window.removeEventListener('focus', refreshAchievements);
+    };
+  }, []);
 
   useEffect(() => {
     const authUser = getAuthUser();
@@ -156,6 +199,11 @@ export const ProfileDashboard = () => {
     setIsEditing(false);
   };
 
+  const openCert = (a: CourseAchievement) => {
+    setCertData(a);
+    setCertOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] p-4 text-[var(--text-primary)] md:p-8">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -226,6 +274,82 @@ export const ProfileDashboard = () => {
           </Link>
         </section>
 
+        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
+              <Sparkles className="h-5 w-5 text-violet-500" /> Skills gained through courses
+            </h2>
+            <Link to="/ai-course-designer" className="text-xs font-bold text-[var(--accent)] hover:underline">
+              AI Course Designer →
+            </Link>
+          </div>
+          {courseSkills.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">
+              Pass a final assessment (60%+) on a designed course to show skills here.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {courseSkills.map((s) => (
+                <span
+                  key={s}
+                  className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-3 py-1.5 text-xs font-bold text-violet-800 dark:text-violet-200"
+                >
+                  <Award className="h-3.5 w-3.5" /> {s}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
+              <Award className="h-5 w-5 text-indigo-500" /> Course certificates
+            </h2>
+            <span className="text-xs text-[var(--text-muted)]">{achievements.length} earned</span>
+          </div>
+          {achievements.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">
+              Complete ~95% of a course, pass the AI final quiz, then download certificates here.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {achievements.map((a) => (
+                <li
+                  key={a.courseId}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-bold text-[var(--text-primary)]">{a.courseTitle}</div>
+                    <div className="text-xs text-[var(--text-secondary)]">
+                      {a.level} · {a.durationLabel} · Score {a.percent}% · {(a.badge || 'bronze').toUpperCase()} · {a.completedAt}
+                    </div>
+                    {a.skills.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {a.skills.slice(0, 5).map((s) => (
+                          <span
+                            key={s}
+                            className="rounded-full bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-bold text-[var(--text-secondary)]"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openCert(a)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download certificate
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         <BuildCvCta />
 
         {isEditing && (
@@ -274,88 +398,67 @@ export const ProfileDashboard = () => {
                 </div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{item.label}</p>
                 <p className="mt-2 text-3xl font-black text-[var(--text-primary)]">{valueMap[item.key]}</p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">{item.description}</p>
               </article>
             );
           })}
         </section>
 
-        <LivingLearningPath />
-
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)] xl:col-span-1">
-            <h2 className="mb-4 text-lg font-bold text-[var(--text-primary)]">Progress Breakdown</h2>
-            <div className="h-56">
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <article className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
+            <h2 className="mb-4 text-lg font-bold text-[var(--text-primary)]">Solved by difficulty</h2>
+            <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={5}>
+                  <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
                     {chartData.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
-                  <RechartsTooltip formatter={(value: number | undefined, name: string | undefined) => [`${value ?? 0} solved`, name ?? '']} />
+                  <RechartsTooltip />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </section>
-
-          <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)] xl:col-span-2">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">Badges Earned</h2>
-              <span className="text-xs text-[var(--text-muted)]">{(profileData.badges || []).length} total</span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {(profileData.badges || []).map((badge) => (
-                <article key={badge.id} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4">
-                  <p className="text-2xl">{badge.icon}</p>
-                  <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">{badge.title}</p>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">Earned: {badge.earnedAt}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
-          <div className="mb-4 flex items-center gap-2">
-            <Flame className="h-5 w-5 text-orange-500" />
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">Streak</h2>
-            <span className="text-sm text-[var(--text-secondary)]">
-              {profileData.streak?.current ?? 0} day current · best {profileData.streak?.max ?? 0}
-            </span>
-          </div>
+          </article>
+          <article className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
+              <Flame className="h-5 w-5 text-orange-500" /> Streak
+            </h2>
+            <p className="text-3xl font-black text-[var(--text-primary)]">{profileData.streak?.current ?? 0} days</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Best: {profileData.streak?.max ?? 0} days</p>
+          </article>
         </section>
 
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
-          <h2 className="mb-1 text-lg font-bold text-[var(--text-primary)]">Internship completions</h2>
-          <p className="mb-4 text-xs text-[var(--text-secondary)]">Certificate / completion log from finished internships.</p>
-          {completions.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">No completed internships yet. Finish a pipeline to see records here.</p>
-          ) : (
-            <ul className="space-y-3">
-              {completions.map((c) => (
-                <li key={c.internshipId} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="font-bold text-[var(--text-primary)]">{c.role}</div>
-                      <div className="text-xs text-[var(--text-secondary)]">
-                        {c.company}
-                        {c.completedAt ? ` · ${new Date(c.completedAt).toLocaleDateString()}` : ''}
-                      </div>
-                    </div>
-                    <span className="rounded-full bg-teal-100 px-2.5 py-1 text-[10px] font-black uppercase text-teal-800 dark:bg-teal-500/20 dark:text-teal-200">
-                      Certificate logged
-                    </span>
-                  </div>
-                  {c.mentorFeedback && (
-                    <p className="mt-2 text-xs text-[var(--text-secondary)]">
-                      Mentor {c.mentorFeedback.mentorName}: {'★'.repeat(c.mentorFeedback.rating)} — {c.mentorFeedback.comment}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <LivingLearningPath />
+
+        <p className="text-center text-xs text-[var(--text-muted)]">
+          Completions: {completions.length} internships tracked · Open{' '}
+          <Link to="/portfolio" className="font-semibold text-[var(--accent)] hover:underline">
+            Portfolio
+          </Link>{' '}
+          to publish all skills on your public share link.
+        </p>
+
+        {certData && (
+          <CourseCertificate
+            open={certOpen}
+            onClose={() => {
+              setCertOpen(false);
+              setCertData(null);
+            }}
+            data={{
+              studentName: profileData.fullName,
+              courseTitle: certData.courseTitle,
+              skills: certData.skills,
+              level: certData.level,
+              durationDays: certData.durationDays,
+              percent: certData.percent,
+              badge: certData.badge,
+              completedAt: certData.completedAt,
+              certId: certData.certId,
+            }}
+          />
+        )}
       </div>
     </div>
   );

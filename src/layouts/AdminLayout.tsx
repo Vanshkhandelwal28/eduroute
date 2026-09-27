@@ -14,7 +14,7 @@ import { clearAuthSession, getAuthUser } from '../utils/rbacAuth';
 import { clearAdminSession, isAdminSessionActive } from '../utils/adminSession';
 import { ThemeToggle } from '../components/ThemeToggle';
 
-/** Slim admin nav: SIH features + core ops (no Dashboard / Pending / Partners / Reports / Settings). */
+/** Slim admin nav: core ops (students, courses, curriculum, districts, market). */
 const NAV = [
   { name: 'Student Management', path: '/admin/students', icon: Users },
   { name: 'Courses', path: '/admin/courses', icon: BookOpen },
@@ -27,110 +27,84 @@ export const AdminLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const authUser = getAuthUser();
-  const sessionOk = authUser?.role === 'admin' || isAdminSessionActive();
 
   useEffect(() => {
-    if (!sessionOk) {
-      navigate('/login', { replace: true });
+    if (!isAdminSessionActive() && authUser?.role !== 'admin') {
+      navigate('/admin/login', { replace: true });
     }
-  }, [sessionOk, navigate]);
+  }, [navigate, authUser?.role]);
 
-  const handleLogout = () => {
-    clearAuthSession();
+  const logout = () => {
     clearAdminSession();
-    navigate('/login', { replace: true });
+    clearAuthSession();
+    navigate('/admin/login', { replace: true });
   };
-
-  if (!sessionOk) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-[var(--text-secondary)] bg-[var(--bg-primary)]">
-        Checking admin access…
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <aside className="hidden md:flex w-64 flex-col border-r border-[var(--border-default)] bg-[var(--bg-sidebar)] text-[var(--text-primary)]">
-        <div className="px-5 py-6 border-b border-[var(--border-default)] flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-indigo-500 flex items-center justify-center font-black text-white">E</div>
+      <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-[var(--border-default)] bg-[var(--bg-card)]">
+        <div className="flex h-16 items-center gap-2 border-b border-[var(--border-default)] px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-sm font-black text-white">
+            E
+          </div>
           <div>
-            <div className="font-black tracking-tight">EduRoute</div>
-            <div className="text-xs text-[var(--text-muted)]">Admin Panel</div>
+            <p className="text-sm font-black tracking-tight">EDUROUTE</p>
+            <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">Admin</p>
           </div>
         </div>
-
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {NAV.map((item) => {
-            const active =
-              location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+            const active = location.pathname.startsWith(item.path);
+            const Icon = item.icon;
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
                   active
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/30'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
                     : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span className="flex-1">{item.name}</span>
+                <Icon className="h-4 w-4 shrink-0" />
+                {item.name}
               </Link>
             );
           })}
         </nav>
-
-        <div className="p-4 border-t border-[var(--border-default)] flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="h-9 w-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold shrink-0">
-              {(authUser?.name || 'A').charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-bold truncate">{authUser?.name || 'Admin'}</div>
-              <div className="text-[11px] text-[var(--text-muted)]">Super Admin</div>
-            </div>
-          </div>
+        <div className="border-t border-[var(--border-default)] p-3">
           <button
             type="button"
-            onClick={handleLogout}
-            className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
-            title="Logout"
+            onClick={logout}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-500/10"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-4 w-4" /> Logout
           </button>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-card)] backdrop-blur-md px-4 md:px-6 py-3 flex items-center gap-3">
-          <div className="md:hidden font-black text-indigo-600">EduRoute</div>
-          <div className="flex-1 max-w-xl relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)]" />
+      <div className="flex min-h-screen flex-1 flex-col pl-64">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-[var(--border-default)] bg-[var(--bg-card)]/90 px-6 backdrop-blur">
+          <div className="flex max-w-md flex-1 items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2">
+            <Search className="h-4 w-4 text-[var(--text-muted)]" />
             <input
               type="search"
-              placeholder="Search students or courses..."
-              className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)] pl-10 pr-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+              placeholder="Search admin…"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
             />
           </div>
-          <ThemeToggle />
-          <button
-            type="button"
-            className="relative p-2.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)]"
-          >
-            <Bell className="h-4 w-4 text-[var(--text-secondary)]" />
-          </button>
-          <div className="hidden sm:flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)] px-3 py-1.5">
-            <div className="h-8 w-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-bold">
-              {(authUser?.name || 'A').charAt(0).toUpperCase()}
+          <div className="flex items-center gap-3">
+            <button type="button" className="rounded-xl p-2 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]">
+              <Bell className="h-4 w-4" />
+            </button>
+            <ThemeToggle />
+            <div className="text-right">
+              <p className="text-xs font-bold">{authUser?.name || 'Admin'}</p>
+              <p className="text-[10px] text-[var(--text-muted)]">Administrator</p>
             </div>
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
-              {authUser?.name || 'Admin'}
-            </span>
           </div>
         </header>
-
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[var(--bg-primary)] text-[var(--text-primary)]">
+        <main className="flex-1 p-6">
           <Outlet />
         </main>
       </div>

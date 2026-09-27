@@ -190,4 +190,5 @@ export const INTEREST_PRESETS = [
   'Cloud (AWS)',
 ] as const;
 
-export const DURATION_PRESETS = [3, 15, 30, 90] as const;
+/** Includes 30d / 60d for assessment size scaling (10–20 vs 30–40 questions). */
+export const DURATION_PRESETS = [3, 15, 30, 60, 90] as const;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -12,26 +12,108 @@ import {
   Briefcase,
   FileText,
   TrendingUp,
+  Clock,
+  Wand2,
 } from 'lucide-react';
 import { COURSES } from '../data/mockData';
 import { getCurrentUser, getDisplayFirstName } from '../utils/userProfile';
-import { getNextStepPlan, readOnboarding } from '../utils/onboardingStore';
+import { getNextStepPlan, readOnboarding, interestLabel } from '../utils/onboardingStore';
 import {
   readApplications,
   type InternshipApplication,
 } from '../utils/internshipApplications';
+import { courseCompletionStats } from '../utils/courseProgressStore';
+import { getAllEarnedCourseSkills } from '../utils/courseAchievementsStore';
+
+function placementBoostPercent(
+  course: { id: string; title: string; category: string; level?: string },
+  skills: string[],
+): number {
+  const hay = `${course.title} ${course.category} ${course.level || ''}`.toLowerCase();
+  const tokens = skills.map((s) => s.toLowerCase().trim()).filter((s) => s.length > 1);
+  let hits = 0;
+  for (const t of tokens) {
+    if (hay.includes(t) || t.split(/\s+/).some((w) => w.length > 2 && hay.includes(w))) hits += 1;
+  }
+  const matchRatio = tokens.length ? hits / tokens.length : 0.25;
+  let seed = 0;
+  for (let i = 0; i < course.id.length; i++) seed += course.id.charCodeAt(i) * (i + 3);
+  const base = 50 + (seed % 18);
+  const skillLift = Math.round(matchRatio * 21);
+  return Math.min(88, Math.max(50, base + skillLift));
+}
+
+function courseTopicIds(course: (typeof COURSES)[0]): string[] {
+  const ids: string[] = [];
+  for (const m of course.modules || []) {
+    for (const l of m.lessons || []) ids.push(l.id);
+  }
+  return ids;
+}
+
+function courseHref(course: (typeof COURSES)[0]): string {
+  const topics = courseTopicIds(course);
+  if (topics.length > 0) return `/courses/${course.id}`;
+  const skills = encodeURIComponent(
+    [course.title, course.category].filter(Boolean).join(', '),
+  );
+  return `/ai-course-designer?skills=${skills}&auto=1&days=30`;
+}
 
 export const Dashboard = () => {
   const currentUser = getCurrentUser();
   const firstName = getDisplayFirstName() || 'there';
-  const enrolledCourses = COURSES.filter((c) => currentUser.enrolledCourses.includes(c.id)).slice(0, 2);
-  const recommendedCourses = COURSES.filter((c) => !currentUser.enrolledCourses.includes(c.id)).slice(0, 4);
   const onboarding = readOnboarding();
   const nextPlan = getNextStepPlan(onboarding);
   const gapCount =
     nextPlan.kind === 'gaps' ? nextPlan.gapCount : onboarding.missingSkills?.length || 0;
   const hasSkillProfile = Boolean(onboarding.completedAt);
   const [applications, setApplications] = useState<InternshipApplication[]>(() => readApplications());
+  const earnedSkills = useMemo(() => getAllEarnedCourseSkills(), []);
+
+  const userSkills = useMemo(() => {
+    const strengths = (onboarding.gapAnswers || [])
+      .filter((a) => a.answer === 'yes')
+      .map((a) => a.skill);
+    const interests = (onboarding.interests || []).map(interestLabel);
+    return Array.from(
+      new Set([...strengths, ...interests, ...earnedSkills].map((s) => String(s).trim()).filter(Boolean)),
+    );
+  }, [onboarding, earnedSkills]);
+
+  const isNewLearner =
+    !hasSkillProfile &&
+    (currentUser.enrolledCourses?.length || 0) === 0 &&
+    earnedSkills.length === 0;
+
+  const enrolledCourses = useMemo(() => {
+    const ids = currentUser.enrolledCourses || [];
+    return COURSES.filter((c) => ids.includes(c.id)).slice(0, 4);
+  }, [currentUser.enrolledCourses]);
+
+  const recommendedCourses = useMemo(() => {
+    const enrolled = new Set(currentUser.enrolledCourses || []);
+    const scored = COURSES.filter((c) => !enrolled.has(c.id)).map((c) => ({
+      course: c,
+      boost: placementBoostPercent(c, userSkills),
+    }));
+    scored.sort((a, b) => b.boost - a.boost);
+    return scored.slice(0, 4);
+  }, [currentUser.enrolledCourses, userSkills]);
+
+  const pathPercent = useMemo(() => {
+    if (!enrolledCourses.length) return 0;
+    let sum = 0;
+    for (const c of enrolledCourses) {
+      const topics = courseTopicIds(c);
+      if (!topics.length) {
+        sum += 0;
+        continue;
+      }
+      sum += courseCompletionStats(c.id, topics).percent;
+    }
+    return Math.round(sum / enrolledCourses.length);
+  }, [enrolledCourses]);
 
   useEffect(() => {
     const refresh = () => setApplications(readApplications());
@@ -45,37 +127,33 @@ export const Dashboard = () => {
 
   const stats = [
     {
-      label: 'Completed Courses',
-      value: '12',
-      delta: '+3 this month',
-      deltaPositive: true,
+      label: 'Completed',
+      value: String(earnedSkills.length > 0 ? Math.max(1, Math.floor(earnedSkills.length / 3)) : 0),
+      delta: isNewLearner ? 'Start first course' : 'Keep learning',
       icon: CheckCircle2,
       iconBg: 'bg-emerald-100 dark:bg-emerald-500/20',
       iconColor: 'text-emerald-600 dark:text-emerald-400',
     },
     {
-      label: 'Learning Streak',
-      value: '7 days',
-      delta: '+2',
-      deltaPositive: true,
+      label: 'Streak',
+      value: isNewLearner ? '0d' : '3d',
+      delta: isNewLearner ? 'Lesson today' : 'On track',
       icon: Flame,
       iconBg: 'bg-violet-100 dark:bg-violet-500/20',
       iconColor: 'text-violet-600 dark:text-violet-400',
     },
     {
-      label: 'Total Points',
-      value: '2,850',
-      delta: '+320',
-      deltaPositive: true,
+      label: 'Skills',
+      value: String(userSkills.length || 0),
+      delta: userSkills.length ? 'Mapped' : 'Add profile',
       icon: Star,
       iconBg: 'bg-amber-100 dark:bg-amber-500/20',
       iconColor: 'text-amber-600 dark:text-amber-400',
     },
     {
-      label: 'Rank',
-      value: '#12',
-      delta: 'in your batch',
-      deltaPositive: true,
+      label: 'Apps',
+      value: String(applications.length),
+      delta: applications.length ? 'Tracked' : 'Browse roles',
       icon: Trophy,
       iconBg: 'bg-blue-100 dark:bg-blue-500/20',
       iconColor: 'text-blue-600 dark:text-blue-400',
@@ -83,8 +161,8 @@ export const Dashboard = () => {
   ];
 
   return (
-    <div className="er-page space-y-8">
-      <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border-default)] min-h-[180px] md:min-h-[200px]">
+    <div className="er-page space-y-6">
+      <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border-default)] min-h-[160px] md:min-h-[176px]">
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105"
           style={{
@@ -95,142 +173,120 @@ export const Dashboard = () => {
           aria-hidden
         />
         <div className="absolute inset-0 bg-gradient-to-r from-white/88 via-white/45 to-transparent dark:from-slate-950/92 dark:via-slate-950/70 dark:to-slate-950/35" aria-hidden />
-        <div className="absolute inset-0 bg-gradient-to-b from-white/25 via-transparent to-white/30 dark:from-slate-950/40 dark:via-transparent dark:to-slate-950/50" aria-hidden />
-        <div className="relative z-10 flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between md:p-8">
+        <div className="relative z-10 flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6">
           <div className="max-w-xl">
             <p className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              <span className="mr-1">👋</span> Welcome back,
+              <span className="mr-1">{isNewLearner ? '🚀' : '👋'}</span>{' '}
+              {isNewLearner ? 'Welcome,' : 'Welcome back,'}
             </p>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white md:text-4xl">
-              {firstName}! <span className="inline-block">👋</span>
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white md:text-3xl">
+              {firstName}!
             </h1>
             <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              You've completed 45% of your current path. Keep it up!
+              {isNewLearner
+                ? 'Start a course or design your own path — placement readiness climbs as you complete modules.'
+                : enrolledCourses.length
+                  ? `You're about ${pathPercent}% through your current path. Finish modules to unlock the final assessment & certificate.`
+                  : 'Enroll in a course or design a mixed path matched to market demand.'}
             </p>
-            <div className="mt-5 flex items-center gap-3">
+            <div className="mt-4 flex items-center gap-3">
               <div className="er-progress flex-1 max-w-xs">
-                <div className="er-progress-bar" style={{ width: '45%' }} />
+                <div className="er-progress-bar" style={{ width: `${Math.max(4, pathPercent)}%` }} />
               </div>
-              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">45%</span>
+              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{pathPercent}%</span>
             </div>
           </div>
-
-          <div className="flex shrink-0 items-center gap-4 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-card)]/80 px-5 py-4 shadow-sm backdrop-blur-sm">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-500/20">
+          <div className="flex shrink-0 items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-card)]/80 px-4 py-3 shadow-sm backdrop-blur-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-500/20">
               <ShieldCheck className="h-5 w-5 text-violet-600 dark:text-violet-400" />
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-[var(--text-primary)]">Verify College ID</div>
-              <p className="text-xs text-[var(--text-secondary)]">Unlock 50% discount on certifications</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Skill profile</p>
+              <p className="text-sm font-bold text-[var(--text-primary)]">
+                {hasSkillProfile ? `${userSkills.length} skills mapped` : 'Complete skill profile'}
+              </p>
             </div>
-            <Link to="/verify-college" className="er-btn er-btn-primary ml-2 shrink-0 !px-4 !py-2 text-xs">
-              Verify
-            </Link>
           </div>
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((s) => (
-          <div key={s.label} className="er-stat-card">
-            <div className={`er-stat-icon ${s.iconBg}`}>
-              <s.icon className={`h-5 w-5 ${s.iconColor}`} />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-medium text-[var(--text-secondary)]">{s.label}</div>
-              <div className="mt-0.5 text-2xl font-bold tracking-tight text-[var(--text-primary)]">{s.value}</div>
-              <div className={`mt-1 text-xs font-medium ${s.deltaPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--text-muted)]'}`}>
-                {s.deltaPositive && s.delta.startsWith('+') ? (
-                  <span className="inline-flex items-center gap-0.5">
-                    <span className="text-[10px]">↑</span> {s.delta}
-                  </span>
-                ) : (
-                  s.delta
-                )}
+      <section className="er-stat-grid">
+        {stats.map((s) => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} className="er-stat-card">
+              <div className={`er-stat-icon ${s.iconBg}`}>
+                <Icon className={`shrink-0 ${s.iconColor}`} />
+              </div>
+              <div>
+                <div className="er-stat-label">{s.label}</div>
+                <div className="er-stat-value">{s.value}</div>
+                <div className="er-stat-delta">{s.delta}</div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
-      <Link to="/ai-course-designer" className="group relative mb-2 block overflow-hidden rounded-[var(--radius-xl)] border border-fuchsia-200/70 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-indigo-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-fuchsia-500/25 dark:from-fuchsia-950/40 dark:via-violet-950/30 dark:to-indigo-950/30 sm:p-6">
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <Link
+        to="/ai-course-designer"
+        className="group relative block overflow-hidden rounded-[var(--radius-xl)] border border-fuchsia-200/70 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-indigo-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-fuchsia-500/25 dark:from-fuchsia-950/40 dark:via-violet-950/30 dark:to-indigo-950/30 sm:p-5"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-md"><Sparkles className="h-6 w-6" /></div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-md">
+              <Wand2 className="h-5 w-5" />
+            </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-fuchsia-600 dark:text-fuchsia-400">New · AI-powered</p>
-              <h2 className="text-base font-bold text-[var(--text-primary)] sm:text-lg">Design your own mixed course</h2>
-              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">Pick duration + interests (DSA, React, Data Analytics…). AI builds a roadmap with real YouTube + docs you can edit.</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-fuchsia-600 dark:text-fuchsia-300">New · AI-powered</p>
+              <h2 className="text-base font-bold text-[var(--text-primary)]">Design your own mixed course</h2>
+              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
+                Pick duration + interests. AI builds a roadmap with real YouTube + docs you can edit.
+              </p>
             </div>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-fuchsia-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-md">Start designing <ArrowRight className="h-4 w-4" /></span>
+          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-fuchsia-600 px-4 py-2 text-sm font-bold text-white shadow-sm sm:self-center">
+            Start <ArrowRight className="h-4 w-4" />
+          </span>
         </div>
       </Link>
 
       <Link
         to="/trend-analyse"
-        className="group relative mb-2 block overflow-hidden rounded-[var(--radius-xl)] border border-cyan-200/70 bg-gradient-to-br from-cyan-50 via-sky-50 to-indigo-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-cyan-500/25 dark:from-cyan-950/40 dark:via-sky-950/30 dark:to-indigo-950/30 sm:p-6"
+        className="group relative block overflow-hidden rounded-[var(--radius-xl)] border border-sky-200/70 bg-gradient-to-br from-sky-50 via-cyan-50 to-teal-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-sky-500/25 dark:from-sky-950/40 dark:via-cyan-950/30 dark:to-teal-950/30 sm:p-5"
       >
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-indigo-600 text-white shadow-md">
-              <TrendingUp className="h-6 w-6" />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-teal-600 text-white shadow-md">
+              <TrendingUp className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-600 dark:text-cyan-400">
-                Gemini · Market vs you
-              </p>
-              <h2 className="text-base font-bold text-[var(--text-primary)] sm:text-lg">
-                Trend Analyse — skill gaps vs market demand
-              </h2>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-300">Market vs you</p>
+              <h2 className="text-base font-bold text-[var(--text-primary)]">Trend Analyse — skill gaps vs market demand</h2>
               <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
-                Compare real market trends with your skill profile. See demand vs current skills, gaps, and
-                charts (refresh every 7 days).
+                Compare market trends with your skill profile. Gaps, charts, refresh every 7 days.
               </p>
             </div>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-md">
-            Open analysis <ArrowRight className="h-4 w-4" />
+          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-sky-600 px-4 py-2 text-sm font-bold text-white shadow-sm sm:self-center">
+            Open <ArrowRight className="h-4 w-4" />
           </span>
         </div>
       </Link>
 
       <section>
-        {nextPlan.kind === 'quiz' ? (
-          <Link
-            to="/onboarding"
-            className="er-card er-card-hover group flex flex-col gap-4 border-violet-200/80 bg-gradient-to-r from-violet-50 to-indigo-50 p-5 transition-all dark:border-violet-500/30 dark:from-violet-950/40 dark:to-indigo-950/30 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-md shadow-violet-600/25">
-                <Sparkles className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400">Next step</p>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">Finish your skill quiz</h2>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Pick interests and answer a short Yes/No quiz to unlock match scores and a personal path.
-                </p>
-              </div>
-            </div>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-violet-600 px-4 py-2 text-sm font-bold text-white">
-              Start quiz <ArrowRight className="h-4 w-4" />
-            </span>
-          </Link>
-        ) : nextPlan.kind === 'gaps' ? (
+        {nextPlan.kind === 'gaps' && nextPlan.primary ? (
           <div className="er-card border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 p-5 dark:border-amber-500/30 dark:from-amber-950/30 dark:to-orange-950/20">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex min-w-0 items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md">
-                  <Target className="h-6 w-6" />
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md">
+                  <Target className="h-5 w-5" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Next step</p>
-                  <h2 className="text-base font-bold text-[var(--text-primary)]">
-                    Close {nextPlan.gapCount} skill gap{nextPlan.gapCount === 1 ? '' : 's'}
-                  </h2>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">Close gaps</p>
+                  <h2 className="text-base font-bold text-[var(--text-primary)]">Skill gaps on your path</h2>
                   <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                    For <span className="font-semibold text-[var(--text-primary)]">{nextPlan.trackLabel}</span>
+                    Track <span className="font-semibold text-[var(--text-primary)]">{nextPlan.trackLabel}</span>
                     {' · '}start with{' '}
                     <span className="font-semibold text-[var(--text-primary)]">{nextPlan.primary.skill}</span>
                     {' → '}{nextPlan.primary.courseTitle}
@@ -257,14 +313,14 @@ export const Dashboard = () => {
             className="er-card er-card-hover group flex flex-col gap-4 border-emerald-200/80 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 transition-all dark:border-emerald-500/30 dark:from-emerald-950/30 dark:to-teal-950/20 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md">
-                <Briefcase className="h-6 w-6" />
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md">
+                <Briefcase className="h-5 w-5" />
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Next step</p>
                 <h2 className="text-base font-bold text-[var(--text-primary)]">Apply with skill match</h2>
                 <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Your profile for {nextPlan.trackLabel} is ready. Browse internships ranked by how well you match.
+                  Your profile{nextPlan.trackLabel ? ` for ${nextPlan.trackLabel}` : ''} is ready. Browse internships ranked by match.
                 </p>
               </div>
             </div>
@@ -281,15 +337,15 @@ export const Dashboard = () => {
           className="er-card er-card-hover group flex flex-col gap-4 p-5 transition-all sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-              <Target className="h-6 w-6" />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+              <Target className="h-5 w-5" />
             </div>
             <div>
               <h2 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)]">Student Skill Profile</h2>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">
                 {hasSkillProfile
                   ? gapCount > 0
-                    ? `You have ${gapCount} skill gap${gapCount === 1 ? '' : 's'} marked — view strengths, tracks, and next steps.`
+                    ? `You have ${gapCount} skill gap${gapCount === 1 ? '' : 's'} marked — view strengths and next steps.`
                     : 'View your strengths, target tracks, and recommended next steps.'
                   : 'Complete onboarding to unlock strengths, gaps, and a personal path.'}
               </p>
@@ -302,67 +358,96 @@ export const Dashboard = () => {
       </section>
 
       <section>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">Continue Learning</h2>
-          <Link to="/courses" className="text-sm font-semibold text-[var(--accent)] hover:underline inline-flex items-center gap-1">
+          <Link to="/my-courses" className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--accent)] hover:underline">
             View all <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {enrolledCourses.length > 0 ? (
-            enrolledCourses.map((course) => (
-              <div key={course.id} className="er-card p-4">
-                <h3 className="font-bold text-[var(--text-primary)]">{course.title}</h3>
-                <p className="text-sm text-[var(--text-secondary)]">{course.category}</p>
-              </div>
-            ))
+            enrolledCourses.map((course) => {
+              const topics = courseTopicIds(course);
+              const prog = topics.length ? courseCompletionStats(course.id, topics).percent : 0;
+              return (
+                <Link key={course.id} to={courseHref(course)} className="er-card er-card-hover group overflow-hidden p-0">
+                  <div className="relative h-28 w-full overflow-hidden bg-[var(--bg-elevated)] sm:h-32">
+                    <img src={course.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
+                    <span className="absolute left-2.5 top-2.5 rounded-full bg-indigo-600/95 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">In progress</span>
+                    <span className="absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur">{prog}%</span>
+                  </div>
+                  <div className="p-3.5">
+                    <p className="truncate text-sm font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)]">{course.title}</p>
+                    <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{course.category} · {course.level}</p>
+                    <div className="mt-2.5 er-progress h-1.5">
+                      <div className="er-progress-bar" style={{ width: `${Math.max(4, prog)}%` }} />
+                    </div>
+                  </div>
+                </Link>
+              );
+            })
           ) : (
-            <div className="er-card col-span-full p-8 text-center text-[var(--text-secondary)]">
+            <div className="er-card p-5 text-sm text-[var(--text-secondary)] md:col-span-2">
               No enrolled courses yet.{' '}
-              <Link to="/browse" className="font-semibold text-[var(--accent)]">Browse courses</Link>
+              <Link to="/ai-course-designer" className="font-semibold text-[var(--accent)] hover:underline">Design a course</Link>
+              {' '}or browse recommendations below.
             </div>
           )}
         </div>
       </section>
 
       <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
-            <Sparkles className="h-5 w-5 text-[var(--accent)]" /> Recommended for You
-          </h2>
-          <Link to="/browse" className="text-sm font-semibold text-[var(--accent)] hover:underline inline-flex items-center gap-1">
-            Explore all <ArrowRight className="h-3.5 w-3.5" />
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">Recommended for placement</h2>
+          <Link to="/my-courses" className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--accent)] hover:underline">
+            Explore <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {recommendedCourses.slice(0, 4).map((course) => (
-            <Link key={course.id} to={`/courses/${course.id}`} className="er-card er-card-hover p-4">
-              <h3 className="font-bold text-[var(--text-primary)]">{course.title}</h3>
-              <p className="mt-1 text-xs text-[var(--text-secondary)]">{course.category}</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {recommendedCourses.map(({ course, boost }) => (
+            <Link key={course.id} to={courseHref(course)} className="er-card er-card-hover group flex flex-col overflow-hidden p-0">
+              <div className="relative h-24 w-full overflow-hidden bg-[var(--bg-elevated)] sm:h-28">
+                <img src={course.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
+                <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">~{boost}% readiness</span>
+              </div>
+              <div className="flex flex-1 flex-col gap-1 p-3">
+                <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">{course.title}</p>
+                <p className="text-xs text-[var(--text-secondary)]">{course.category}</p>
+                <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-[var(--text-muted)]">
+                  <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3 shrink-0" /> {course.duration}</span>
+                  <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600 dark:text-amber-400"><Star className="h-3 w-3 fill-current" /> {course.rating}</span>
+                </div>
+              </div>
             </Link>
           ))}
         </div>
       </section>
 
-      <Link
-        to="/cv-builder"
-        className="mb-8 mt-6 flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 via-violet-50 to-white p-5 transition hover:border-indigo-300 hover:shadow-md dark:border-indigo-700/60 dark:from-indigo-950 dark:via-slate-900 dark:to-slate-900 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25">
-            <FileText className="h-5 w-5" />
-          </span>
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Link to="/internships" className="er-card er-card-hover flex items-center gap-3 p-4">
+          <Briefcase className="h-5 w-5 text-blue-500" />
           <div>
-            <p className="text-sm font-black text-slate-900 dark:text-white">Build CV</p>
-            <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
-              Free templates · step-by-step editor · download PDF for internships & placements.
-            </p>
+            <p className="text-sm font-bold text-[var(--text-primary)]">Internships</p>
+            <p className="text-xs text-[var(--text-secondary)]">{applications.length} tracked</p>
           </div>
-        </div>
-        <span className="inline-flex items-center gap-1 self-start rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md sm:self-center">
-          Open builder <ArrowRight className="h-3.5 w-3.5" />
-        </span>
-      </Link>
+        </Link>
+        <Link to="/cv-builder" className="er-card er-card-hover flex items-center gap-3 p-4">
+          <FileText className="h-5 w-5 text-violet-500" />
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">CV Builder</p>
+            <p className="text-xs text-[var(--text-secondary)]">Build & export</p>
+          </div>
+        </Link>
+        <Link to="/buddy" className="er-card er-card-hover flex items-center gap-3 p-4">
+          <Clock className="h-5 w-5 text-amber-500" />
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">AI Buddy</p>
+            <p className="text-xs text-[var(--text-secondary)]">Ask anything</p>
+          </div>
+        </Link>
+      </section>
     </div>
   );
 };

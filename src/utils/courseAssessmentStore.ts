@@ -1,44 +1,78 @@
-/** Persist final-assessment attempts per AI course. */
+/**
+ * Final assessment results — localStorage.
+ * Certificate unlock requires passed === true (score >= 60%).
+ */
 
-export type AssessmentAttempt = {
+export type AssessmentRecord = {
   courseId: string;
-  percent: number;
   passed: boolean;
-  answeredAt: string;
+  percent: number;
+  score: number;
+  total: number;
+  gapTopics: string[];
+  completedAt: string;
+  attempts: number;
 };
 
-const KEY = 'eduroute:course-assessment-attempts';
+const KEY = 'eduroute:course-assessments-v1';
 
-export function getAssessmentAttempt(courseId: string): AssessmentAttempt | null {
+function readAll(): Record<string, AssessmentRecord> {
+  if (typeof window === 'undefined') return {};
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const map = JSON.parse(raw) as Record<string, AssessmentAttempt>;
-    return map[courseId] || null;
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
-    return null;
+    return {};
   }
 }
 
-export function saveAssessmentAttempt(attempt: AssessmentAttempt): void {
+function writeAll(map: Record<string, AssessmentRecord>) {
+  if (typeof window === 'undefined') return;
   try {
-    const raw = localStorage.getItem(KEY);
-    const map = raw ? (JSON.parse(raw) as Record<string, AssessmentAttempt>) : {};
-    map[attempt.courseId] = attempt;
     localStorage.setItem(KEY, JSON.stringify(map));
+    window.dispatchEvent(
+      new CustomEvent('eduroute:course-assessment-updated', { detail: map }),
+    );
   } catch {
     /* ignore */
   }
 }
 
-export function clearAssessmentAttempt(courseId: string): void {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return;
-    const map = JSON.parse(raw) as Record<string, AssessmentAttempt>;
-    delete map[courseId];
-    localStorage.setItem(KEY, JSON.stringify(map));
-  } catch {
-    /* ignore */
-  }
+export function getAssessment(courseId: string): AssessmentRecord | null {
+  return readAll()[courseId] || null;
+}
+
+export function hasPassedAssessment(courseId: string): boolean {
+  return Boolean(getAssessment(courseId)?.passed);
+}
+
+export function saveAssessmentResult(
+  courseId: string,
+  result: {
+    passed: boolean;
+    percent: number;
+    score: number;
+    total: number;
+    gapTopics: string[];
+  },
+): AssessmentRecord {
+  const map = readAll();
+  const prev = map[courseId];
+  const next: AssessmentRecord = {
+    courseId,
+    passed: result.passed || Boolean(prev?.passed),
+    percent: result.percent,
+    score: result.score,
+    total: result.total,
+    gapTopics: result.gapTopics,
+    completedAt: new Date().toISOString(),
+    attempts: (prev?.attempts || 0) + 1,
+  };
+  // Keep best pass: once passed, stay passed even if later attempt fails
+  if (prev?.passed) next.passed = true;
+  map[courseId] = next;
+  writeAll(map);
+  return next;
 }

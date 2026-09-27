@@ -71,7 +71,7 @@ export function DistrictTrainingPlan() {
         >
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              SIH26134 · District training plans
+              District training plans
             </p>
             <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">
               District training plan — {district}
@@ -84,7 +84,7 @@ export function DistrictTrainingPlan() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 px-3 py-2 text-xs font-bold shadow-[var(--shadow-card)] backdrop-blur-sm">
               <MapPin className="h-3.5 w-3.5 text-emerald-500" />
-              Maharashtra · mock signals
+              Maharashtra · demand signals
             </div>
             <button
               type="button"
@@ -346,7 +346,7 @@ export function DistrictTrainingPlan() {
         </section>
 
         <p className="text-center text-xs text-[var(--text-muted)]">
-          EDUROUTE · SIH26134 district plans · reuses Demand Intel signals + Curriculum Gaps courses
+          EDUROUTE · District training plans · Demand Intel signals + Curriculum Gaps
         </p>
       </div>
     </div>

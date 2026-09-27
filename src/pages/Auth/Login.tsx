@@ -1,3 +1,4 @@
+/** Login — multi-role auth (student / faculty / industry / college / staff) */
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -12,7 +13,6 @@ import {
   Briefcase,
   Eye,
   EyeOff,
-  ChevronDown,
 } from 'lucide-react';
 
 import { saveAuthSession, type UserRole } from '../../utils/rbacAuth';
@@ -69,7 +69,7 @@ export const Login = () => {
   }, []);
 
   const goHome = (userRole: UserRole) => {
-    if (userRole === 'admin') navigate('/admin/pending-approvals', { replace: true });
+    if (userRole === 'admin') navigate('/admin/students', { replace: true });
     else if (userRole === 'industry') navigate('/industry', { replace: true });
     else if (userRole === 'college') navigate('/college/placements', { replace: true });
     else if (userRole === 'faculty') navigate('/faculty', { replace: true });
@@ -85,7 +85,6 @@ export const Login = () => {
       const emailRaw = formData.email.trim();
       const password = formData.password;
 
-      // Student + Supabase: ALWAYS real auth — no passwordless demo
       if (studentNeedsRealAuth) {
         if (!emailRaw) {
           setError('Email is required.');
@@ -104,7 +103,6 @@ export const Login = () => {
         return;
       }
 
-      // Other roles (or Supabase not configured): demo mode only
       setUsedDemoMode(true);
       const email =
         emailRaw ||
@@ -182,7 +180,6 @@ export const Login = () => {
         return;
       }
 
-      // Student only when Supabase is NOT configured
       saveAuthSession(`open-student-${Date.now()}`, {
         id: `open-student-${Date.now()}`,
         name: displayName,
@@ -203,7 +200,6 @@ export const Login = () => {
     ? 'border-white/15 bg-slate-900/70 shadow-black/40'
     : 'border-slate-200 bg-white/95 shadow-slate-300/40';
   const muted = isDark ? 'text-slate-400' : 'text-slate-500';
-  const selected = ROLE_OPTIONS.find((r) => r.id === role) || ROLE_OPTIONS[0];
 
   return (
     <div className={`relative min-h-screen overflow-hidden ${isDark ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'}`}>
@@ -249,64 +245,76 @@ export const Login = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div ref={roleRef} className="relative">
-                <label className={`mb-1.5 block text-xs font-semibold ${muted}`}>I am a</label>
+              <div>
+                <label className={`mb-2 block text-xs font-semibold ${muted}`}>I am a</label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {ROLE_OPTIONS.filter((o) => o.id !== 'admin').map((opt) => {
+                    const active = role === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setRole(opt.id);
+                          setError('');
+                          if (opt.id === 'industry') {
+                            setFormData({
+                              email: INDUSTRY_DEMO_CREDENTIALS.email,
+                              password: INDUSTRY_DEMO_CREDENTIALS.password,
+                            });
+                          } else if (opt.id === 'faculty') {
+                            setFormData({
+                              email: FACULTY_DEMO_CREDENTIALS.email,
+                              password: FACULTY_DEMO_CREDENTIALS.password,
+                            });
+                          } else if (opt.id === 'college') {
+                            setFormData({
+                              email: COLLEGE_DEMO_CREDENTIALS.email,
+                              password: COLLEGE_DEMO_CREDENTIALS.password,
+                            });
+                          } else {
+                            setFormData({ email: '', password: '' });
+                          }
+                        }}
+                        className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-center text-xs font-bold transition ${
+                          active
+                            ? isDark
+                              ? 'border-violet-400 bg-violet-600/30 text-violet-100 ring-2 ring-violet-400/40'
+                              : 'border-violet-400 bg-violet-100 text-violet-800 ring-2 ring-violet-300/50'
+                            : isDark
+                              ? 'border-white/10 bg-slate-800/60 text-slate-300 hover:bg-white/5'
+                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <opt.icon className={`h-5 w-5 ${active ? 'text-violet-500' : ''}`} />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <button
                   type="button"
-                  onClick={() => setRoleOpen((v) => !v)}
-                  className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left text-sm ${fieldCls}`}
+                  onClick={() => {
+                    setRole('admin');
+                    setError('');
+                    setFormData({
+                      email: LOCAL_STAFF.email,
+                      password: LOCAL_STAFF.password,
+                    });
+                  }}
+                  className={`mt-2 flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition ${
+                    role === 'admin'
+                      ? isDark
+                        ? 'border-violet-400 bg-violet-600/30 text-violet-100 ring-2 ring-violet-400/40'
+                        : 'border-violet-400 bg-violet-100 text-violet-800 ring-2 ring-violet-300/50'
+                      : isDark
+                        ? 'border-white/10 bg-slate-800/40 text-slate-400 hover:bg-white/5'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                  }`}
                 >
-                  <span className="flex items-center gap-2">
-                    <selected.icon className="h-4 w-4 text-violet-500" />
-                    <span className="font-semibold">{selected.label}</span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition ${roleOpen ? 'rotate-180' : ''} ${muted}`} />
+                  <UserCog className="h-4 w-4" />
+                  Staff / Admin
                 </button>
-                {roleOpen && (
-                  <div className={`absolute z-30 mt-1 w-full overflow-hidden rounded-xl border shadow-xl ${isDark ? 'border-white/10 bg-slate-900' : 'border-slate-200 bg-white'}`}>
-                    {ROLE_OPTIONS.map((opt) => {
-                      const active = role === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => {
-                            setRole(opt.id);
-                            setRoleOpen(false);
-                            setError('');
-                            if (opt.id === 'industry') {
-                              setFormData({
-                                email: INDUSTRY_DEMO_CREDENTIALS.email,
-                                password: INDUSTRY_DEMO_CREDENTIALS.password,
-                              });
-                            } else if (opt.id === 'faculty') {
-                              setFormData({
-                                email: FACULTY_DEMO_CREDENTIALS.email,
-                                password: FACULTY_DEMO_CREDENTIALS.password,
-                              });
-                            } else if (opt.id === 'college') {
-                              setFormData({
-                                email: COLLEGE_DEMO_CREDENTIALS.email,
-                                password: COLLEGE_DEMO_CREDENTIALS.password,
-                              });
-                            } else if (opt.id === 'admin') {
-                              setFormData({
-                                email: LOCAL_STAFF.email,
-                                password: LOCAL_STAFF.password,
-                              });
-                            } else {
-                              setFormData({ email: '', password: '' });
-                            }
-                          }}
-                          className={`flex w-full items-center gap-2 px-4 py-2.5 text-sm transition ${active ? (isDark ? 'bg-violet-600/30 text-violet-200' : 'bg-violet-100 text-violet-800') : (isDark ? 'text-slate-300 hover:bg-white/5' : 'text-slate-700 hover:bg-slate-50')}`}
-                        >
-                          <opt.icon className="h-4 w-4" />
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
               <div>
