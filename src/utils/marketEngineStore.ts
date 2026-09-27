@@ -1,6 +1,6 @@
 /**
  * Skill Market Trend Engine — client cache + local matching.
- * Server collect: Adzuna API (if configured) + curated seed; no restricted scraping.
+ * Server collect: Adzuna (multi-page) + data.gov.in Skill India/PLFS + curated seed; no restricted scraping.
  */
 import { normalizeSkillList, normalizeSkillName, skillsMatch } from './skillNormalize';
 import { readMarketSnapshot, type MarketSnapshot } from './marketTrendStore';
@@ -286,6 +286,7 @@ export function matchStudentToMarket(
     new Date().toISOString();
 
   const hasAdzuna = jobs.some((j) => j.source === 'adzuna');
+  const hasGov = jobs.some((j) => j.source === 'data-gov-in');
 
   return {
     matched,
@@ -295,9 +296,10 @@ export function matchStudentToMarket(
     matchScore: Math.min(100, matchScore),
     computedAt: new Date().toISOString(),
     dataAsOf: latest,
-    sourceNote: hasAdzuna
-      ? 'Adzuna Jobs API (India) + curated-public seed + admin AI snapshot. No restricted scraping. Growth: Insufficient historical data until multiple collection windows exist.'
-      : 'Curated public demo jobs + admin market snapshot (Adzuna when keys configured on Netlify). No restricted scraping. Growth: Insufficient historical data until multiple collection windows exist.',
+    sourceNote:
+      hasAdzuna || hasGov
+        ? `Live sources: ${hasAdzuna ? 'Adzuna' : ''}${hasAdzuna && hasGov ? ' + ' : ''}${hasGov ? 'data.gov.in' : ''} + curated-public + admin AI grounded on collected demand. No restricted scraping.`
+        : 'Curated public demo jobs + admin AI. Configure ADZUNA_* and DATA_GOV_API_KEY on Netlify, then Collect jobs → Refresh AI trends.',
   };
 }
 
