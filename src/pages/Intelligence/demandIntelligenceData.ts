@@ -1,4 +1,4 @@
-/** Mock labour-market signals for SIH26134 Demand Intelligence (Maharashtra focus) */
+/** Mock labour-market signals for Demand Intelligence (Maharashtra focus) */
 
 export type DistrictKey =
   | 'Pune'
