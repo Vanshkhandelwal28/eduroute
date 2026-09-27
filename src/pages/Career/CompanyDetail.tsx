@@ -10,7 +10,7 @@ import {
   Mail,
   Check,
 } from 'lucide-react';
-import { INTERNSHIPS } from './Internships';
+import { INTERNSHIPS } from './internshipData';
 import {
   applyToInternship,
   getApplication,
@@ -82,17 +82,17 @@ export const CompanyDetail = () => {
                   <MapPin className="h-4 w-4 text-indigo-400" /> {internship.location}
                 </span>
                 <span className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-indigo-400" /> {internship.employeeCount}
+                  <Users className="h-4 w-4 text-indigo-400" /> {(internship as any).employeeCount || '—'}
                 </span>
                 <span className="flex items-center gap-2">
                   <Globe className="h-4 w-4 text-indigo-400" />{' '}
                   <a
-                    href={internship.companylink}
+                    href={(internship as any).companylink || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:underline"
                   >
-                    {internship.companylink}
+                    {(internship as any).companylink || 'Website'}
                   </a>
                 </span>
               </div>
