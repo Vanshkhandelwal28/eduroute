@@ -51,6 +51,55 @@ const GEMINI_MODELS = [
   return m && !/3\.8|gemini-pro$/i.test(m);
 });
 
+/** Helpful offline reply when no API keys or all providers fail. */
+function limitedModeReply(last, language) {
+  const q = String(last || '').trim().slice(0, 200);
+  const lang = (language || 'english').toLowerCase();
+
+  const intro =
+    lang === 'hindi'
+      ? 'मैं Buddy हूँ। अभी AI keys उपलब्ध नहीं हैं, फिर भी आपकी guide कर सकता हूँ।'
+      : lang === 'hinglish'
+        ? 'Main Buddy hoon. Abhi AI keys offline hain, lekin main aapko solid guidance de sakta hoon.'
+        : 'I am Buddy. AI keys are offline on this deploy, but I can still guide you.';
+
+  const plan =
+    lang === 'hindi'
+      ?
+          'Beginner → Intermediate → Pro:\n' +
+          '1) Beginner: fundamentals + 1 mini project\n' +
+          '2) Intermediate: frameworks + APIs + portfolio update\n' +
+          '3) Pro: system design, testing, interview prep + internship applications\n\n' +
+          'Weekly challenge: एक project milestone पूरा करें और एक mock interview करें।'
+      : lang === 'hinglish'
+        ?
+          'Beginner → Intermediate → Pro:\n' +
+          '1) Beginner: fundamentals + 1 mini project\n' +
+          '2) Intermediate: frameworks + APIs + portfolio update\n' +
+          '3) Pro: system design, testing, interview prep + internship applications\n\n' +
+          'Weekly challenge: complete one project milestone aur ek mock interview.'
+        :
+          'Beginner → Intermediate → Pro plan:\n' +
+          '1) Beginner: strengthen fundamentals + 1 mini project.\n' +
+          '2) Intermediate: framework mastery + API integration + portfolio update.\n' +
+          '3) Pro: system design, testing, interview prep, and internship applications.\n\n' +
+          'Weekly challenge: complete one project milestone and one mock interview.';
+
+  const based =
+    q
+      ? lang === 'hindi'
+        ? `आपने पूछा: "${q}"\n\n`
+        : lang === 'hinglish'
+          ? `Aapne pucha: "${q}"\n\n`
+          : `Based on: "${q}"\n\n`
+      : '';
+
+  const opsNote =
+    '\n\n_(Ops: set GROQ_API_KEY or GEMINI_API_KEY on Netlify for Production + Deploy previews, then redeploy for full AI.)_';
+
+  return intro + '\n\n' + based + plan + opsNote;
+}
+
 async function generateBuddyReply({ messages, language }) {
   const last =
     (messages && messages[messages.length - 1] && messages[messages.length - 1].content) || '';
@@ -156,10 +205,7 @@ async function generateBuddyReply({ messages, language }) {
 
   console.error('Buddy all AI failed', errors.join(' | '));
   return {
-    reply:
-      'I am Buddy in limited mode (AI keys unavailable on this deploy). You asked: "' +
-      String(last).slice(0, 180) +
-      '". Set GROQ_API_KEY on Netlify (Deploy previews + Production) and redeploy.',
+    reply: limitedModeReply(last, language),
     usedWebSearch: false,
     sources: [],
     provider: 'limited',
