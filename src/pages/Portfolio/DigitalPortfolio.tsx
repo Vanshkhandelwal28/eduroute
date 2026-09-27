@@ -4,16 +4,12 @@ import { motion } from 'framer-motion';
 import {
   Award,
   Briefcase,
-  CheckCircle2,
-  Code2,
   Download,
   FolderGit2,
   GraduationCap,
   Share2,
-  Shield,
   Sparkles,
   Target,
-  Trophy,
   Copy,
   ExternalLink,
 } from 'lucide-react';
@@ -63,6 +59,18 @@ function resolvePublicUsername(fullName: string, email: string): string {
   return slugifyUsername(fullName || email.split('@')[0] || 'user');
 }
 
+/** CV / onboarding strengths only — never course skills until cert. */
+function cvStrengthSkills(onboarding: OnboardingProfile): string[] {
+  const fromCv = (onboarding.cvSkills || []).map((s) => String(s || '').trim()).filter(Boolean);
+  const fromCustom = (onboarding.customSkills || []).map((s) => String(s || '').trim()).filter(Boolean);
+  const fromGaps = (onboarding.gapAnswers || [])
+    .filter((a) => a.answer === 'yes')
+    .map((a) => a.skill)
+    .map((s) => String(s || '').trim())
+    .filter(Boolean);
+  return Array.from(new Set([...fromCv, ...fromCustom, ...fromGaps]));
+}
+
 export const DigitalPortfolio = () => {
   const auth = getAuthUser();
   const stored = getStoredUserProfile();
@@ -81,32 +89,19 @@ export const DigitalPortfolio = () => {
   const [certData, setCertData] = useState<CourseAchievement | null>(null);
   const [certOpen, setCertOpen] = useState(false);
 
-  const strengths = useMemo(
-    () =>
-      (onboarding.gapAnswers || [])
-        .filter((a) => a.answer === 'yes')
-        .map((a) => a.skill),
-    [onboarding.gapAnswers],
-  );
+  // Verified = only skills from courses where student earned a certificate (assessment pass)
+  const verifiedCourseSkills = useMemo(() => getAllEarnedCourseSkills(), [achievements]);
+  // Strengths = CV / onboarding skills only
+  const strengthSkills = useMemo(() => cvStrengthSkills(onboarding), [onboarding]);
   const gaps = onboarding.missingSkills || [];
   const interests = (onboarding.interests || []).map(interestLabel);
-  const courseSkills = useMemo(() => getAllEarnedCourseSkills(), [achievements]);
-  const allSkills = useMemo(() => {
-    const s = new Set<string>(
-      [...strengths, ...courseSkills, ...interests]
-        .map((x) => String(x || '').trim())
-        .filter(Boolean),
-    );
-    return Array.from(s);
-  }, [strengths, courseSkills, interests]);
   const completions = useMemo(() => readCompletions(), [apps]);
   const activeApps = apps.filter((a) => a.status !== 'Completed');
 
   const buildPublicPayload = useCallback((): PublicProfilePayload => {
-    // Merge ALL skill sources so public portfolio shows everything the learner has
     const skillsMerged = Array.from(
       new Set(
-        [...strengths, ...courseSkills, ...interests]
+        [...strengthSkills, ...verifiedCourseSkills]
           .map((s) => String(s || '').trim())
           .filter(Boolean),
       ),
@@ -153,7 +148,7 @@ export const DigitalPortfolio = () => {
       solved: 0,
       pathSummary: skills.slice(0, 8).map((t) => ({ title: t, status: 'active' })),
     };
-  }, [strengths, interests, gaps, completions, activeApps, courseSkills, achievements]);
+  }, [strengthSkills, verifiedCourseSkills, gaps, completions, activeApps, achievements]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !auth?.id) return;
@@ -163,7 +158,6 @@ export const DigitalPortfolio = () => {
       .catch(() => setSyncNote(null));
   }, [auth?.id, buildPublicPayload]);
 
-  // Ensure public username is unique in Supabase (portfolio share link)
   useEffect(() => {
     if (!isSupabaseConfigured || !auth?.id) return;
     let cancelled = false;
@@ -220,12 +214,20 @@ export const DigitalPortfolio = () => {
     if (fullName) score += 15;
     if (email) score += 10;
     if (onboarding.completedAt) score += 20;
-    if (allSkills.length) score += 15;
+    if (strengthSkills.length || verifiedCourseSkills.length) score += 15;
     if (completions.length) score += 15;
     if (achievements.length) score += 10;
     if (DEMO_PROJECTS.length) score += 15;
     return Math.min(100, score);
-  }, [fullName, email, onboarding.completedAt, allSkills.length, completions.length, achievements.length]);
+  }, [
+    fullName,
+    email,
+    onboarding.completedAt,
+    strengthSkills.length,
+    verifiedCourseSkills.length,
+    completions.length,
+    achievements.length,
+  ]);
 
   const handleShare = async () => {
     try {
@@ -293,27 +295,39 @@ export const DigitalPortfolio = () => {
         <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
           <Target className="h-5 w-5 text-indigo-600" /> Verified Skills
         </h2>
-        {courseSkills.length > 0 && (
-          <div className="mb-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-violet-600">Skills gained through courses</p>
+        <div className="mb-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-violet-600">
+            Skills gained through courses (certificate required)
+          </p>
+          {verifiedCourseSkills.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              Pass the final assessment and earn a certificate — only then skills appear here.
+            </p>
+          ) : (
             <div className="flex flex-wrap gap-2">
-              {courseSkills.map((s) => (
-                <span key={`course-${s}`} className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-800 dark:bg-violet-500/15 dark:text-violet-200">
+              {verifiedCourseSkills.map((s) => (
+                <span
+                  key={`course-${s}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-800 dark:bg-violet-500/15 dark:text-violet-200"
+                >
                   <Award className="h-3.5 w-3.5" /> {s}
                 </span>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-600">Strengths</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-600">Strengths (from CV / onboarding)</p>
             <div className="flex flex-wrap gap-2">
-              {allSkills.length === 0 ? (
-                <span className="text-sm text-slate-400">None marked yet</span>
+              {strengthSkills.length === 0 ? (
+                <span className="text-sm text-slate-400">Add skills in onboarding or CV Builder</span>
               ) : (
-                allSkills.map((s) => (
-                  <span key={s} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+                strengthSkills.map((s) => (
+                  <span
+                    key={s}
+                    className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"
+                  >
                     {s}
                   </span>
                 ))
@@ -327,7 +341,10 @@ export const DigitalPortfolio = () => {
                 <span className="text-sm text-slate-400">No major gaps</span>
               ) : (
                 gaps.map((s) => (
-                  <span key={s} className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800 dark:bg-rose-500/15 dark:text-rose-300">
+                  <span
+                    key={s}
+                    className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800 dark:bg-rose-500/15 dark:text-rose-300"
+                  >
                     {s}
                   </span>
                 ))
@@ -335,6 +352,9 @@ export const DigitalPortfolio = () => {
             </div>
           </div>
         </div>
+        {interests.length > 0 && (
+          <p className="mt-3 text-xs text-slate-500">Tracks: {interests.join(', ')}</p>
+        )}
         <div className="mt-4">
           <Link to="/skill-profile" className="text-xs font-bold text-indigo-600 hover:underline">
             Full gap analysis →
@@ -349,14 +369,21 @@ export const DigitalPortfolio = () => {
           </h2>
           <ul className="space-y-3">
             {achievements.map((a) => (
-              <li key={a.courseId} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 px-4 py-3 dark:border-slate-800">
+              <li
+                key={a.courseId}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 px-4 py-3 dark:border-slate-800"
+              >
                 <div>
                   <div className="font-bold text-slate-900 dark:text-white">{a.courseTitle}</div>
                   <div className="text-xs text-slate-500">
                     {a.badge.toUpperCase()} · {a.percent}% · {a.level}
                   </div>
                 </div>
-                <button type="button" onClick={() => openCert(a)} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">
+                <button
+                  type="button"
+                  onClick={() => openCert(a)}
+                  className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white"
+                >
                   <Download className="h-3.5 w-3.5" /> Download
                 </button>
               </li>
@@ -399,10 +426,16 @@ export const DigitalPortfolio = () => {
       </section>
 
       <div className="flex flex-wrap gap-3">
-        <Link to="/profile" className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200">
+        <Link
+          to="/profile"
+          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200"
+        >
           <GraduationCap className="h-4 w-4" /> Profile dashboard
         </Link>
-        <Link to="/ai-course-designer" className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white">
+        <Link
+          to="/ai-course-designer"
+          className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white"
+        >
           <Sparkles className="h-4 w-4" /> AI Course Designer
         </Link>
       </div>
