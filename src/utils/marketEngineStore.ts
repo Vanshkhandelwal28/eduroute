@@ -1,6 +1,6 @@
 /**
- * Skill Market Trend Engine — client cache + local matching.
- * Full utilisation: Adzuna + data.gov.in + curated + gov indicators.
+ * Skill Market Trend Engine — full utilisation of Adzuna + data.gov + curated.
+ * Region-aware demand for India (All) vs individual states.
  */
 import { normalizeSkillList, normalizeSkillName, skillsMatch } from './skillNormalize';
 import { readMarketSnapshot, type MarketSnapshot } from './marketTrendStore';
@@ -86,6 +86,35 @@ const STUDENT_SKILL_EXPAND: Record<string, string[]> = {
   'data cleaning': ['Python', 'Pandas', 'SQL'],
 };
 
+/** Location aliases so Maharashtra matches Pune, Mumbai, etc. */
+const REGION_LOC_HINTS: Record<string, string[]> = {
+  Maharashtra: ['maharashtra', 'mumbai', 'pune', 'nagpur', 'nashik', 'thane'],
+  Karnataka: ['karnataka', 'bengaluru', 'bangalore', 'mysore', 'hubli'],
+  'Tamil Nadu': ['tamil nadu', 'chennai', 'coimbatore', 'madurai'],
+  Telangana: ['telangana', 'hyderabad', 'secunderabad'],
+  'Andhra Pradesh': ['andhra', 'vijayawada', 'visakhapatnam'],
+  'Delhi NCR': ['delhi', 'noida', 'gurgaon', 'gurugram', 'ncr', 'ghaziabad', 'faridabad'],
+  'Uttar Pradesh': ['uttar pradesh', 'lucknow', 'noida', 'kanpur'],
+  Gujarat: ['gujarat', 'ahmedabad', 'surat', 'vadodara'],
+  Rajasthan: ['rajasthan', 'jaipur', 'udaipur'],
+  'West Bengal': ['west bengal', 'kolkata', 'calcutta'],
+  Kerala: ['kerala', 'kochi', 'trivandrum', 'thiruvananthapuram'],
+  'Madhya Pradesh': ['madhya pradesh', 'indore', 'bhopal'],
+  Haryana: ['haryana', 'gurgaon', 'gurugram', 'faridabad'],
+  Punjab: ['punjab', 'chandigarh', 'ludhiana', 'amritsar'],
+  Bihar: ['bihar', 'patna'],
+  Odisha: ['odisha', 'bhubaneswar'],
+  Assam: ['assam', 'guwahati'],
+  Jharkhand: ['jharkhand', 'ranchi'],
+  Chhattisgarh: ['chhattisgarh', 'raipur'],
+  Uttarakhand: ['uttarakhand', 'dehradun'],
+  'Himachal Pradesh': ['himachal'],
+  Goa: ['goa', 'panaji', 'panjim'],
+  'Jammu & Kashmir': ['jammu', 'kashmir', 'srinagar'],
+  Puducherry: ['puducherry', 'pondicherry'],
+  Chandigarh: ['chandigarh'],
+};
+
 export function expandStudentSkills(studentSkills: string[]): string[] {
   const out: string[] = [];
   for (const raw of studentSkills || []) {
@@ -98,6 +127,21 @@ export function expandStudentSkills(studentSkills: string[]): string[] {
     if (extra) out.push(...extra);
   }
   return normalizeSkillList(out);
+}
+
+/** Filter jobs for selected region — India (All) = all jobs. */
+export function jobsForRegion(jobs: MarketJob[], region?: string): MarketJob[] {
+  const r = String(region || 'India (All)').trim();
+  if (!r || /^india\s*\(all\)$/i.test(r) || /^india$/i.test(r)) return jobs;
+  const hints = REGION_LOC_HINTS[r] || [r.toLowerCase()];
+  const filtered = jobs.filter((j) => {
+    const loc = String(j.location || '').toLowerCase();
+    if (!loc) return true; // keep unknown location for demand
+    return hints.some((h) => loc.includes(h));
+  });
+  // If region filter yields almost nothing, fall back to all (better than empty demand)
+  if (filtered.length < 3 && jobs.length > 10) return jobs;
+  return filtered.length ? filtered : jobs;
 }
 
 export const SEED_JOBS: MarketJob[] = [
@@ -204,6 +248,90 @@ export const SEED_JOBS: MarketJob[] = [
     postingDate: '2026-09-13',
     collectedAt: '2026-09-20T10:00:00.000Z',
     skills: ['React Native', 'JavaScript', 'REST APIs', 'Git'],
+  },
+];
+
+/** Local Skill India catalog (matches server) so gov data always appears even offline. */
+const LOCAL_SKILL_INDIA: Omit<MarketJob, 'collectedAt'>[] = [
+  {
+    externalId: 'skill-india-0',
+    source: 'data-gov-in',
+    title: 'IT-ITeS Software Developer',
+    company: 'Skill India / NCVT (public catalog)',
+    location: 'India',
+    experience: '',
+    industry: 'Skill India',
+    skills: ['Java', 'SQL', 'Git', 'REST APIs', 'JavaScript'],
+  },
+  {
+    externalId: 'skill-india-1',
+    source: 'data-gov-in',
+    title: 'IT-ITeS Web Developer',
+    company: 'Skill India / NCVT (public catalog)',
+    location: 'India',
+    experience: '',
+    industry: 'Skill India',
+    skills: ['JavaScript', 'React', 'CSS', 'Git', 'REST APIs'],
+  },
+  {
+    externalId: 'skill-india-2',
+    source: 'data-gov-in',
+    title: 'IT-ITeS Cloud Application Developer',
+    company: 'Skill India / NCVT (public catalog)',
+    location: 'India',
+    experience: '',
+    industry: 'Skill India',
+    skills: ['AWS', 'Docker', 'Python', 'Linux', 'Kubernetes'],
+  },
+  {
+    externalId: 'skill-india-3',
+    source: 'data-gov-in',
+    title: 'IT-ITeS Data Analyst',
+    company: 'Skill India / NCVT (public catalog)',
+    location: 'India',
+    experience: '',
+    industry: 'Skill India',
+    skills: ['Python', 'SQL', 'Data Analysis', 'Excel', 'Pandas'],
+  },
+  {
+    externalId: 'skill-india-4',
+    source: 'data-gov-in',
+    title: 'IT-ITeS Cyber Security Analyst',
+    company: 'Skill India / NCVT (public catalog)',
+    location: 'India',
+    experience: '',
+    industry: 'Skill India',
+    skills: ['Cybersecurity', 'Linux', 'Networking', 'Python'],
+  },
+  {
+    externalId: 'skill-india-5',
+    source: 'data-gov-in',
+    title: 'IT-ITeS Machine Learning Engineer',
+    company: 'Skill India / NCVT (public catalog)',
+    location: 'India',
+    experience: '',
+    industry: 'Skill India',
+    skills: ['Python', 'Machine Learning', 'SQL', 'Git', 'PyTorch'],
+  },
+  {
+    externalId: 'skill-india-6',
+    source: 'data-gov-in',
+    title: 'IT-ITeS DevOps Engineer',
+    company: 'Skill India / NCVT (public catalog)',
+    location: 'India',
+    experience: '',
+    industry: 'Skill India',
+    skills: ['DevOps', 'CI/CD', 'Docker', 'Linux', 'AWS'],
+  },
+  {
+    externalId: 'skill-india-7',
+    source: 'data-gov-in',
+    title: 'IT-ITeS Full Stack Developer',
+    company: 'Skill India / NCVT (public catalog)',
+    location: 'India',
+    experience: '',
+    industry: 'Skill India',
+    skills: ['React', 'Node.js', 'TypeScript', 'SQL', 'Git'],
   },
 ];
 
@@ -440,6 +568,22 @@ function roadmapLinkForSkill(skill: string): string {
   return `/roadmaps`;
 }
 
+function mergeLocal(existing: MarketJob[], incoming: MarketJob[]) {
+  const key = (j: MarketJob) => `${j.source}::${j.externalId}`;
+  const map = new Map(existing.map((j) => [key(j), j]));
+  let inserted = 0;
+  let dup = 0;
+  for (const j of incoming) {
+    const k = key(j);
+    if (map.has(k)) dup += 1;
+    else {
+      map.set(k, { ...j, skills: normalizeSkillList(j.skills), collectedAt: new Date().toISOString() });
+      inserted += 1;
+    }
+  }
+  return { jobs: Array.from(map.values()), inserted, dup };
+}
+
 export async function apiCollectJobs(region?: string): Promise<{
   ok: boolean;
   jobs?: MarketJob[];
@@ -449,60 +593,67 @@ export async function apiCollectJobs(region?: string): Promise<{
   error?: string;
 }> {
   const existing = readJobs();
-  const res = await fetch('/api/market-trends', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'collect_jobs',
-      region: region || 'India (All)',
-      existingJobs: existing,
-    }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.ok) {
-    const run: CollectionRun = {
-      id: `local-${Date.now()}`,
-      startedAt: new Date().toISOString(),
-      finishedAt: new Date().toISOString(),
-      status: 'ok',
-      source: 'curated-public',
-      jobsFetched: SEED_JOBS.length,
-      jobsInserted: 0,
-      jobsDuplicate: 0,
-      note: 'Server unavailable — curated seed only',
-    };
-    const key = (j: MarketJob) => `${j.source}::${j.externalId}`;
-    const map = new Map(existing.map((j) => [key(j), j]));
-    let inserted = 0;
-    let dup = 0;
-    for (const j of SEED_JOBS) {
-      const k = key(j);
-      if (map.has(k)) dup += 1;
-      else {
-        map.set(k, { ...j, skills: normalizeSkillList(j.skills), collectedAt: new Date().toISOString() });
-        inserted += 1;
+  const scope = region || 'India (All)';
+  try {
+    const res = await fetch('/api/market-trends', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'collect_jobs',
+        region: scope,
+        existingJobs: existing,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok && Array.isArray(data.jobs)) {
+      writeJobs(data.jobs);
+      if (Array.isArray(data.govIndicators)) writeGovIndicators(data.govIndicators);
+      if (data.note) writeLastCollectNote(String(data.note));
+      if (data.run) {
+        writeRuns([{ ...(data.run as CollectionRun), note: data.note }, ...readRuns()]);
       }
+      return {
+        ok: true,
+        jobs: data.jobs,
+        run: data.run,
+        govIndicators: data.govIndicators,
+        note: data.note,
+      };
     }
-    run.jobsInserted = inserted;
-    run.jobsDuplicate = dup;
-    const merged = Array.from(map.values());
-    writeJobs(merged);
-    writeRuns([run, ...readRuns()]);
-    writeLastCollectNote(run.note || '');
-    return { ok: true, jobs: merged, run, note: run.note };
+  } catch {
+    /* network / timeout */
   }
-  if (Array.isArray(data.jobs)) writeJobs(data.jobs);
-  if (Array.isArray(data.govIndicators)) writeGovIndicators(data.govIndicators);
-  if (data.note) writeLastCollectNote(String(data.note));
-  if (data.run) {
-    const run = { ...(data.run as CollectionRun), note: data.note };
-    writeRuns([run, ...readRuns()]);
-  }
-  return {
-    ok: true,
-    jobs: data.jobs,
-    run: data.run,
-    govIndicators: data.govIndicators,
-    note: data.note,
+
+  // Fallback: keep existing live jobs + merge Skill India + curated (never wipe Adzuna)
+  const loc = /^india/i.test(scope) ? 'India' : scope;
+  const skillIndia: MarketJob[] = LOCAL_SKILL_INDIA.map((j) => ({
+    ...j,
+    location: loc,
+    externalId: `${j.externalId}-${loc.replace(/\s+/g, '-').toLowerCase()}`,
+    collectedAt: new Date().toISOString(),
+    skills: normalizeSkillList(j.skills),
+  }));
+  const seed = SEED_JOBS.map((j) => ({
+    ...j,
+    skills: normalizeSkillList(j.skills),
+    collectedAt: new Date().toISOString(),
+  }));
+  const merged = mergeLocal(existing, [...seed, ...skillIndia]);
+  writeJobs(merged.jobs);
+  const note =
+    'Server timed out or failed — kept existing jobs + Skill India catalog + curated. Redeploy PR #5 for full Adzuna+gov collect.';
+  writeLastCollectNote(note);
+  const run: CollectionRun = {
+    id: `local-${Date.now()}`,
+    startedAt: new Date().toISOString(),
+    finishedAt: new Date().toISOString(),
+    status: 'partial',
+    source: 'curated-public+data-gov-in+(existing)',
+    jobsFetched: seed.length + skillIndia.length,
+    jobsInserted: merged.inserted,
+    jobsDuplicate: merged.dup,
+    note,
   };
+  writeRuns([run, ...readRuns()]);
+  return { ok: true, jobs: merged.jobs, run, note };
 }
