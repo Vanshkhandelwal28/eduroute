@@ -64,18 +64,15 @@ const STATE_DISTRICTS: Record<string, string[]> = {
 function districtsForRegion(region: string): string[] {
   const r = String(region || 'India (All)').trim();
   if (STATE_DISTRICTS[r]) return STATE_DISTRICTS[r];
-  // fallback: use region name + generic hubs
   return [r, 'Capital', 'Tech park', 'Industrial', 'IT zone', 'City center', 'Suburb', 'Remote'];
 }
 
-/** Match job location string to one of the state's districts. */
 function matchDistrict(location: string, districts: string[]): string | null {
   const loc = String(location || '').toLowerCase();
   if (!loc) return null;
   for (const d of districts) {
     if (loc.includes(d.toLowerCase())) return d;
   }
-  // common aliases
   if (loc.includes('bangalore') || loc.includes('bengaluru')) {
     const b = districts.find((x) => /bengaluru|bangalore/i.test(x));
     if (b) return b;
@@ -108,13 +105,10 @@ function aggregateDistrictHeat(jobs: MarketJob[], districts: string[]) {
   districts.forEach((d) => {
     counts[d] = 0;
   });
-  let unmatched = 0;
   jobs.forEach((j) => {
     const d = matchDistrict(j.location || '', districts);
     if (d) counts[d] = (counts[d] || 0) + 1;
-    else unmatched += 1;
   });
-  // If almost nothing matched, distribute unmatched into first district so UI is not all zeros
   const totalMatched = Object.values(counts).reduce((a, b) => a + b, 0);
   if (totalMatched === 0 && jobs.length > 0 && districts[0]) {
     counts[districts[0]] = jobs.length;
@@ -154,11 +148,9 @@ export function DemandIntelligence() {
     };
   }, [reloadLive]);
 
-  // Same region filter as student Skill Trend Analysis
   const regionJobs = useMemo(() => jobsForRegion(jobs, region), [jobs, region]);
   const districts = useMemo(() => districtsForRegion(region), [region]);
   const heat = useMemo(() => aggregateDistrictHeat(regionJobs, districts), [regionJobs, districts]);
-
   const demandRows = useMemo(() => computeSkillDemand(regionJobs).slice(0, 12), [regionJobs]);
   const maxPct = demandRows[0]?.demandPct || 1;
 
@@ -181,7 +173,6 @@ export function DemandIntelligence() {
         delta: Math.max(5, Math.round(r.openingsIndex / 10)),
       }));
     }
-    // derive from job titles in region
     const counts: Record<string, number> = {};
     regionJobs.forEach((j) => {
       let role = (j.title || 'Job').slice(0, 60);
@@ -206,7 +197,6 @@ export function DemandIntelligence() {
 
   const risingSkills = market?.risingSkills?.slice(0, 6) || [];
   const decliningSkills = market?.decliningSkills?.slice(0, 4) || [];
-
   const uniqueRoles = new Set(regionJobs.map((j) => j.title)).size;
   const uniqueSkills = new Set(regionJobs.flatMap((j) => j.skills || [])).size;
   const emergingCount = regionJobs.filter((j) =>
@@ -272,7 +262,7 @@ export function DemandIntelligence() {
         >
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              SIH26134 · Labour market intelligence
+              Labour market intelligence
             </p>
             <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">Demand Intelligence</h1>
             <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
@@ -307,14 +297,10 @@ export function DemandIntelligence() {
         </motion.div>
 
         {msg && (
-          <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-800 dark:text-emerald-200">
-            {msg}
-          </p>
+          <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-800 dark:text-emerald-200">{msg}</p>
         )}
         {err && (
-          <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-700 dark:text-rose-300" role="alert">
-            {err}
-          </p>
+          <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-700 dark:text-rose-300" role="alert">{err}</p>
         )}
 
         <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4">
@@ -332,15 +318,13 @@ export function DemandIntelligence() {
               }}
             >
               {MARKET_REGIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
+                <option key={r} value={r}>{r}</option>
               ))}
             </select>
           </label>
           <p className="pb-2 text-xs text-[var(--text-muted)]">
-            Heatmap shows top tech districts for <strong>{region}</strong> · demand from{' '}
-            {regionJobs.length} jobs (same filter as student trend analysis).
+            Heatmap shows top tech districts for <strong>{region}</strong> · demand from {regionJobs.length} jobs
+            (same filter as student trend analysis).
           </p>
         </div>
 
@@ -350,12 +334,7 @@ export function DemandIntelligence() {
             { label: 'Unique roles', value: uniqueRoles, icon: Target, tone: 'bg-violet-500/20 text-violet-300' },
             { label: 'Skills in demand', value: uniqueSkills, icon: Zap, tone: 'bg-amber-500/20 text-amber-300' },
             { label: 'AI/Cloud tagged', value: emergingCount, icon: Sparkles, tone: 'bg-emerald-500/20 text-emerald-300' },
-            {
-              label: 'Top skill share',
-              value: demandRows[0] ? `${demandRows[0].demandPct}%` : '—',
-              icon: TrendingUp,
-              tone: 'bg-sky-500/20 text-sky-300',
-            },
+            { label: 'Top skill share', value: demandRows[0] ? `${demandRows[0].demandPct}%` : '—', icon: TrendingUp, tone: 'bg-sky-500/20 text-sky-300' },
           ].map((k) => (
             <div key={k.label} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4">
               <div className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl ${k.tone}`}>
@@ -401,9 +380,7 @@ export function DemandIntelligence() {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
           <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 xl:col-span-3">
             <h2 className="mb-1 text-sm font-bold">Top skills in demand — {region}</h2>
-            <p className="mb-4 text-xs text-[var(--text-muted)]">
-              Demand % from live jobs (same calculation as student Skill Trend Analysis).
-            </p>
+            <p className="mb-4 text-xs text-[var(--text-muted)]">Demand % from live jobs (same as student Skill Trend Analysis).</p>
             {skills.length === 0 ? (
               <p className="text-sm text-[var(--text-muted)]">Collect jobs to see demand for this state.</p>
             ) : (
@@ -411,19 +388,11 @@ export function DemandIntelligence() {
                 {skills.map((row) => (
                   <li key={row.skill}>
                     <div className="mb-1 flex justify-between text-xs font-bold">
-                      <span>
-                        {row.skill}
-                        {row.emerging ? ' · EMERGING' : ''}
-                      </span>
-                      <span className="text-[var(--text-muted)]">
-                        {row.openings} jobs · {row.demand}%
-                      </span>
+                      <span>{row.skill}{row.emerging ? ' · EMERGING' : ''}</span>
+                      <span className="text-[var(--text-muted)]">{row.openings} jobs · {row.demand}%</span>
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500"
-                        style={{ width: `${Math.max(6, row.demand)}%` }}
-                      />
+                    <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+                      <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400" style={{ width: `${row.demand}%` }} />
                     </div>
                   </li>
                 ))}
@@ -432,88 +401,43 @@ export function DemandIntelligence() {
           </section>
 
           <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 xl:col-span-2">
-            <h2 className="mb-3 text-sm font-bold">Top roles — {region}</h2>
-            <ul className="space-y-2.5">
-              {roles.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">No roles yet.</p>
-              ) : (
-                roles.map((r) => (
-                  <li
-                    key={r.role}
-                    className="flex items-center justify-between rounded-xl border border-[var(--border-default)] px-3 py-2.5"
-                  >
-                    <div>
-                      <p className="text-xs font-bold">{r.role}</p>
-                      <p className="text-[10px] text-[var(--text-muted)]">Score {r.score}</p>
-                    </div>
-                    <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-emerald-600 dark:text-emerald-300">
-                      <ArrowUpRight className="h-3 w-3" />+{r.delta}%
-                    </span>
-                  </li>
-                ))
-              )}
-            </ul>
+            <h2 className="mb-1 text-sm font-bold">District heatmap — {region}</h2>
+            <p className="mb-4 text-xs text-[var(--text-muted)]">Openings matched by job location in top hubs.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {heat.map((h) => (
+                <div
+                  key={h.district}
+                  className="rounded-xl border border-[var(--border-default)] p-3"
+                  style={{ background: `rgba(99, 102, 241, ${0.05 + (h.intensity / 100) * 0.25})` }}
+                >
+                  <p className="text-xs font-bold">{h.district}</p>
+                  <p className="text-lg font-black">{h.openings}</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">{h.intensity}% intensity</p>
+                </div>
+              ))}
+            </div>
           </section>
         </div>
 
         <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-sky-400" />
-            <div>
-              <h2 className="text-sm font-bold">District heatmap — {region}</h2>
-              <p className="text-xs text-[var(--text-muted)]">
-                Top tech districts for this state. Counts = jobs whose location matches each hub.
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {heat.map((d) => (
-              <div
-                key={d.district}
-                className="rounded-2xl border border-[var(--border-default)] p-4"
-                style={{
-                  background: `linear-gradient(135deg, rgba(99,102,241,${0.08 + d.intensity / 200}) 0%, rgba(139,92,246,${0.05 + d.intensity / 250}) 100%)`,
-                }}
-              >
-                <p className="text-sm font-bold">{d.district}</p>
-                <p className="mt-1 text-2xl font-black">{d.openings}</p>
-                <p className="text-[10px] text-[var(--text-muted)]">intensity {d.intensity}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5">
-          <h2 className="mb-3 text-sm font-bold">Job sample — {region}</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-left text-xs">
-              <thead>
-                <tr className="border-b border-[var(--border-default)] text-[10px] uppercase text-[var(--text-muted)]">
-                  <th className="py-2 pr-2">Role</th>
-                  <th className="py-2 pr-2">Company</th>
-                  <th className="py-2 pr-2">Location</th>
-                  <th className="py-2">Skills</th>
-                </tr>
-              </thead>
-              <tbody>
-                {regionJobs.slice(0, 15).map((j) => (
-                  <tr key={`${j.source}-${j.externalId}`} className="border-b border-[var(--border-default)]/60">
-                    <td className="py-2.5 pr-2 font-bold">{j.title}</td>
-                    <td className="py-2.5 pr-2 text-[var(--text-secondary)]">{j.company}</td>
-                    <td className="py-2.5 pr-2">{j.location}</td>
-                    <td className="py-2.5 text-[var(--text-muted)]">
-                      {(j.skills || []).slice(0, 4).join(', ')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {regionJobs.length === 0 && (
-              <p className="py-6 text-center text-sm text-[var(--text-muted)]">
-                No jobs for this state — click Collect jobs.
-              </p>
-            )}
-          </div>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold">
+            <Briefcase className="h-4 w-4" /> Top roles — {region}
+          </h2>
+          {roles.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">Collect jobs to see role demand.</p>
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {roles.map((r) => (
+                <li key={r.role} className="flex items-center justify-between rounded-xl border border-[var(--border-default)] px-3 py-2 text-sm">
+                  <span className="font-semibold">{r.role}</span>
+                  <span className="inline-flex items-center gap-1 tabular-nums text-[var(--text-muted)]">
+                    {r.score}
+                    <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </div>

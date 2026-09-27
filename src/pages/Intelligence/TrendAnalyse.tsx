@@ -48,21 +48,11 @@ import {
   type MarketJob,
   type SkillDemandRow,
 } from '../../utils/marketEngineStore';
-import { normalizeSkillList } from '../../utils/skillNormalize';
-
-function strengthsFromProfile(o: OnboardingProfile) {
-  return (o.gapAnswers || []).filter((a) => a.answer === 'yes').map((a) => a.skill);
-}
-
-function gapsFromProfile(o: OnboardingProfile) {
-  const missing = [...(o.missingSkills || [])];
-  if (missing.length === 0 && o.gapAnswers?.length) {
-    o.gapAnswers.forEach((a) => {
-      if (a.answer === 'no' && a.skill && !missing.includes(a.skill)) missing.push(a.skill);
-    });
-  }
-  return missing;
-}
+import {
+  buildStudentSkillProfile,
+  sourceLabel,
+  type StudentSkillProfile,
+} from '../../utils/studentSkillProfile';
 
 export function TrendAnalyse() {
   const [profile, setProfile] = useState<OnboardingProfile>(() => readOnboarding());
@@ -73,6 +63,7 @@ export function TrendAnalyse() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const [tick, setTick] = useState(0);
   const skillKeyRef = useRef('');
   const regionKeyRef = useRef(region);
   const autoAiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,17 +73,17 @@ export function TrendAnalyse() {
     setMarket(readMarketSnapshot());
     setAnalysis(readStudentAnalysis());
     setJobs(readJobs());
+    setTick((t) => t + 1);
   }, []);
 
-  // Full page refresh whenever admin jobs, market, or skill-gap test (onboarding) change
   useEffect(() => {
-    const onUp = () => {
-      reloadAll();
-    };
+    const onUp = () => reloadAll();
     window.addEventListener('eduroute:market-trends-updated', onUp);
     window.addEventListener('eduroute:student-trend-updated', onUp);
     window.addEventListener('eduroute:mt-jobs-updated', onUp);
     window.addEventListener('eduroute:onboarding-updated', onUp);
+    window.addEventListener('eduroute:course-achievements-updated', onUp);
+    window.addEventListener('eduroute:cv-updated', onUp);
     window.addEventListener('storage', onUp);
     window.addEventListener('focus', onUp);
     return () => {
@@ -100,41 +91,34 @@ export function TrendAnalyse() {
       window.removeEventListener('eduroute:student-trend-updated', onUp);
       window.removeEventListener('eduroute:mt-jobs-updated', onUp);
       window.removeEventListener('eduroute:onboarding-updated', onUp);
+      window.removeEventListener('eduroute:course-achievements-updated', onUp);
+      window.removeEventListener('eduroute:cv-updated', onUp);
       window.removeEventListener('storage', onUp);
       window.removeEventListener('focus', onUp);
     };
   }, [reloadAll]);
 
-  const field =
-    profile.interests?.[0] != null
-      ? interestLabel(profile.interests[0] as InterestTrack)
-      : 'Software Engineering';
-  const strengths = useMemo(() => strengthsFromProfile(profile), [profile]);
-  const gaps = useMemo(() => gapsFromProfile(profile), [profile]);
-  const allSkills = useMemo(
-    () => normalizeSkillList([...new Set([...strengths, ...gaps])]),
-    [strengths, gaps],
+  const skillProfile: StudentSkillProfile = useMemo(
+    () => buildStudentSkillProfile(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [profile, tick],
   );
+  const field = skillProfile.field;
+  const strengths = skillProfile.ownedSkills;
+  const gaps = skillProfile.quizGaps;
+  const allSkills = skillProfile.allSkills;
 
-  // State-wise: filter admin job pool to selected region
   const regionJobs = useMemo(() => jobsForRegion(jobs, region), [jobs, region]);
-
-  const demandRows: SkillDemandRow[] = useMemo(
-    () => computeSkillDemand(regionJobs),
-    [regionJobs],
-  );
+  const demandRows: SkillDemandRow[] = useMemo(() => computeSkillDemand(regionJobs), [regionJobs]);
   const maxDemand = demandRows[0]?.demandPct || 1;
-
   const localMatch = useMemo(
     () => matchStudentToMarket(allSkills, regionJobs, market),
     [allSkills, regionJobs, market],
   );
-
   const risingDisplay = useMemo(() => {
     if (regionJobs.length > 0) return risingFromDemand(regionJobs, 6);
     return market?.risingSkills || [];
   }, [regionJobs, market]);
-
   const sourceBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
     regionJobs.forEach((j) => {
@@ -150,7 +134,7 @@ export function TrendAnalyse() {
   };
 
   const runAnalysis = useCallback(
-    async (opts?: { silent?: boolean; regionOverride?: string }) => {
+    async (opts?: { silent?: boolean; regionOverride?: string; liveCollect?: boolean }) => {
       if (!opts?.silent) {
         setBusy(true);
         setErr('');
@@ -158,21 +142,21 @@ export function TrendAnalyse() {
       }
       try {
         const o = readOnboarding();
-        const s = strengthsFromProfile(o);
-        const g = gapsFromProfile(o);
-        const skills = normalizeSkillList([...new Set([...s, ...g])]);
-        const f =
-          o.interests?.[0] != null
-            ? interestLabel(o.interests[0] as InterestTrack)
-            : 'Software Engineering';
+        const sp = buildStudentSkillProfile();
         const scope = opts?.regionOverride || region;
+        const hasAdzuna = readJobs().some((j) => j.source === 'adzuna');
+        const live =
+          opts?.liveCollect === true ||
+          (!opts?.silent && opts?.liveCollect !== false) ||
+          (opts?.silent && !hasAdzuna);
         const res = await apiAnalyzeStudent({
-          skills,
-          strengths: s,
-          gaps: g,
-          field: f,
-          interests: (o.interests || []).map((id) => interestLabel(id)),
+          skills: sp.allSkills,
+          strengths: sp.ownedSkills,
+          gaps: sp.quizGaps.length ? sp.quizGaps : sp.allSkills.length === 0 ? [] : [],
+          field: sp.field,
+          interests: (o.interests || []).map((id) => interestLabel(id as InterestTrack)),
           region: scope,
+          liveCollect: live,
         });
         if (!res.ok) {
           if (!opts?.silent) setErr(res.error || 'Analysis failed');
@@ -182,8 +166,29 @@ export function TrendAnalyse() {
         setMarket(readMarketSnapshot());
         setProfile(readOnboarding());
         setJobs(readJobs());
+        setTick((t) => t + 1);
         if (!opts?.silent) {
-          setMsg(`Trend analysis updated for ${scope} from admin demand + your skill-gap answers.`);
+          const who =
+            res.provider === 'groq'
+              ? 'Groq AI'
+              : res.provider === 'gemini'
+                ? 'Gemini AI'
+                : res.provider === 'local-fallback'
+                  ? 'local baseline (set GROQ_API_KEY on Netlify for live AI)'
+                  : res.provider || 'AI';
+          const src =
+            res.sourcesUsed && Object.keys(res.sourcesUsed).length
+              ? Object.entries(res.sourcesUsed)
+                  .map(([k, v]) => `${k}:${v}`)
+                  .join(' · ')
+              : '';
+          setMsg(
+            `Live analysis for ${scope} via ${who}` +
+              (typeof res.regionJobCount === 'number' ? ` · ${res.regionJobCount} jobs in region` : '') +
+              (src ? ` · ${src}` : '') +
+              (res.collectNote ? ` · ${String(res.collectNote).slice(0, 120)}` : '') +
+              '.',
+          );
         }
       } catch (e) {
         if (!opts?.silent) setErr(e instanceof Error ? e.message : 'Network error');
@@ -194,15 +199,21 @@ export function TrendAnalyse() {
     [region],
   );
 
-  // Every skill-gap test change → reload page data + auto AI refresh
   useEffect(() => {
-    const key = allSkills.slice().sort().join('|') + '::' + gaps.join(',') + '::' + region;
+    const key =
+      allSkills.slice().sort().join('|') +
+      '::' +
+      gaps.join(',') +
+      '::' +
+      region +
+      '::' +
+      String(skillProfile.certCount) +
+      '::' +
+      String(skillProfile.cvSkillCount);
     if (key === skillKeyRef.current) return;
     const prev = skillKeyRef.current;
     skillKeyRef.current = key;
     if (!prev) return;
-    // Skills or region changed — full local recompute is already live via memos;
-    // also re-run AI analysis so summary/gaps stay in sync
     if (autoAiTimer.current) clearTimeout(autoAiTimer.current);
     autoAiTimer.current = setTimeout(() => {
       reloadAll();
@@ -211,14 +222,18 @@ export function TrendAnalyse() {
     return () => {
       if (autoAiTimer.current) clearTimeout(autoAiTimer.current);
     };
-  }, [allSkills, gaps, region, runAnalysis, reloadAll]);
+  }, [allSkills, gaps, region, skillProfile.certCount, skillProfile.cvSkillCount, runAnalysis, reloadAll]);
 
-  // Region change alone also triggers analysis
   useEffect(() => {
     if (regionKeyRef.current === region) return;
     regionKeyRef.current = region;
     void runAnalysis({ silent: true, regionOverride: region });
   }, [region, runAnalysis]);
+
+  useEffect(() => {
+    void runAnalysis({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const chartData = useMemo(() => {
     const bars = buildComparisonBars(regionJobs, allSkills, 8);
@@ -235,6 +250,23 @@ export function TrendAnalyse() {
 
   const displayScore = localMatch.matchScore;
 
+  const ownedBySource = useMemo(() => {
+    const groups: Record<string, string[]> = {
+      onboarding_strength: [],
+      cv: [],
+      certificate: [],
+      custom: [],
+    };
+    skillProfile.bySource.forEach((s) => {
+      s.sources.forEach((src) => {
+        if (src === 'onboarding_gap') return;
+        if (!groups[src]) groups[src] = [];
+        if (!groups[src].includes(s.skill)) groups[src].push(s.skill);
+      });
+    });
+    return groups;
+  }, [skillProfile.bySource]);
+
   return (
     <div className="er-page mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -246,22 +278,22 @@ export function TrendAnalyse() {
             Skill Trend Analysis
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Match score and gaps use admin job pool for the <strong>selected state / India</strong>.
-            Page refreshes automatically after every skill-gap test answer.
+            Match score uses <strong>quiz + CV + course certificates</strong> against the{' '}
+            <strong>selected state</strong> job pool (Adzuna + data.gov.in + curated). Click{' '}
+            <strong>Refresh analysis</strong> to collect live Adzuna jobs and run Groq/Gemini AI.
           </p>
         </div>
         <button
           type="button"
           disabled={busy}
-          onClick={() => void runAnalysis()}
+          onClick={() => void runAnalysis({ liveCollect: true })}
           className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {busy ? 'Analyzing…' : !analysis ? 'Generate analysis' : 'Refresh analysis'}
+          {busy ? 'Collecting + AI…' : !analysis ? 'Generate analysis' : 'Refresh analysis'}
         </button>
       </div>
 
-      {/* State / region selector for gap analysis */}
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
         <label className="flex min-w-[220px] flex-1 flex-col gap-1.5">
           <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">
@@ -281,14 +313,14 @@ export function TrendAnalyse() {
           </select>
         </label>
         <p className="pb-2 text-xs text-[var(--text-muted)]">
-          Demand, match score, rising skills & gaps are computed only from jobs in this region
-          ({regionJobs.length} of {jobs.length} jobs).
+          Demand, match score, rising skills & gaps from jobs in this region ({regionJobs.length} of{' '}
+          {jobs.length} jobs).
         </p>
       </div>
 
       {msg && (
         <p className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-800 dark:text-emerald-200">
-          <CheckCircle2 className="h-4 w-4" /> {msg}
+          <CheckCircle2 className="h-4 w-4 shrink-0" /> {msg}
         </p>
       )}
       {err && (
@@ -300,18 +332,89 @@ export function TrendAnalyse() {
         </p>
       )}
 
-      {!profile.completedAt && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            Complete the{' '}
-            <Link to="/onboarding" className="font-bold underline">
-              skill gap quiz
-            </Link>
-            . Each answer refreshes match score, gaps, and demand for <strong>{region}</strong>.
-          </div>
+      <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
+          <Sparkles className="h-4 w-4 text-cyan-500" /> Your skill template
+        </h2>
+        <p className="mb-4 text-xs text-[var(--text-muted)]">
+          From quiz, CV, certificates, custom role — used for match + AI on every refresh.
+        </p>
+        <div className="mb-3 flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-full border border-[var(--border-default)] px-2.5 py-1 font-semibold">
+            Owned: {skillProfile.ownedSkills.length}
+          </span>
+          <span className="rounded-full border border-[var(--border-default)] px-2.5 py-1 font-semibold">
+            Quiz gaps: {skillProfile.quizGaps.length}
+          </span>
+          <span className="rounded-full border border-[var(--border-default)] px-2.5 py-1 font-semibold">
+            CV: {skillProfile.cvSkillCount}
+          </span>
+          <span className="rounded-full border border-[var(--border-default)] px-2.5 py-1 font-semibold">
+            Certs: {skillProfile.certCount}
+          </span>
         </div>
-      )}
+        {skillProfile.ownedSkills.length === 0 && skillProfile.quizGaps.length === 0 ? (
+          <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              No skills yet. Complete the{' '}
+              <Link to="/onboarding" className="font-bold underline">
+                skill gap quiz
+              </Link>
+              ,{' '}
+              <Link to="/cv-builder" className="font-bold underline">
+                CV Builder
+              </Link>
+              , or{' '}
+              <Link to="/certifications" className="font-bold underline">
+                course certificate
+              </Link>
+              .
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {(['onboarding_strength', 'cv', 'certificate', 'custom'] as const).map((src) => {
+              const list = ownedBySource[src] || [];
+              if (!list.length) return null;
+              return (
+                <div key={src}>
+                  <p className="mb-1 text-[10px] font-bold uppercase text-[var(--text-muted)]">
+                    {sourceLabel(src)}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {list.slice(0, 16).map((s) => (
+                      <span
+                        key={s}
+                        className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {skillProfile.quizGaps.length > 0 && (
+              <div>
+                <p className="mb-1 text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">
+                  Quiz gaps
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {skillProfile.quizGaps.map((s) => (
+                    <span
+                      key={s}
+                      className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-900 dark:text-amber-200"
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="er-card p-4">
@@ -348,18 +451,14 @@ export function TrendAnalyse() {
           <Database className="h-4 w-4" /> Skill demand — {region}
         </h2>
         <p className="mb-4 text-xs text-[var(--text-muted)]">
-          Demand % from {regionJobs.length} jobs in this region (Adzuna + data.gov.in + curated).
+          Demand % from {regionJobs.length} jobs (Adzuna + data.gov.in + curated).
         </p>
         {demandRows.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">
-            Admin has not collected jobs for this region yet.
-          </p>
+          <p className="text-sm text-[var(--text-muted)]">Click Refresh analysis to collect live jobs.</p>
         ) : (
           <ul className="space-y-3">
             {demandRows.slice(0, 10).map((row) => {
-              const have = localMatch.matched.some(
-                (s) => s.toLowerCase() === row.skill.toLowerCase(),
-              );
+              const have = localMatch.matched.some((s) => s.toLowerCase() === row.skill.toLowerCase());
               return (
                 <li key={row.skill}>
                   <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -376,8 +475,7 @@ export function TrendAnalyse() {
                       )}
                     </span>
                     <span className="tabular-nums text-[var(--text-muted)]">
-                      {row.jobCount} jobs ·{' '}
-                      <strong className="text-[var(--text-primary)]">{row.demandPct}%</strong>
+                      {row.jobCount} jobs · <strong className="text-[var(--text-primary)]">{row.demandPct}%</strong>
                     </span>
                   </div>
                   <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
@@ -414,9 +512,7 @@ export function TrendAnalyse() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-[var(--text-muted)]">
-              No strong matches yet — complete the skill gap quiz.
-            </p>
+            <p className="text-sm text-[var(--text-muted)]">No matches yet — add skills then Refresh.</p>
           )}
         </div>
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
@@ -437,9 +533,6 @@ export function TrendAnalyse() {
           ) : (
             <p className="text-sm text-[var(--text-muted)]">No major gaps against {region} demand.</p>
           )}
-          <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-            Recalculates on every skill-gap test answer and region change.
-          </p>
         </div>
       </div>
 
@@ -466,117 +559,76 @@ export function TrendAnalyse() {
             </li>
           ))}
         </ul>
-        {localMatch.priority[0]?.reason && (
-          <p className="mt-2 text-[11px] text-[var(--text-muted)]">{localMatch.priority[0].reason}</p>
-        )}
       </div>
 
       {analysis?.summary && (
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase text-violet-600 dark:text-violet-400">
-            <Sparkles className="h-3.5 w-3.5" /> AI summary ({region})
+          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase text-[var(--text-muted)]">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI analysis{' '}
+            {analysis.provider && (
+              <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-300">
+                {analysis.provider}
+              </span>
+            )}
           </div>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{analysis.summary}</p>
+          {analysis.recommendations && analysis.recommendations.length > 0 && (
+            <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-[var(--text-secondary)]">
+              {analysis.recommendations.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
       {chartData.length > 0 && (
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
-            <BarChart3 className="h-4 w-4" /> Market demand vs your skill level — {region}
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
+            <BarChart3 className="h-4 w-4" /> Market vs you
           </h2>
-          <div className="h-72 w-full">
+          <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+              <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="skill" tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <Tooltip
-                  formatter={(value: number, name: string) => [
-                    value,
-                    name === 'market' ? 'Market demand' : 'Your level',
-                  ]}
-                  labelFormatter={(_, payload) => payload?.[0]?.payload?.full || ''}
-                />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
                 <Legend />
                 <Bar dataKey="market" name="Market" fill="#6366f1" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="student" name="You" fill="#06b6d4" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-            Updates when you change region or complete skill-gap answers.
-          </p>
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {risingDisplay.length > 0 && (
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
-            <TrendingUp className="h-4 w-4" /> In-demand / rising ({region})
+            <TrendingUp className="h-4 w-4" /> Rising skills — {region}
           </h2>
-          {risingDisplay.length ? (
-            <ul className="mt-1 space-y-2">
-              {risingDisplay.slice(0, 6).map((s) => (
-                <li key={s.skill} className="flex justify-between gap-2 text-sm">
-                  <span className="font-semibold">{s.skill}</span>
-                  <span className="shrink-0 tabular-nums text-[var(--text-muted)]">{s.demandScore}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-[var(--text-muted)]">No rising data yet for this region.</p>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {risingDisplay.map((s) => (
+              <span
+                key={s.skill}
+                className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-bold text-cyan-800 dark:text-cyan-200"
+              >
+                {s.skill}
+                {s.demandScore != null ? ` · ${s.demandScore}` : ''}
+              </span>
+            ))}
+          </div>
         </div>
-        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
-          <h2 className="mb-3 text-sm font-black uppercase text-[var(--text-muted)]">
-            Priority gaps detail
-          </h2>
-          {localMatch.priority.length > 0 ? (
-            <ul className="space-y-3">
-              {localMatch.priority.map((g) => (
-                <li key={g.skill} className="text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-[var(--text-primary)]">{g.skill}</span>
-                    <span className="tabular-nums text-[var(--text-muted)]">{g.demandPct}%</span>
-                  </div>
-                  <p className="mt-0.5 text-[var(--text-secondary)]">{g.reason}</p>
-                </li>
-              ))}
-            </ul>
-          ) : analysis?.skillGaps && analysis.skillGaps.length > 0 ? (
-            <ul className="space-y-3">
-              {analysis.skillGaps.map((g) => (
-                <li key={g.skill} className="text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-[var(--text-primary)]">{g.skill}</span>
-                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
-                      {g.priority}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-[var(--text-secondary)]">{g.why}</p>
-                  <p className="mt-0.5 text-xs font-medium text-cyan-700 dark:text-cyan-300">{g.action}</p>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-[var(--text-muted)]">No priority gaps against current demand.</p>
-          )}
-        </div>
-      </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <Link to="/onboarding" className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-600 dark:text-amber-400">
           Retake skill gap quiz <ArrowRight className="h-4 w-4" />
         </Link>
-        <Link to="/skill-profile" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
-          Open skill profile <ArrowRight className="h-4 w-4" />
-        </Link>
-        <Link
-          to="/ai-course-designer"
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-fuchsia-600 dark:text-fuchsia-400"
-        >
-          Design mixed course <ArrowRight className="h-4 w-4" />
+        <Link to="/cv-builder" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
+          CV Builder <ArrowRight className="h-4 w-4" />
         </Link>
         <Link to="/roadmaps" className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
           Learning roadmaps <ArrowRight className="h-4 w-4" />

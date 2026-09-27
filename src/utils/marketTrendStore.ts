@@ -241,7 +241,7 @@ export async function apiRefreshMarket(
   return { ok: true, market: data.market, provider: data.provider };
 }
 
-/** Student analysis — includes live job demand context. */
+/** Student analysis — liveCollect triggers Adzuna + data.gov collect then Groq/Gemini. */
 export async function apiAnalyzeStudent(payload: {
   skills: string[];
   strengths: string[];
@@ -249,7 +249,17 @@ export async function apiAnalyzeStudent(payload: {
   field: string;
   interests: string[];
   region?: string;
-}): Promise<{ ok: boolean; analysis?: StudentAnalysis; error?: string }> {
+  /** When true, server collects Adzuna + data.gov + curated before AI (Refresh button). */
+  liveCollect?: boolean;
+}): Promise<{
+  ok: boolean;
+  analysis?: StudentAnalysis;
+  error?: string;
+  provider?: string;
+  collectNote?: string;
+  regionJobCount?: number;
+  sourcesUsed?: Record<string, number>;
+}> {
   const existingJobs = readStoredJobs();
   const res = await fetch('/api/market-trends', {
     method: 'POST',
@@ -259,6 +269,7 @@ export async function apiAnalyzeStudent(payload: {
       ...payload,
       region: payload.region || readPreferredRegion(),
       existingJobs,
+      liveCollect: Boolean(payload.liveCollect),
     }),
   });
   const data = await res.json().catch(() => ({}));
@@ -267,7 +278,23 @@ export async function apiAnalyzeStudent(payload: {
   }
   if (data.analysis) writeStudentAnalysis(data.analysis);
   if (data.market) writeMarketSnapshot(data.market);
-  return { ok: true, analysis: data.analysis };
+  // Persist freshly collected jobs so demand bars stay live after Refresh
+  if (Array.isArray(data.jobs) && data.jobs.length) {
+    try {
+      localStorage.setItem('eduroute:mt-jobs-v1', JSON.stringify(data.jobs));
+      window.dispatchEvent(new Event('eduroute:mt-jobs-updated'));
+    } catch {
+      /* */
+    }
+  }
+  return {
+    ok: true,
+    analysis: data.analysis,
+    provider: data.provider,
+    collectNote: data.collectNote,
+    regionJobCount: data.regionJobCount,
+    sourcesUsed: data.sourcesUsed,
+  };
 }
 
 export function monthDueForRefresh(lastUpdated?: string | null): boolean {

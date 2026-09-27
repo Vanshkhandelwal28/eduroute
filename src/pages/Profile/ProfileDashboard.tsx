@@ -52,7 +52,6 @@ export const ProfileDashboard = () => {
   const [achievements, setAchievements] = useState<CourseAchievement[]>(() => listCourseAchievements());
   const courseSkills = useMemo(() => getAllEarnedCourseSkills(), [achievements]);
 
-  // Keep public portfolio skills in sync from profile too
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     const skills = Array.from(
@@ -274,6 +273,8 @@ export const ProfileDashboard = () => {
           </Link>
         </section>
 
+        <LivingLearningPath />
+
         <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
           <div className="mb-4 flex items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
@@ -390,15 +391,17 @@ export const ProfileDashboard = () => {
               badges: String((profileData.badges || []).length),
             };
             return (
-              <article key={item.key} className="group rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)] transition hover:-translate-y-1 hover:border-[var(--accent)]">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="rounded-2xl bg-[var(--accent-soft)] p-2.5 text-[var(--accent)]">
+              <article key={item.key} className="group rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)] transition hover:border-[var(--accent)]">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
                     <Icon className="h-5 w-5" />
                   </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{item.label}</p>
+                    <p className="text-xl font-black text-[var(--text-primary)]">{valueMap[item.key]}</p>
+                  </div>
                 </div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{item.label}</p>
-                <p className="mt-2 text-3xl font-black text-[var(--text-primary)]">{valueMap[item.key]}</p>
-                <p className="mt-1 text-xs text-[var(--text-muted)]">{item.description}</p>
+                <p className="text-xs text-[var(--text-muted)]">{item.description}</p>
               </article>
             );
           })}
@@ -407,10 +410,10 @@ export const ProfileDashboard = () => {
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <article className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
             <h2 className="mb-4 text-lg font-bold text-[var(--text-primary)]">Solved by difficulty</h2>
-            <div className="h-64">
+            <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
+                  <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={3}>
                     {chartData.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
@@ -418,6 +421,14 @@ export const ProfileDashboard = () => {
                   <RechartsTooltip />
                 </PieChart>
               </ResponsiveContainer>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">
+              {chartData.map((d) => (
+                <span key={d.name} className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
+                  {d.name}: {d.value}
+                </span>
+              ))}
             </div>
           </article>
           <article className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
@@ -428,8 +439,6 @@ export const ProfileDashboard = () => {
             <p className="mt-1 text-sm text-[var(--text-muted)]">Best: {profileData.streak?.max ?? 0} days</p>
           </article>
         </section>
-
-        <LivingLearningPath />
 
         <p className="text-center text-xs text-[var(--text-muted)]">
           Completions: {completions.length} internships tracked · Open{' '}
@@ -455,7 +464,6 @@ export const ProfileDashboard = () => {
               percent: certData.percent,
               badge: certData.badge,
               completedAt: certData.completedAt,
-              certId: certData.certId,
             }}
           />
         )}

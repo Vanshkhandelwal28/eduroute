@@ -1,4 +1,4 @@
-/** SIH26134 — District-level training plan generator (reuses Demand Intel + Curriculum Gaps) */
+/** District-level training plan generator (reuses Demand Intel + Curriculum Gaps) */
 
 import {
   COURSES,
