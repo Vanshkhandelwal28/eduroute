@@ -87,6 +87,8 @@ export function AiCourseDesigner() {
   const [certOpen, setCertOpen] = useState(false);
   const [assessOpen, setAssessOpen] = useState(false);
   const [assessTick, setAssessTick] = useState(0);
+  const autoStartedRef = useRef(false);
+  const handleGenerateRef = useRef<() => void>(() => {});
 
   const refresh = useCallback(() => setCourses(readAiCourses()), []);
 
@@ -114,6 +116,65 @@ export function AiCourseDesigner() {
       window.removeEventListener('eduroute:course-achievements-updated', onAssess);
     };
   }, []);
+
+  /**
+   * Continue learning deep-link:
+   * /ai-course-designer?interest=…&title=…&skills=a,b&days=N&auto=1&nodeId=…
+   * Pre-fill interests + duration from the path node, then auto-design once.
+   */
+  useEffect(() => {
+    const qInterest = searchParams.get('interest')?.trim() || '';
+    const qTitle = searchParams.get('title')?.trim() || '';
+    const qSkills = (searchParams.get('skills') || '')
+      .split(/[,|]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const qDays = Number(searchParams.get('days') || 0);
+    const qHours = Number(searchParams.get('hours') || 0);
+    const qAuto = searchParams.get('auto') === '1';
+    const qRole = searchParams.get('role')?.trim() || '';
+
+    const interestSet: string[] = [];
+    const pushInterest = (raw: string) => {
+      const v = raw.trim();
+      if (!v) return;
+      const preset = INTEREST_PRESETS.find(
+        (p) => p.toLowerCase() === v.toLowerCase() || v.toLowerCase().includes(p.toLowerCase()),
+      );
+      const label = preset || v;
+      if (!interestSet.some((x) => x.toLowerCase() === label.toLowerCase())) {
+        interestSet.push(label);
+      }
+    };
+    qSkills.forEach(pushInterest);
+    if (qInterest) pushInterest(qInterest);
+
+    if (interestSet.length) setSelected(interestSet.slice(0, 8));
+    if (qTitle) setCustomInterest(qTitle);
+    if (qRole) setField(qRole);
+
+    let days = qDays > 0 ? qDays : qHours > 0 ? Math.round(qHours / 2.5) : 0;
+    if (days > 0) {
+      days = Math.min(90, Math.max(3, days));
+      if ((DURATION_PRESETS as number[]).includes(days)) {
+        setDuration(days);
+        setUseCustomDays(false);
+      } else {
+        setUseCustomDays(true);
+        setCustomDays(String(days));
+        setDuration(days);
+      }
+    }
+
+    if (!qAuto || autoStartedRef.current) return;
+    if (!qTitle && !qInterest && !interestSet.length) return;
+    autoStartedRef.current = true;
+    const timer = window.setTimeout(() => {
+      handleGenerateRef.current();
+    }, 80);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const active = useMemo(
     () => courses.find((c) => c.id === activeId) || courses[0] || null,
@@ -156,7 +217,18 @@ export function AiCourseDesigner() {
     setError('');
     const qInterest = searchParams.get('interest')?.trim() || '';
     const qTitle = searchParams.get('title')?.trim() || '';
-    const interests = selected.length > 0 ? selected : qInterest ? [qInterest] : [];
+    const qSkills = (searchParams.get('skills') || '')
+      .split(/[,|]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const interests =
+      selected.length > 0
+        ? selected
+        : qSkills.length
+          ? qSkills
+          : qInterest
+            ? [qInterest]
+            : [];
     const custom = customInterest.trim() || qTitle || undefined;
     if (!interests.length && !custom) {
       setError('Select at least one area of interest (or enter a custom one).');
@@ -171,6 +243,7 @@ export function AiCourseDesigner() {
         .filter(Boolean);
       const knownSkills = [
         ...urlSkills,
+        ...interests,
         ...(profile.customSkills || []),
         ...(profile.cvSkills || []),
       ].filter(Boolean);
@@ -180,7 +253,7 @@ export function AiCourseDesigner() {
         field.trim() ||
         'Engineer';
       const days = useCustomDays && customDays ? Number(customDays) || duration : duration;
-      const pathNodeId = searchParams.get('pathNode') || '';
+      const pathNodeId = searchParams.get('pathNode') || searchParams.get('nodeId') || '';
       const course = await generateAiCourse(
         {
           durationDays: days,
@@ -210,6 +283,9 @@ export function AiCourseDesigner() {
     } finally {
       setBusy(false);
     }
+  };
+  handleGenerateRef.current = () => {
+    void handleGenerate();
   };
 
   const handleDelete = (id: string) => {
@@ -465,19 +541,24 @@ export function AiCourseDesigner() {
                         updateCourseTopics(active.id, next);
                         refresh();
                       }}
-                      onDelete={() => {
-                        const next = active.topics.filter((t) => t.id !== topic.id);
-                        updateCourseTopics(active.id, next);
-                        refresh();
-                      }}
                       onVideoProgress={(ratio) => {
                         recordWatchProgress(active.id, topic.id, ratio);
                         setProgressTick((n) => n + 1);
                       }}
+                      progressTick={progressTick}
                     />
                   ))}
                 </ul>
               </motion.div>
+            )}
+            {!active && (
+              <div className="flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border-default)] p-8 text-center">
+                <BookOpen className="mb-3 h-10 w-10 text-[var(--text-muted)]" />
+                <p className="font-bold">No course yet</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  Pick interests and duration, then Design — or open from Continue learning.
+                </p>
+              </div>
             )}
           </section>
         </div>
@@ -491,7 +572,6 @@ export function AiCourseDesigner() {
           userId={user?.email || user?.id || 'demo-student'}
           onPassed={() => {
             setAssessTick((n) => n + 1);
-            setAssessOpen(false);
             setCertOpen(true);
           }}
         />
@@ -527,8 +607,8 @@ function TopicCard({
   onPlay,
   onToggleComplete,
   onHours,
-  onDelete,
   onVideoProgress,
+  progressTick,
 }: {
   topic: CourseTopic;
   index: number;
@@ -538,87 +618,104 @@ function TopicCard({
   onPlay: () => void;
   onToggleComplete: () => void;
   onHours: (h: number) => void;
-  onDelete: () => void;
   onVideoProgress: (ratio: number) => void;
+  progressTick: number;
 }) {
   const prog = getTopicProgress(courseId, topic.id);
+  const done = prog.completed;
+  const watchPct = Math.round((prog.watchedRatio || 0) * 100);
+
   return (
-    <motion.li
-      layout
-      className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-base)]/60 p-3"
+    <li
+      className={`rounded-2xl border p-4 ${
+        done
+          ? 'border-emerald-500/30 bg-emerald-500/5'
+          : 'border-[var(--border-default)] bg-[var(--bg-base)]/50'
+      }`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-600/15 text-[10px] font-black text-violet-600">
-              {index + 1}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[10px] font-black uppercase text-[var(--text-muted)]">Module {index + 1}</span>
+        <div className="flex items-center gap-2">
+          {done ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Done
             </span>
-            <p className="truncate text-sm font-bold">{topic.title}</p>
-            {prog.completed && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />}
-          </div>
-          <p className="mt-1 line-clamp-2 text-xs text-[var(--text-muted)]">{topic.description}</p>
-          <p className="mt-1 text-[10px] text-[var(--text-muted)]">
-            {topic.dayRange} · {topic.estimatedHours}h
-            {prog.watchedRatio > 0 && ` · watched ${Math.round(prog.watchedRatio * 100)}%`}
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
-          {editing && (
-            <>
-              <input
-                type="number"
-                min={0.5}
-                step={0.5}
-                className="w-16 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 py-1 text-xs"
-                value={topic.estimatedHours}
-                onChange={(e) => onHours(Number(e.target.value) || 1)}
-              />
-              <button type="button" onClick={onDelete} className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-500/10">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </>
+          ) : (
+            <span className="text-[11px] font-bold text-[var(--text-muted)]">Watched {watchPct}%</span>
           )}
           <button
             type="button"
             onClick={onToggleComplete}
             className="rounded-lg border border-[var(--border-default)] px-2 py-1 text-[10px] font-bold"
           >
-            {prog.completed ? 'Undo' : 'Mark done'}
+            {done ? 'Mark incomplete' : 'Mark complete'}
           </button>
-          {topic.youtubeUrl && (
-            <button
-              type="button"
-              onClick={onPlay}
-              className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1.5 text-[10px] font-bold text-white"
-            >
-              <Youtube className="h-3.5 w-3.5" />
-              {playing ? 'Hide' : 'Watch'}
-            </button>
-          )}
-          {topic.docUrl && (
-            <a
-              href={topic.docUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-default)] px-2.5 py-1.5 text-[10px] font-bold"
-            >
-              <FileText className="h-3.5 w-3.5" />
-              Docs
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
         </div>
       </div>
+      {editing && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          <label className="text-[10px] font-bold text-[var(--text-muted)]">
+            Hours
+            <input
+              type="number"
+              step={0.5}
+              min={0.5}
+              className="ml-1 w-16 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 py-1 text-xs"
+              value={topic.estimatedHours}
+              onChange={(e) => onHours(Number(e.target.value))}
+            />
+          </label>
+        </div>
+      )}
+      <h3 className={`text-sm font-black ${done ? 'text-[var(--text-muted)] line-through' : ''}`}>{topic.title}</h3>
+      <p className="mt-1 text-xs text-[var(--text-secondary)]">{topic.description}</p>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {(topic.skills || []).map((s) => (
+          <span
+            key={s}
+            className="rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10px] font-bold"
+          >
+            {s}
+          </span>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {topic.youtubeUrl && (
+          <button
+            type="button"
+            onClick={onPlay}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600/90 px-3 py-1.5 text-[11px] font-bold text-white"
+          >
+            <Youtube className="h-3.5 w-3.5" />
+            {playing ? 'Hide player' : 'Watch'}
+          </button>
+        )}
+        {topic.docUrl && (
+          <a
+            href={topic.docUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-1.5 text-[11px] font-bold"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            {topic.docTitle || 'Document'}
+            <ExternalLink className="h-3 w-3 opacity-80" />
+          </a>
+        )}
+      </div>
       {playing && topic.youtubeUrl && (
-        <div className="mt-3 overflow-hidden rounded-xl">
+        <div className="mt-3">
           <YouTubeCoursePlayer
-            url={topic.youtubeUrl}
+            youtubeUrl={topic.youtubeUrl}
             title={topic.youtubeTitle || topic.title}
-            onProgress={(ratio) => onVideoProgress(ratio)}
+            onProgress={onVideoProgress}
+            onDuration={(sec) => {
+              updateTopicVideoDuration(courseId, topic.id, sec);
+            }}
           />
         </div>
       )}
-    </motion.li>
+    </li>
   );
 }
 
