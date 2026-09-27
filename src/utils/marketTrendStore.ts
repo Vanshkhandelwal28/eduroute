@@ -189,10 +189,25 @@ export async function apiRefreshMarket(
   region?: string,
 ): Promise<{ ok: boolean; market?: MarketSnapshot; error?: string; provider?: string }> {
   const scope = (region || readPreferredRegion() || 'India (All)').trim();
+  // Send collected jobs so AI trends are grounded on Adzuna + data.gov.in + curated
+  let existingJobs: unknown[] = [];
+  try {
+    const raw = localStorage.getItem('eduroute:mt-jobs-v1');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) existingJobs = parsed;
+    }
+  } catch {
+    /* */
+  }
   const res = await fetch('/api/market-trends', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'refresh_market', region: scope }),
+    body: JSON.stringify({
+      action: 'refresh_market',
+      region: scope,
+      existingJobs,
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
