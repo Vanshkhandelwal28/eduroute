@@ -22,6 +22,7 @@ import {
   getAllEarnedCourseSkills,
   type CourseAchievement,
 } from '../../utils/courseAchievementsStore';
+import { syncMyPublicData, isSupabaseConfigured } from '../../utils/supabaseAuth';
 import { BuildCvCta } from '../../components/BuildCvCta';
 import { LivingLearningPath } from '../../components/LivingLearningPath';
 import { CourseCertificate } from '../../components/CourseCertificate';
@@ -50,6 +51,28 @@ export const ProfileDashboard = () => {
   const completions = useMemo(() => readCompletions(), []);
   const [achievements, setAchievements] = useState<CourseAchievement[]>(() => listCourseAchievements());
   const courseSkills = useMemo(() => getAllEarnedCourseSkills(), [achievements]);
+
+  // Keep public portfolio skills in sync from profile too
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const skills = Array.from(
+      new Set(
+        [...courseSkills]
+          .map((s) => String(s || '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (skills.length === 0 && achievements.length === 0) return;
+    void syncMyPublicData({
+      skills: skills.length ? skills : undefined,
+      certs: achievements.slice(0, 8).map((a) => ({
+        title: a.courseTitle,
+        issuer: 'EduRoute',
+        date: (a.completedAt || '').slice(0, 10),
+      })),
+    }).catch(() => {});
+  }, [courseSkills, achievements]);
+
   const [certOpen, setCertOpen] = useState(false);
   const [certData, setCertData] = useState<CourseAchievement | null>(null);
 
@@ -357,128 +380,37 @@ export const ProfileDashboard = () => {
           </div>
         )}
 
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {statsMeta.map((item) => {
-            const Icon = item.icon;
-            const valueMap: Record<string, string> = {
-              totalProblems: String(profileData.solved?.total ?? 0),
-              rank: `#${(profileData.rank?.global ?? 0).toLocaleString()}`,
-              xp: (profileData.xp?.total ?? 0).toLocaleString(),
-              badges: String((profileData.badges || []).length),
-            };
-            return (
-              <article key={item.key} className="group rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)] transition hover:-translate-y-1 hover:border-[var(--accent)]">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="rounded-2xl bg-[var(--accent-soft)] p-2.5 text-[var(--accent)]">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                </div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{item.label}</p>
-                <p className="mt-2 text-3xl font-black text-[var(--text-primary)]">{valueMap[item.key]}</p>
-              </article>
-            );
-          })}
-        </section>
-
         <LivingLearningPath />
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)] xl:col-span-1">
-            <h2 className="mb-4 text-lg font-bold text-[var(--text-primary)]">Progress Breakdown</h2>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={5}>
-                    {chartData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip formatter={(value: number | undefined, name: string | undefined) => [`${value ?? 0} solved`, name ?? '']} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
+        <p className="text-center text-xs text-[var(--text-muted)]">
+          Completions: {completions.length} internships tracked locally · Open{' '}
+          <Link to="/portfolio" className="font-semibold text-[var(--accent)] hover:underline">
+            Portfolio
+          </Link>{' '}
+          to publish skills publicly.
+        </p>
 
-          <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)] xl:col-span-2">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">Badges Earned</h2>
-              <span className="text-xs text-[var(--text-muted)]">{(profileData.badges || []).length} total</span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {(profileData.badges || []).map((badge) => (
-                <article key={badge.id} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4">
-                  <p className="text-2xl">{badge.icon}</p>
-                  <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">{badge.title}</p>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">Earned: {badge.earnedAt}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
-          <div className="mb-4 flex items-center gap-2">
-            <Flame className="h-5 w-5 text-orange-500" />
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">Streak</h2>
-            <span className="text-sm text-[var(--text-secondary)]">
-              {profileData.streak?.current ?? 0} day current · best {profileData.streak?.max ?? 0}
-            </span>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
-          <h2 className="mb-1 text-lg font-bold text-[var(--text-primary)]">Internship completions</h2>
-          <p className="mb-4 text-xs text-[var(--text-secondary)]">Certificate / completion log from finished internships.</p>
-          {completions.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">No completed internships yet. Finish a pipeline to see records here.</p>
-          ) : (
-            <ul className="space-y-3">
-              {completions.map((c) => (
-                <li key={c.internshipId} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="font-bold text-[var(--text-primary)]">{c.role}</div>
-                      <div className="text-xs text-[var(--text-secondary)]">
-                        {c.company}
-                        {c.completedAt ? ` · ${new Date(c.completedAt).toLocaleDateString()}` : ''}
-                      </div>
-                    </div>
-                    <span className="rounded-full bg-teal-100 px-2.5 py-1 text-[10px] font-black uppercase text-teal-800 dark:bg-teal-500/20 dark:text-teal-200">
-                      Certificate logged
-                    </span>
-                  </div>
-                  {c.mentorFeedback && (
-                    <p className="mt-2 text-xs text-[var(--text-secondary)]">
-                      Mentor {c.mentorFeedback.mentorName}: {'★'.repeat(c.mentorFeedback.rating)} — {c.mentorFeedback.comment}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        {certData && (
+          <CourseCertificate
+            open={certOpen}
+            onClose={() => {
+              setCertOpen(false);
+              setCertData(null);
+            }}
+            data={{
+              studentName: profileData.fullName,
+              courseTitle: certData.courseTitle,
+              skills: certData.skills,
+              level: certData.level,
+              durationDays: certData.durationDays,
+              percent: certData.percent,
+              badge: certData.badge,
+              completedAt: certData.completedAt,
+              certId: certData.certId,
+            }}
+          />
+        )}
       </div>
-
-      {certData && (
-        <CourseCertificate
-          open={certOpen}
-          onClose={() => {
-            setCertOpen(false);
-            setCertData(null);
-          }}
-          data={{
-            studentName: profileData.fullName,
-            courseName: certData.courseTitle,
-            skills: certData.skills,
-            level: certData.level,
-            durationLabel: certData.durationLabel,
-            completionDate: certData.completedAt,
-            certId: certData.certId,
-            percent: certData.percent,
-            badge: certData.badge,
-          }}
-        />
-      )}
     </div>
   );
 };
