@@ -16,8 +16,17 @@ import type { PublicProfilePayload } from '../../utils/publicProfilePayload';
 
 function asPayload(raw: unknown): PublicProfilePayload {
   const pd = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const rawSkills = Array.isArray(pd.skills) ? (pd.skills as string[]) : [];
+  const fromPath = Array.isArray(pd.pathSummary)
+    ? (pd.pathSummary as { title?: string }[])
+        .map((p) => String(p?.title || '').trim())
+        .filter(Boolean)
+    : [];
+  const skills = Array.from(
+    new Set([...rawSkills, ...fromPath].map((s) => String(s).trim()).filter(Boolean)),
+  );
   return {
-    skills: Array.isArray(pd.skills) ? (pd.skills as string[]) : [],
+    skills,
     skillGaps: Array.isArray(pd.skillGaps) ? (pd.skillGaps as string[]) : [],
     certs: Array.isArray(pd.certs) ? (pd.certs as PublicProfilePayload['certs']) : [],
     internships: Array.isArray(pd.internships)
