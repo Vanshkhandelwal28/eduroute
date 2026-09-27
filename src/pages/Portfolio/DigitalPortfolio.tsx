@@ -33,6 +33,12 @@ import {
   syncMyPublicData,
 } from '../../utils/supabaseAuth';
 import type { PublicProfilePayload } from '../../utils/publicProfilePayload';
+import {
+  listCourseAchievements,
+  getAllEarnedCourseSkills,
+  type CourseAchievement,
+} from '../../utils/courseAchievementsStore';
+import { CourseCertificate } from '../../components/CourseCertificate';
 
 type PortfolioProject = {
   id: string;
@@ -67,6 +73,23 @@ const DEMO_PROJECTS: PortfolioProject[] = [
   },
 ];
 
+const DEMO_CERTS = [
+  {
+    id: 'c1',
+    title: 'Frontend Fundamentals',
+    issuer: 'EduRoute',
+    date: '2026-08',
+    verified: true,
+  },
+  {
+    id: 'c2',
+    title: 'Git & GitHub Essentials',
+    issuer: 'EduRoute',
+    date: '2026-07',
+    verified: true,
+  },
+];
+
 const DEMO_ACHIEVEMENTS = [
   { id: 'a1', title: '7-Day Streak', icon: '🔥', detail: 'Consistent daily learning' },
   { id: 'a2', title: 'First Internship Completed', icon: '🎓', detail: 'Pipeline finished with mentor feedback' },
@@ -93,6 +116,9 @@ export const DigitalPortfolio = () => {
   const [apps, setApps] = useState<InternshipApplication[]>(() => readApplications());
   const [shareMsg, setShareMsg] = useState<string | null>(null);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [achievements, setAchievements] = useState<CourseAchievement[]>(() => listCourseAchievements());
+  const [certData, setCertData] = useState<CourseAchievement | null>(null);
+  const [certOpen, setCertOpen] = useState(false);
 
   const strengths = useMemo(
     () =>
@@ -103,6 +129,11 @@ export const DigitalPortfolio = () => {
   );
   const gaps = onboarding.missingSkills || [];
   const interests = (onboarding.interests || []).map(interestLabel);
+  const courseSkills = useMemo(() => getAllEarnedCourseSkills(), [achievements]);
+  const allSkills = useMemo(() => {
+    const s = new Set<string>([...strengths, ...courseSkills]);
+    return Array.from(s);
+  }, [strengths, courseSkills]);
   const completions = useMemo(() => readCompletions(), [apps]);
   const activeApps = apps.filter((a) => a.status !== 'Completed');
 
@@ -112,20 +143,28 @@ export const DigitalPortfolio = () => {
         ? strengths
         : interests.length > 0
           ? interests
-          : ['JavaScript', 'React', 'Problem Solving'];
+          : courseSkills.length > 0
+            ? courseSkills
+            : ['JavaScript', 'React', 'Problem Solving'];
     const internships = [...completions, ...activeApps].slice(0, 8).map((a) => ({
       role: a.role,
       company: a.company,
       status: a.status,
       duration: a.duration,
     }));
-    // If no real internships yet, still show a lean placeholder only when nothing else — skip empty noise
-    const certs = DEMO_CERTS.map((c) => ({
-      title: c.title,
-      issuer: c.issuer,
-      date: c.date,
-    }));
-    const achievements = DEMO_ACHIEVEMENTS.map((a) => ({
+    const certs =
+      achievements.length > 0
+        ? achievements.slice(0, 8).map((a) => ({
+            title: a.courseTitle,
+            issuer: 'EduRoute',
+            date: (a.completedAt || '').slice(0, 10),
+          }))
+        : DEMO_CERTS.map((c) => ({
+            title: c.title,
+            issuer: c.issuer,
+            date: c.date,
+          }));
+    const demoAchievements = DEMO_ACHIEVEMENTS.map((a) => ({
       title: a.title,
       detail: a.detail,
       icon: a.icon,
@@ -135,14 +174,13 @@ export const DigitalPortfolio = () => {
       skillGaps: gaps.slice(0, 12),
       certs,
       internships,
-      achievements,
-      xp: 120 + completions.length * 50,
+      achievements: demoAchievements,
+      xp: 120 + completions.length * 50 + achievements.length * 40,
       solved: 0,
       pathSummary: skills.slice(0, 5).map((t) => ({ title: t, status: 'active' })),
     };
-  }, [strengths, interests, gaps, completions, activeApps]);
+  }, [strengths, interests, gaps, completions, activeApps, courseSkills, achievements]);
 
-  // Push portfolio snapshot to Supabase public_data so /u/:username is rich
   useEffect(() => {
     if (!isSupabaseConfigured || !auth?.id) return;
     const payload = buildPublicPayload();
@@ -244,67 +282,33 @@ export const DigitalPortfolio = () => {
               <p className="mt-1 text-sm font-semibold text-indigo-600 dark:text-indigo-400">@{username}</p>
               {email && <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{email}</p>}
               <p className="mt-2 max-w-xl text-sm text-slate-600 dark:text-slate-300">{bio}</p>
-              {interests.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {interests.map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:items-end">
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void handleCopy()}
-                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-              >
+              <button type="button" onClick={() => void handleCopy()} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                 <Copy className="h-4 w-4" /> Copy link
               </button>
-              <button
-                type="button"
-                onClick={() => void handleShare()}
-                className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-500"
-              >
+              <button type="button" onClick={() => void handleShare()} className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-500">
                 <Share2 className="h-4 w-4" /> Share
               </button>
-              <Link
-                to={`/u/${username}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/15 dark:text-indigo-200"
-              >
+              <Link to={`/u/${username}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/15 dark:text-indigo-200">
                 <ExternalLink className="h-4 w-4" /> Public page
               </Link>
             </div>
-            <p className="max-w-xs truncate text-right text-[11px] text-slate-400" title={shareUrl}>
-              {shareUrl}
-            </p>
+            <p className="max-w-xs truncate text-right text-[11px] text-slate-400" title={shareUrl}>{shareUrl}</p>
             {shareMsg && <p className="text-right text-xs font-semibold text-emerald-600">{shareMsg}</p>}
-            {syncNote && <p className="text-right text-[11px] text-slate-400">{syncNote}</p>}
           </div>
         </div>
-
         <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-800/40">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="font-bold text-slate-800 dark:text-slate-100">Portfolio completeness</span>
             <span className="font-black text-indigo-600 dark:text-indigo-400">{completeness}%</span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
-              style={{ width: `${completeness}%` }}
-            />
+            <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all" style={{ width: `${completeness}%` }} />
           </div>
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            Share link: /u/{username} (skills, certs, internships, achievements).
-          </p>
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Share link: /u/{username}</p>
         </div>
       </motion.section>
 
@@ -313,181 +317,77 @@ export const DigitalPortfolio = () => {
           <h2 className="flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
             <Target className="h-5 w-5 text-indigo-600" /> Verified Skills
           </h2>
-          <Link to="/skill-profile" className="text-xs font-bold text-indigo-600 hover:underline">
-            Full gap analysis →
-          </Link>
+          <Link to="/skill-profile" className="text-xs font-bold text-indigo-600 hover:underline">Full gap analysis →</Link>
         </div>
-
         {courseSkills.length > 0 && (
           <div className="mb-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-violet-600 dark:text-violet-300">
-              Skills gained through courses
-            </p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-violet-600">Skills gained through courses</p>
             <div className="flex flex-wrap gap-2">
               {courseSkills.map((s) => (
-                <span
-                  key={`course-${s}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-800 dark:bg-violet-500/15 dark:text-violet-200"
-                >
+                <span key={`course-${s}`} className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-800 dark:bg-violet-500/15 dark:text-violet-200">
                   <Award className="h-3.5 w-3.5" /> {s}
                 </span>
               ))}
             </div>
           </div>
         )}
-
-        {!onboarding.completedAt && courseSkills.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center dark:border-slate-700">
-            <p className="text-sm text-slate-500">
-              Complete skill check or pass a course assessment to unlock verified skills.
-            </p>
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-              <Link
-                to="/onboarding"
-                className="inline-flex rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white"
-              >
-                Start skill check
-              </Link>
-              <Link
-                to="/ai-course-designer"
-                className="inline-flex rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200"
-              >
-                AI Course Designer
-              </Link>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-600">Strengths</p>
+            <div className="flex flex-wrap gap-2">
+              {allSkills.length === 0 ? (
+                <span className="text-sm text-slate-400">None marked yet</span>
+              ) : (
+                allSkills.map((s) => (
+                  <span key={s} className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {s}
+                  </span>
+                ))
+              )}
             </div>
           </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-600">Strengths</p>
-              <div className="flex flex-wrap gap-2">
-                {allSkills.length === 0 ? (
-                  <span className="text-sm text-slate-400">None marked yet</span>
-                ) : (
-                  allSkills.map((s) => (
-                    <span
-                      key={s}
-                      className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> {s}
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-rose-600">Skill gaps to close</p>
-              <div className="flex flex-wrap gap-2">
-                {gaps.length === 0 ? (
-                  <span className="text-sm text-slate-400">No major gaps</span>
-                ) : (
-                  gaps.map((s) => (
-                    <span
-                      key={s}
-                      className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800 dark:bg-rose-500/15 dark:text-rose-300"
-                    >
-                      {s}
-                    </span>
-                  ))
-                )}
-              </div>
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-rose-600">Skill gaps to close</p>
+            <div className="flex flex-wrap gap-2">
+              {gaps.length === 0 ? (
+                <span className="text-sm text-slate-400">No major gaps</span>
+              ) : (
+                gaps.map((s) => (
+                  <span key={s} className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800 dark:bg-rose-500/15 dark:text-rose-300">{s}</span>
+                ))
+              )}
             </div>
           </div>
-        )}
+        </div>
       </section>
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
-            <Briefcase className="h-5 w-5 text-indigo-600" /> Internships & Experience
+      {achievements.length > 0 && (
+        <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
+            <Award className="h-5 w-5 text-indigo-600" /> Course certificates
           </h2>
-          <Link to="/internships" className="text-xs font-bold text-indigo-600 hover:underline">
-            Board →
-          </Link>
-        </div>
-        {completions.length === 0 && activeApps.length === 0 ? (
-          <p className="text-sm text-slate-500">No applications yet. Apply from Internships to build this section.</p>
-        ) : (
           <ul className="space-y-3">
-            {[...completions, ...activeApps.filter((a) => a.status !== 'Completed')].map((a) => (
-              <li
-                key={a.internshipId}
-                className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-800/40"
-              >
-                <div className="font-bold text-slate-900 dark:text-white">{a.role}</div>
-                <div className="text-xs text-slate-500">
-                  {a.company}
-                  {a.duration ? ` · ${a.duration}` : ''} · {a.status}
+            {achievements.map((a) => (
+              <li key={a.courseId} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 px-4 py-3 dark:border-slate-800">
+                <div>
+                  <div className="font-bold text-slate-900 dark:text-white">{a.courseTitle}</div>
+                  <div className="text-xs text-slate-500">{a.badge.toUpperCase()} · {a.percent}% · {a.level}</div>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
-            <FolderGit2 className="h-5 w-5 text-indigo-600" /> Projects
-          </h2>
-          <ul className="space-y-3">
-            {DEMO_PROJECTS.map((p) => (
-              <li key={p.id} className="rounded-2xl border border-slate-100 p-4 dark:border-slate-800">
-                <h3 className="font-bold text-slate-900 dark:text-white">{p.title}</h3>
-                <p className="mt-1 text-xs text-slate-500">{p.description}</p>
+                <button type="button" onClick={() => openCert(a)} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">
+                  <Download className="h-3.5 w-3.5" /> Download
+                </button>
               </li>
             ))}
           </ul>
         </section>
-
-        <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
-            <Award className="h-5 w-5 text-indigo-600" /> Certifications
-          </h2>
-          <ul className="space-y-3">
-            {DEMO_CERTS.map((c) => (
-              <li key={c.id} className="rounded-2xl border border-slate-100 px-4 py-3 dark:border-slate-800">
-                <div className="font-bold text-slate-900 dark:text-white">{c.title}</div>
-                <div className="text-xs text-slate-500">{c.issuer} · {c.date}</div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
-
-      <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
-          <Trophy className="h-5 w-5 text-amber-500" /> Achievements
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {DEMO_ACHIEVEMENTS.map((a) => (
-            <article key={a.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-              <span className="text-2xl">{a.icon}</span>
-              <p className="mt-2 text-sm font-bold text-slate-900 dark:text-white">{a.title}</p>
-              <p className="text-xs text-slate-500">{a.detail}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+      )}
 
       <div className="flex flex-wrap gap-3">
-        <Link
-          to="/profile"
-          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200"
-        >
+        <Link to="/profile" className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200">
           <GraduationCap className="h-4 w-4" /> Profile dashboard
         </Link>
-        <Link
-          to="/cv-builder"
-          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200"
-        >
-          <Code2 className="h-4 w-4" /> CV Builder
-        </Link>
-        <Link
-          to="/skill-profile"
-          className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white"
-        >
-          <Sparkles className="h-4 w-4" /> Skill gap analysis
+        <Link to="/ai-course-designer" className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white">
+          <Sparkles className="h-4 w-4" /> AI Course Designer
         </Link>
       </div>
 
