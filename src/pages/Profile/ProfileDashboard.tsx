@@ -380,14 +380,63 @@ export const ProfileDashboard = () => {
           </div>
         )}
 
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {statsMeta.map((item) => {
+            const Icon = item.icon;
+            const valueMap: Record<string, string> = {
+              totalProblems: String(profileData.solved?.total ?? 0),
+              rank: `#${(profileData.rank?.global ?? 0).toLocaleString()}`,
+              xp: (profileData.xp?.total ?? 0).toLocaleString(),
+              badges: String((profileData.badges || []).length),
+            };
+            return (
+              <article key={item.key} className="group rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)] transition hover:-translate-y-1 hover:border-[var(--accent)]">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="rounded-2xl bg-[var(--accent-soft)] p-2.5 text-[var(--accent)]">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{item.label}</p>
+                <p className="mt-2 text-3xl font-black text-[var(--text-primary)]">{valueMap[item.key]}</p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">{item.description}</p>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <article className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
+            <h2 className="mb-4 text-lg font-bold text-[var(--text-primary)]">Solved by difficulty</h2>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
+                    {chartData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </article>
+          <article className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
+              <Flame className="h-5 w-5 text-orange-500" /> Streak
+            </h2>
+            <p className="text-3xl font-black text-[var(--text-primary)]">{profileData.streak?.current ?? 0} days</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Best: {profileData.streak?.max ?? 0} days</p>
+          </article>
+        </section>
+
         <LivingLearningPath />
 
         <p className="text-center text-xs text-[var(--text-muted)]">
-          Completions: {completions.length} internships tracked locally · Open{' '}
+          Completions: {completions.length} internships tracked · Open{' '}
           <Link to="/portfolio" className="font-semibold text-[var(--accent)] hover:underline">
             Portfolio
           </Link>{' '}
-          to publish skills publicly.
+          to publish all skills on your public share link.
         </p>
 
         {certData && (
