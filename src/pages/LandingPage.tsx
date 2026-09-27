@@ -15,54 +15,72 @@ import {
   Users,
 } from 'lucide-react';
 import { AuthModal } from '../components/AuthModal';
-import { OfferStackSection } from '../components/OfferStackSection';
 
-const HERO_VIDEO_CDN =
-  'https://videos.pexels.com/video-files/2278095/2278095-hd_1920_1080_30fps.mp4';
-const HERO_VIDEO_LOCAL = '/videos/hero-coding.mp4';
+/* ═══════════════════════════════════════════════════════════════
+   KINETIC BRUTALISM — EDUROUTE Landing
+   Rich black · Off-white · Acid yellow · Typography as architecture
+   ═══════════════════════════════════════════════════════════════ */
 
-/** Real nav links */
 const NAV = [
-  { label: 'Home', href: '#home' },
-  { label: 'How it works', href: '#how-it-works' },
-  { label: 'Roadmaps', href: '/roadmaps' },
-  { label: 'Internships', href: '/internships' },
-  { label: 'Journey', href: '#journey' },
+  { label: 'HOME', href: '#home' },
+  { label: 'SYSTEM', href: '#how-it-works' },
+  { label: 'ROADMAPS', href: '/roadmaps' },
+  { label: 'INTERNSHIPS', href: '/internships' },
+  { label: 'JOURNEY', href: '#journey' },
 ];
 
 const STATS = [
-  { target: 45, suffix: 'K+', label: 'Active Learners', icon: Users, color: 'bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300' },
-  { target: 80, suffix: '+', label: 'Roadmaps', icon: Map, color: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300' },
-  { target: 500, suffix: '+', label: 'Job & Internship Opportunities', icon: Briefcase, color: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300' },
-  { target: 120, suffix: '+', label: 'Upcoming Hackathons', icon: Trophy, color: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300' },
+  { target: 45, suffix: 'K+', label: 'ACTIVE LEARNERS' },
+  { target: 80, suffix: '+', label: 'ROADMAPS' },
+  { target: 500, suffix: '+', label: 'OPPORTUNITIES' },
+  { target: 120, suffix: '+', label: 'HACKATHONS' },
 ];
 
 const HOW_STEPS = [
   {
-    step: '1',
-    title: 'Sign up',
+    step: '01',
+    title: 'SIGN UP',
     body: 'Create a free account and pick the track you care about.',
     icon: Users,
   },
   {
-    step: '2',
-    title: 'Skill quiz',
+    step: '02',
+    title: 'SKILL QUIZ',
     body: 'Answer a short yes/no quiz so we map your skill gaps.',
     icon: ClipboardCheck,
   },
   {
-    step: '3',
-    title: 'Get your path',
+    step: '03',
+    title: 'GET YOUR PATH',
     body: 'Follow a personal roadmap, practice, and apply with confidence.',
     icon: Route,
   },
 ];
 
 const JOURNEY = [
-  { title: 'Learn', desc: 'Explore curated roadmaps', icon: BookOpen, color: 'bg-violet-600' },
-  { title: 'Build', desc: 'Work on real projects and practice', icon: Code2, color: 'bg-emerald-500' },
-  { title: 'Compete', desc: 'Join hackathons and challenges', icon: Trophy, color: 'bg-pink-500' },
-  { title: 'Get Hired', desc: 'Land internships and full-time roles', icon: Briefcase, color: 'bg-blue-500' },
+  { title: 'LEARN', desc: 'Explore curated roadmaps', icon: BookOpen },
+  { title: 'BUILD', desc: 'Work on real projects and practice', icon: Code2 },
+  { title: 'COMPETE', desc: 'Join hackathons and challenges', icon: Trophy },
+  { title: 'GET HIRED', desc: 'Land internships and full-time roles', icon: Briefcase },
+];
+
+const MARQUEE_A = [
+  'SKILL MAPPING',
+  'INTERNSHIPS',
+  'PLACEMENT',
+  'AI BUDDY',
+  'ROADMAPS',
+  'DSA SHEET',
+  'HACKATHONS',
+  'PORTFOLIO',
+];
+
+const MARQUEE_B = [
+  'BUILD SKILLS',
+  'GET HIRED',
+  'LEARN · MAP · MATCH',
+  'ACADEMIA × INDUSTRY',
+  'EDUROUTE 2026',
 ];
 
 const QUICK_LINKS = [
@@ -81,42 +99,6 @@ const COMPANY_LINKS = [
   { label: 'Terms & Conditions', href: '#contact' },
 ];
 
-/** Split text into letter spans with staggered reveal (CodeSandbox-style). */
-function StaggerText({
-  text,
-  className = '',
-  letterClassName = '',
-  baseDelay = 0,
-  step = 0.028,
-}: {
-  text: string;
-  className?: string;
-  letterClassName?: string;
-  baseDelay?: number;
-  step?: number;
-}) {
-  return (
-    <span className={className} aria-label={text}>
-      {text.split('').map((char, i) =>
-        char === ' ' ? (
-          <span key={i} className="hero-letter-space" aria-hidden>
-            {' '}
-          </span>
-        ) : (
-          <span
-            key={i}
-            className={`hero-letter ${letterClassName}`}
-            style={{ animationDelay: `${baseDelay + i * step}s` }}
-            aria-hidden
-          >
-            {char}
-          </span>
-        ),
-      )}
-    </span>
-  );
-}
-
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -130,7 +112,7 @@ function usePrefersReducedMotion() {
   return reduced;
 }
 
-function useCountUp(target: number, active: boolean, duration = 1400) {
+function useCountUp(target: number, active: boolean, duration = 1200) {
   const [value, setValue] = useState(0);
   const reduced = usePrefersReducedMotion();
 
@@ -155,35 +137,50 @@ function useCountUp(target: number, active: boolean, duration = 1400) {
   return value;
 }
 
-function StatItem({
-  target,
-  suffix,
-  label,
-  icon: Icon,
-  color,
-  active,
+function Marquee({
+  items,
+  reverse = false,
+  className = '',
 }: {
-  target: number;
-  suffix: string;
-  label: string;
-  icon: typeof Users;
-  color: string;
-  active: boolean;
+  items: string[];
+  reverse?: boolean;
+  className?: string;
 }) {
-  const value = useCountUp(target, active);
+  const reduced = usePrefersReducedMotion();
+  const content = [...items, ...items, ...items];
   return (
-    <div className="flex items-center gap-3 px-2 py-2">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
-        <div className="text-lg font-extrabold tabular-nums text-slate-900 dark:text-white">
-          {value}
-          {suffix}
-        </div>
-        <div className="text-[11px] font-medium leading-tight text-slate-500 dark:text-slate-400">{label}</div>
+    <div
+      className={`kb-marquee overflow-hidden border-y-2 border-[#f5f5f0] ${className}`}
+      aria-hidden={reduced}
+    >
+      <div
+        className={`kb-marquee-track flex whitespace-nowrap ${
+          reverse ? 'kb-marquee-reverse' : ''
+        } ${reduced ? 'kb-marquee-static' : ''}`}
+      >
+        {content.map((t, i) => (
+          <span
+            key={`${t}-${i}`}
+            className="inline-flex items-center px-6 py-3 text-sm font-black uppercase tracking-[0.2em] text-[#f5f5f0] sm:text-base"
+          >
+            {t}
+            <span className="ml-6 inline-block h-2 w-2 rotate-45 bg-[#d4ff00]" aria-hidden />
+          </span>
+        ))}
       </div>
     </div>
+  );
+}
+
+function GhostIndex({ n }: { n: string }) {
+  return (
+    <span
+      className="pointer-events-none absolute -right-2 -top-4 select-none font-black leading-none text-[#f5f5f0]/[0.04] sm:-right-4 sm:-top-8"
+      style={{ fontSize: 'clamp(4rem, 18vw, 12rem)' }}
+      aria-hidden
+    >
+      {n}
+    </span>
   );
 }
 
@@ -210,40 +207,47 @@ function NavItem({
   );
 }
 
+function StatBlock({
+  target,
+  suffix,
+  label,
+  active,
+  index,
+}: {
+  target: number;
+  suffix: string;
+  label: string;
+  active: boolean;
+  index: number;
+}) {
+  const value = useCountUp(target, active);
+  return (
+    <div className="group relative border-2 border-[#f5f5f0] bg-[#0a0a0a] p-5 transition-colors duration-150 hover:bg-[#d4ff00] hover:text-[#0a0a0a] sm:p-6">
+      <span className="absolute right-3 top-2 font-black text-[10px] tracking-widest text-[#f5f5f0]/40 group-hover:text-[#0a0a0a]/50">
+        0{index + 1}
+      </span>
+      <div className="text-3xl font-black tabular-nums tracking-tighter sm:text-4xl lg:text-5xl">
+        {value}
+        {suffix}
+      </div>
+      <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.25em] opacity-70 sm:text-xs">
+        {label}
+      </div>
+    </div>
+  );
+}
+
 export const LandingPage = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState('');
-  const [heroVideoSrc, setHeroVideoSrc] = useState(HERO_VIDEO_CDN);
   const [statsActive, setStatsActive] = useState(false);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
   const statsRef = useRef<HTMLDivElement>(null);
 
   const instagramUrl = 'https://www.instagram.com/vanshkhandelwal28/';
   const whatsappUrl = 'https://wa.link/9mfubu';
   const supportEmail = 'vanshkhandelwal777@gmail.com';
 
-  // Pause hero video when off-screen (better performance)
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry) return;
-        if (entry.isIntersecting) {
-          void el.play().catch(() => undefined);
-        } else {
-          el.pause();
-        }
-      },
-      { threshold: 0.15 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [heroVideoSrc]);
-
-  // Stats count-up when scrolled into view
   useEffect(() => {
     const el = statsRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
@@ -254,33 +258,102 @@ export const LandingPage = () => {
           io.disconnect();
         }
       },
-      { threshold: 0.35 },
+      { threshold: 0.3 },
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
   return (
-    <div id="home" className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div
+      id="home"
+      className="kb-root min-h-screen bg-[#0a0a0a] text-[#f5f5f0] antialiased selection:bg-[#d4ff00] selection:text-[#0a0a0a]"
+    >
+      {/* Scoped kinetic-brutalism styles */}
+      <style>{`
+        .kb-root {
+          --kb-black: #0a0a0a;
+          --kb-off: #f5f5f0;
+          --kb-acid: #d4ff00;
+          font-feature-settings: "ss01" 1, "kern" 1;
+        }
+        .kb-marquee-track {
+          animation: kb-scroll 28s linear infinite;
+          width: max-content;
+        }
+        .kb-marquee-reverse {
+          animation-direction: reverse;
+          animation-duration: 36s;
+        }
+        .kb-marquee-static {
+          animation: none !important;
+        }
+        @keyframes kb-scroll {
+          from { transform: translateX(0); }
+          to { transform: translateX(-33.333%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .kb-marquee-track { animation: none !important; }
+        }
+        .kb-invert-btn {
+          transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+        }
+        .kb-invert-btn:hover,
+        .kb-invert-btn:focus-visible {
+          background-color: var(--kb-acid);
+          color: var(--kb-black);
+          border-color: var(--kb-acid);
+        }
+        .kb-invert-btn:focus-visible {
+          outline: 3px solid var(--kb-acid);
+          outline-offset: 3px;
+        }
+        .kb-card {
+          transition: background-color 0.12s ease, color 0.12s ease;
+        }
+        .kb-card:hover {
+          background-color: var(--kb-acid);
+          color: var(--kb-black);
+        }
+        .kb-card:hover .kb-card-muted {
+          color: rgba(10,10,10,0.65);
+        }
+        .kb-hero-lockup {
+          font-size: clamp(2.75rem, 12vw, 7.5rem);
+          line-height: 0.88;
+          letter-spacing: -0.04em;
+          text-transform: uppercase;
+          font-weight: 900;
+        }
+        .kb-section-title {
+          font-size: clamp(1.75rem, 5vw, 3.5rem);
+          line-height: 0.95;
+          letter-spacing: -0.03em;
+          text-transform: uppercase;
+          font-weight: 900;
+        }
+      `}</style>
+
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
 
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/90">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
-          <a href="#home" className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-black text-white shadow-md shadow-violet-200/50 dark:shadow-violet-900/40">
+      {/* ── HEADER ── */}
+      <header className="sticky top-0 z-50 border-b-2 border-[#f5f5f0] bg-[#0a0a0a]">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+          <a href="#home" className="flex items-center gap-3 group">
+            <span className="flex h-10 w-10 items-center justify-center border-2 border-[#f5f5f0] bg-[#d4ff00] text-sm font-black text-[#0a0a0a] transition-colors group-hover:bg-[#0a0a0a] group-hover:text-[#d4ff00] group-hover:border-[#d4ff00]">
               E
             </span>
-            <span className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
-              EDU<span className="text-violet-600 dark:text-violet-400">ROUTE</span>
+            <span className="text-base font-black uppercase tracking-[0.15em] text-[#f5f5f0]">
+              EDU<span className="text-[#d4ff00]">ROUTE</span>
             </span>
           </a>
 
-          <nav className="hidden items-center gap-1 lg:flex">
+          <nav className="hidden items-center gap-0 lg:flex" aria-label="Primary">
             {NAV.map((item) => (
               <NavItem
                 key={item.label}
                 item={item}
-                className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                className="border-2 border-transparent px-3 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-[#f5f5f0]/80 transition-colors hover:border-[#f5f5f0] hover:bg-[#f5f5f0] hover:text-[#0a0a0a]"
               />
             ))}
           </nav>
@@ -288,21 +361,22 @@ export const LandingPage = () => {
           <div className="flex items-center gap-2">
             <a
               href="#contact"
-              className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 sm:inline"
+              className="hidden border-2 border-transparent px-3 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-[#f5f5f0]/70 hover:border-[#f5f5f0] hover:bg-[#f5f5f0] hover:text-[#0a0a0a] sm:inline"
             >
               Contact
             </a>
             <button
               type="button"
               onClick={() => setIsAuthOpen(true)}
-              className="rounded-full bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700"
+              className="kb-invert-btn border-2 border-[#d4ff00] bg-[#d4ff00] px-4 py-2 text-[11px] font-black uppercase tracking-[0.15em] text-[#0a0a0a]"
             >
               Get Started
             </button>
             <button
               type="button"
-              className="rounded-lg p-2 text-slate-600 lg:hidden dark:text-slate-300"
-              aria-label="Menu"
+              className="border-2 border-[#f5f5f0] p-2 text-[#f5f5f0] lg:hidden"
+              aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileOpen}
               onClick={() => setMobileOpen((v) => !v)}
             >
               <span className="block h-0.5 w-5 bg-current" />
@@ -313,19 +387,19 @@ export const LandingPage = () => {
         </div>
 
         {mobileOpen && (
-          <div className="border-t border-slate-100 bg-white px-4 py-3 lg:hidden dark:border-slate-800 dark:bg-slate-950">
+          <div className="border-t-2 border-[#f5f5f0] bg-[#0a0a0a] px-4 py-3 lg:hidden">
             {NAV.map((item) => (
               <NavItem
                 key={item.label}
                 item={item}
                 onClick={() => setMobileOpen(false)}
-                className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                className="block border-b border-[#f5f5f0]/15 px-2 py-3 text-sm font-black uppercase tracking-[0.15em] text-[#f5f5f0]"
               />
             ))}
             <a
               href="#contact"
               onClick={() => setMobileOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200"
+              className="block px-2 py-3 text-sm font-black uppercase tracking-[0.15em] text-[#d4ff00]"
             >
               Contact Us
             </a>
@@ -333,222 +407,258 @@ export const LandingPage = () => {
         )}
       </header>
 
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <video
-            ref={videoRef}
-            className="h-full w-full scale-105 object-cover"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            src={heroVideoSrc}
-            onError={() => setHeroVideoSrc(HERO_VIDEO_LOCAL)}
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-white from-0% via-white/75 via-35% to-white/15 to-100% dark:from-slate-950 dark:from-0% dark:via-slate-950/80 dark:via-40% dark:to-slate-950/25 dark:to-100%" />
-          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white/90 to-transparent dark:from-slate-950/90 dark:to-transparent" />
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/50 to-transparent dark:from-slate-950/40 dark:to-transparent" />
-        </div>
+      {/* ── HERO ── */}
+      <section className="relative overflow-hidden border-b-2 border-[#f5f5f0]">
+        <GhostIndex n="01" />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 pb-16 pt-14 sm:px-6 sm:pt-20 lg:px-8 lg:pt-24">
+          <p className="mb-6 inline-flex items-center gap-2 border-2 border-[#d4ff00] bg-[#d4ff00] px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-[#0a0a0a]">
+            Your Growth Partner in Tech
+          </p>
 
-        <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-12 lg:px-8 lg:py-24">
-          <div className="max-w-xl">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-white/80 px-3.5 py-1.5 text-xs font-bold tracking-wide text-violet-700 shadow-sm backdrop-blur dark:border-violet-500/30 dark:bg-slate-900/70 dark:text-violet-300">
-              <span className="text-sm leading-none">⚡</span>
-              Your Growth Partner in Tech
-            </div>
+          <h1 className="kb-hero-lockup max-w-5xl text-[#f5f5f0]">
+            <span className="block">Build</span>
+            <span className="block">Skills.</span>
+            <span className="mt-1 block text-[#d4ff00]">Get Hired.</span>
+          </h1>
 
-            <h1 className="text-5xl font-black leading-[0.95] tracking-tight drop-shadow-sm sm:text-6xl lg:text-7xl">
-              <StaggerText
-                text="Build Skills."
-                className="block"
-                letterClassName="text-slate-900 dark:text-white"
-                baseDelay={0.1}
-                step={0.06}
-              />
-              <StaggerText
-                text="Get Hired."
-                className="block"
-                letterClassName="text-violet-600 dark:text-violet-400"
-                baseDelay={0.84}
-                step={0.06}
-              />
-            </h1>
+          <p className="mt-8 max-w-xl text-base leading-relaxed text-[#f5f5f0]/70 sm:text-lg">
+            EDUROUTE maps your skills, fills the gaps, and matches you to internships,
+            roadmaps, and industry roles — one portal for students, colleges, and employers.
+          </p>
 
-            <p className="mt-6 max-w-md text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-[17px] sm:leading-7">
-              EDUROUTE helps you find the right roadmap, get internships and job
-              opportunities, participate in hackathons and build the skills you
-              need to grow in tech — all in one place.
-            </p>
-
-            <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link
-                to="/roadmaps"
-                className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-6 py-3.5 text-sm font-bold text-white shadow-md shadow-violet-200/60 transition hover:bg-violet-700 dark:shadow-violet-900/40"
-              >
-                <ArrowRight className="h-4 w-4" /> Explore Roadmaps
-              </Link>
-              <Link
-                to="/internships"
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-6 py-3.5 text-sm font-bold text-slate-800 backdrop-blur transition hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:border-violet-500"
-              >
-                Find Opportunities
-              </Link>
-            </div>
+          <div className="mt-10 flex flex-wrap items-center gap-3">
+            <Link
+              to="/roadmaps"
+              className="kb-invert-btn inline-flex items-center gap-2 border-2 border-[#d4ff00] bg-[#d4ff00] px-6 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-[#0a0a0a]"
+            >
+              Explore Roadmaps <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+            <Link
+              to="/internships"
+              className="kb-invert-btn inline-flex items-center gap-2 border-2 border-[#f5f5f0] bg-transparent px-6 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-[#f5f5f0]"
+            >
+              Find Opportunities
+            </Link>
+            <button
+              type="button"
+              onClick={() => setIsAuthOpen(true)}
+              className="kb-invert-btn inline-flex items-center gap-2 border-2 border-[#f5f5f0]/40 bg-transparent px-6 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-[#f5f5f0]/80"
+            >
+              Start Free
+            </button>
           </div>
-          <div className="hidden min-h-[280px] lg:block" aria-hidden />
         </div>
 
-        {/* Stats bar — count-up on scroll */}
+        {/* Stats */}
         <div className="relative z-10 mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
-          <div
-            ref={statsRef}
-            className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-lg shadow-slate-200/40 backdrop-blur-md sm:grid-cols-4 dark:border-slate-700 dark:bg-slate-900/80 dark:shadow-black/30"
-          >
-            {STATS.map((s) => (
-              <StatItem key={s.label} {...s} active={statsActive} />
+          <div ref={statsRef} className="grid grid-cols-2 gap-0 border-2 border-[#f5f5f0] sm:grid-cols-4">
+            {STATS.map((s, i) => (
+              <StatBlock key={s.label} {...s} active={statsActive} index={i} />
             ))}
           </div>
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="how-it-works" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-black text-slate-900 dark:text-white">How it works</h2>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-            Sign up → Skill quiz → Get your path — in three clear steps.
-          </p>
-        </div>
-        <div className="mt-10 grid gap-6 sm:grid-cols-3">
-          {HOW_STEPS.map((s, i) => (
-            <div
-              key={s.step}
-              className="relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-            >
-              {i < HOW_STEPS.length - 1 && (
-                <div className="absolute right-0 top-1/2 hidden h-px w-6 translate-x-full border-t border-dashed border-slate-300 sm:block dark:border-slate-600" />
-              )}
-              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">
-                {s.step}
-              </div>
-              <div className="mb-2 flex items-center gap-2">
-                <s.icon className="h-4 w-4 text-violet-500" />
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">{s.title}</h3>
-              </div>
-              <p className="text-sm leading-6 text-slate-600 dark:text-slate-400">{s.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* ── MARQUEE 1 ── */}
+      <Marquee items={MARQUEE_A} />
 
-      <OfferStackSection onExploreAll={() => setIsAuthOpen(true)} />
+      {/* ── HOW IT WORKS ── */}
+      <section id="how-it-works" className="relative border-b-2 border-[#f5f5f0] py-20 sm:py-24">
+        <GhostIndex n="02" />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-12 max-w-2xl">
+            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.35em] text-[#d4ff00]">
+              System
+            </p>
+            <h2 className="kb-section-title text-[#f5f5f0]">How it works</h2>
+            <p className="mt-4 text-sm text-[#f5f5f0]/60 sm:text-base">
+              Three hard steps. No fluff. Sign up → Skill quiz → Get your path.
+            </p>
+          </div>
 
-      {/* Journey */}
-      <section id="journey" className="py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm sm:p-8 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950">
-            <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr] lg:items-center">
-              <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400">Your Journey</p>
-                <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl dark:text-white">From Learning to Landing</h2>
-                <p className="mt-3 max-w-sm text-sm leading-6 text-slate-500 dark:text-slate-400">Follow a clear path, build real skills, and turn your effort into opportunities.</p>
+          <div className="grid gap-0 border-2 border-[#f5f5f0] sm:grid-cols-3">
+            {HOW_STEPS.map((s) => (
+              <div
+                key={s.step}
+                className="kb-card group relative border-b-2 border-[#f5f5f0] p-6 last:border-b-0 sm:border-b-0 sm:border-r-2 sm:last:border-r-0 sm:p-8"
+              >
+                <div className="mb-6 flex items-center justify-between">
+                  <span className="text-4xl font-black tabular-nums tracking-tighter text-[#d4ff00] group-hover:text-[#0a0a0a] sm:text-5xl">
+                    {s.step}
+                  </span>
+                  <s.icon className="h-6 w-6 opacity-50 group-hover:opacity-100" aria-hidden />
+                </div>
+                <h3 className="text-lg font-black uppercase tracking-[0.1em]">{s.title}</h3>
+                <p className="kb-card-muted mt-3 text-sm leading-relaxed text-[#f5f5f0]/60">
+                  {s.body}
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                {JOURNEY.map((step, i) => (
-                  <div key={step.title} className="relative text-center">
-                    {i < JOURNEY.length - 1 && (
-                      <div className="absolute left-[60%] top-5 hidden h-px w-[80%] border-t border-dashed border-slate-300 sm:block dark:border-slate-600" />
-                    )}
-                    <div className={`relative z-10 mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full text-white shadow-md ${step.color}`}>
-                      <step.icon className="h-5 w-5" />
-                    </div>
-                    <div className="text-sm font-bold text-slate-900 dark:text-white">{step.title}</div>
-                    <div className="mt-1 text-[11px] leading-4 text-slate-500 dark:text-slate-400">{step.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-700 px-6 py-12 text-center text-white shadow-xl shadow-violet-200/40 sm:px-12 dark:shadow-violet-900/30">
-          <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Ready to build skills that get you hired?</h2>
-          <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-violet-100">Join thousands of learners using EDUROUTE roadmaps, practice sheets, and AI Buddy to grow faster.</p>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <button type="button" onClick={() => setIsAuthOpen(true)} className="rounded-full bg-white px-6 py-3 text-sm font-bold text-violet-700 shadow-sm transition hover:bg-violet-50">Create free account</button>
-            <Link to="/roadmaps" className="rounded-full border border-white/40 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/10">Browse roadmaps</Link>
-          </div>
-        </div>
-      </section>
-
-      <footer
-        id="contact"
-        className="border-t border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-[#0a0a0f]"
-      >
-        <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8">
-          <div className="select-none overflow-hidden text-center" aria-hidden>
-            <span
-              className="inline-block whitespace-nowrap text-[16vw] font-black leading-none tracking-tight sm:text-[12vw] lg:text-[9.5rem]"
-              style={{
-                color: 'transparent',
-                WebkitTextStroke: '2px rgba(109, 40, 217, 0.55)',
-              }}
-            >
-              <span className="dark:hidden">EDUROUTE</span>
-            </span>
-            <span
-              className="hidden whitespace-nowrap text-[16vw] font-black leading-none tracking-tight dark:inline-block sm:text-[12vw] lg:text-[9.5rem]"
-              style={{
-                color: 'transparent',
-                WebkitTextStroke: '2px rgba(167, 139, 250, 0.55)',
-              }}
-            >
-              EDUROUTE
-            </span>
-          </div>
-
-          <div className="mt-6 grid gap-10 pb-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
+      {/* ── FEATURES STRIP ── */}
+      <section id="features" className="relative border-b-2 border-[#f5f5f0] py-20 sm:py-24">
+        <GhostIndex n="03" />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-12 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-black text-white shadow-md">
+              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.35em] text-[#d4ff00]">
+                Product
+              </p>
+              <h2 className="kb-section-title text-[#f5f5f0]">What you get</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAuthOpen(true)}
+              className="kb-invert-btn self-start border-2 border-[#f5f5f0] px-5 py-2.5 text-[11px] font-black uppercase tracking-[0.2em]"
+            >
+              Explore all →
+            </button>
+          </div>
+
+          <div className="grid gap-0 border-2 border-[#f5f5f0] md:grid-cols-2">
+            {[
+              {
+                t: 'AI BUDDY MENTOR',
+                d: 'Groq-powered chat that maps skill gaps, suggests roadmaps, and answers career questions with live context.',
+              },
+              {
+                t: 'SKILL → ROLE MATCH',
+                d: 'Assessment-driven matching to internships and roles. Industry sees Match %; you see the gap list.',
+              },
+              {
+                t: 'ROADMAPS + DSA',
+                d: 'Role-based learning paths and a structured DSA sheet so practice stays measurable.',
+              },
+              {
+                t: 'COLLEGE + INDUSTRY',
+                d: 'Placement funnels for colleges. Role posting and shortlisting for industry partners.',
+              },
+            ].map((f, i) => (
+              <div
+                key={f.t}
+                className="kb-card group relative border-b-2 border-[#f5f5f0] p-6 last:border-b-0 md:border-b-0 md:border-r-2 md:odd:border-r-2 md:even:border-r-0 md:[&:nth-child(-n+2)]:border-b-2 sm:p-8"
+              >
+                <span className="text-[10px] font-black tracking-[0.3em] text-[#d4ff00] group-hover:text-[#0a0a0a]/50">
+                  0{i + 1}
+                </span>
+                <h3 className="mt-3 text-xl font-black uppercase tracking-tight sm:text-2xl">{f.t}</h3>
+                <p className="kb-card-muted mt-3 max-w-md text-sm leading-relaxed text-[#f5f5f0]/60">
+                  {f.d}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── MARQUEE 2 ── */}
+      <Marquee items={MARQUEE_B} reverse />
+
+      {/* ── JOURNEY ── */}
+      <section id="journey" className="relative border-b-2 border-[#f5f5f0] py-20 sm:py-24">
+        <GhostIndex n="04" />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-12 max-w-xl">
+            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.35em] text-[#d4ff00]">
+              Path
+            </p>
+            <h2 className="kb-section-title text-[#f5f5f0]">From learning to landing</h2>
+            <p className="mt-4 text-sm text-[#f5f5f0]/60">
+              A linear system: learn → build → compete → get hired.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-0 border-2 border-[#f5f5f0] sm:grid-cols-4">
+            {JOURNEY.map((step, i) => (
+              <div
+                key={step.title}
+                className="kb-card group relative border-b-2 border-[#f5f5f0] p-5 last:border-b-0 sm:border-b-0 sm:border-r-2 sm:last:border-r-0 sm:p-6"
+              >
+                <div className="mb-4 flex h-10 w-10 items-center justify-center border-2 border-current">
+                  <step.icon className="h-5 w-5" aria-hidden />
+                </div>
+                <div className="text-[10px] font-black tracking-[0.25em] text-[#d4ff00] group-hover:text-[#0a0a0a]/50">
+                  0{i + 1}
+                </div>
+                <div className="mt-1 text-sm font-black uppercase tracking-[0.1em]">{step.title}</div>
+                <div className="kb-card-muted mt-2 text-[11px] leading-4 text-[#f5f5f0]/55">{step.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA BAND ── */}
+      <section className="relative border-b-2 border-[#f5f5f0] bg-[#d4ff00] py-16 text-[#0a0a0a] sm:py-20">
+        <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
+          <h2 className="kb-section-title mx-auto max-w-3xl">
+            Ready to map your skills and get hired?
+          </h2>
+          <p className="mx-auto mt-4 max-w-lg text-sm font-medium opacity-80">
+            Join students using EDUROUTE for roadmaps, AI mentoring, and matched internships.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsAuthOpen(true)}
+              className="border-2 border-[#0a0a0a] bg-[#0a0a0a] px-8 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-[#d4ff00] transition-colors hover:bg-transparent hover:text-[#0a0a0a]"
+            >
+              Get Started Free
+            </button>
+            <Link
+              to="/roadmaps"
+              className="border-2 border-[#0a0a0a] bg-transparent px-8 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-[#0a0a0a] transition-colors hover:bg-[#0a0a0a] hover:text-[#d4ff00]"
+            >
+              Browse Roadmaps
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CONTACT / FOOTER ── */}
+      <footer id="contact" className="relative border-t-2 border-[#f5f5f0] bg-[#0a0a0a]">
+        <GhostIndex n="05" />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8">
+          <div className="grid gap-10 border-b-2 border-[#f5f5f0] pb-12 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <div className="mb-4 flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center border-2 border-[#d4ff00] bg-[#d4ff00] text-xs font-black text-[#0a0a0a]">
                   E
                 </span>
-                <span className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
-                  EDU<span className="text-violet-600 dark:text-violet-400">ROUTE</span>
+                <span className="text-sm font-black uppercase tracking-[0.15em]">
+                  EDU<span className="text-[#d4ff00]">ROUTE</span>
                 </span>
               </div>
-              <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-100">
-                Learn. Build. Compete. Get Hired.
+              <p className="max-w-xs text-xs leading-5 text-[#f5f5f0]/55">
+                Academia–Industry collaboration portal for skill mapping, internships and placement.
+                Built for SIH 2026.
               </p>
-              <p className="mt-2 max-w-xs text-xs leading-5 text-slate-500 dark:text-slate-400">
-                Your one stop platform to build skills, explore opportunities and grow your career in tech.
-              </p>
-              <div className="mt-5 flex flex-wrap items-center gap-3">
+              <div className="mt-5 flex gap-2">
                 <a
                   href={instagramUrl}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
+                  className="kb-invert-btn flex h-10 w-10 items-center justify-center border-2 border-[#f5f5f0]"
                   aria-label="Instagram"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-pink-300 hover:text-pink-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-pink-500/50 dark:hover:text-pink-400"
                 >
                   <Instagram className="h-4 w-4" />
                 </a>
                 <a
                   href={whatsappUrl}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
+                  className="kb-invert-btn flex h-10 w-10 items-center justify-center border-2 border-[#f5f5f0]"
                   aria-label="WhatsApp"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-emerald-300 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-emerald-500/50 dark:hover:text-emerald-400"
                 >
                   <MessageCircle className="h-4 w-4" />
                 </a>
                 <a
                   href={`mailto:${supportEmail}`}
+                  className="kb-invert-btn flex h-10 w-10 items-center justify-center border-2 border-[#f5f5f0]"
                   aria-label="Email"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-violet-500/50 dark:hover:text-violet-300"
                 >
                   <Mail className="h-4 w-4" />
                 </a>
@@ -556,23 +666,23 @@ export const LandingPage = () => {
             </div>
 
             <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-900 dark:text-white">
-                Quick Links
+              <h3 className="mb-4 text-[10px] font-black uppercase tracking-[0.3em] text-[#d4ff00]">
+                Navigate
               </h3>
-              <ul className="space-y-2.5">
+              <ul className="space-y-2">
                 {QUICK_LINKS.map((l) => (
                   <li key={l.label}>
                     {l.href.startsWith('/') ? (
                       <Link
                         to={l.href}
-                        className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-300"
+                        className="text-xs font-bold uppercase tracking-[0.1em] text-[#f5f5f0]/60 transition-colors hover:text-[#d4ff00]"
                       >
                         {l.label}
                       </Link>
                     ) : (
                       <a
                         href={l.href}
-                        className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-300"
+                        className="text-xs font-bold uppercase tracking-[0.1em] text-[#f5f5f0]/60 transition-colors hover:text-[#d4ff00]"
                       >
                         {l.label}
                       </a>
@@ -583,15 +693,15 @@ export const LandingPage = () => {
             </div>
 
             <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-900 dark:text-white">
+              <h3 className="mb-4 text-[10px] font-black uppercase tracking-[0.3em] text-[#d4ff00]">
                 Company
               </h3>
-              <ul className="space-y-2.5">
+              <ul className="space-y-2">
                 {COMPANY_LINKS.map((l) => (
                   <li key={l.label}>
                     <a
                       href={l.href}
-                      className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-300"
+                      className="text-xs font-bold uppercase tracking-[0.1em] text-[#f5f5f0]/60 transition-colors hover:text-[#d4ff00]"
                     >
                       {l.label}
                     </a>
@@ -601,30 +711,34 @@ export const LandingPage = () => {
             </div>
 
             <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-900 dark:text-white">
+              <h3 className="mb-4 text-[10px] font-black uppercase tracking-[0.3em] text-[#d4ff00]">
                 Stay Updated
               </h3>
-              <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                Get the latest roadmaps, opportunities and tips in your inbox.
+              <p className="mb-3 text-xs leading-5 text-[#f5f5f0]/55">
+                Roadmaps, opportunities and tips — no spam.
               </p>
               <form
-                className="flex flex-col gap-2 sm:flex-row"
+                className="flex flex-col gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
                   setNewsletterEmail('');
                 }}
               >
+                <label htmlFor="kb-newsletter" className="sr-only">
+                  Email
+                </label>
                 <input
+                  id="kb-newsletter"
                   type="email"
                   value={newsletterEmail}
                   onChange={(e) => setNewsletterEmail(e.target.value)}
-                  placeholder="Your email"
-                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-violet-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  placeholder="YOUR EMAIL"
+                  className="min-w-0 border-2 border-[#f5f5f0] bg-transparent px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-[#f5f5f0] outline-none placeholder:text-[#f5f5f0]/35 focus:border-[#d4ff00]"
                   required
                 />
                 <button
                   type="submit"
-                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-violet-700"
+                  className="kb-invert-btn border-2 border-[#d4ff00] bg-[#d4ff00] px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] text-[#0a0a0a]"
                 >
                   Subscribe
                 </button>
@@ -632,8 +746,9 @@ export const LandingPage = () => {
             </div>
           </div>
 
-          <div className="border-t border-slate-200 py-5 text-center text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
-            © {new Date().getFullYear()} EDUROUTE. All rights reserved.
+          <div className="flex flex-col items-center justify-between gap-3 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-[#f5f5f0]/40 sm:flex-row">
+            <span>© {new Date().getFullYear()} EDUROUTE. All rights reserved.</span>
+            <span className="text-[#d4ff00]/70">Kinetic Brutalism · SIH 2026</span>
           </div>
         </div>
       </footer>
