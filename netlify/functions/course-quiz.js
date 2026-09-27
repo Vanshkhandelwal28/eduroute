@@ -1,6 +1,6 @@
 /**
  * Dedicated final-assessment quiz generation.
- * Gemini first (JSON mode, multi-model) → Groq fallback. Returns strict JSON questions.
+ * Gemini first (multi-model, with/without JSON mime) → Groq fallback. Returns strict JSON questions.
  */
 const { buddyEnvSummary } = require('./_lib/envCheck');
 
@@ -46,9 +46,11 @@ function extractJson(text) {
 const GEMINI_MODELS = [
   env('GEMINI_MODEL') || '',
   'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
   'gemini-1.5-flash',
   'gemini-1.5-flash-latest',
-  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash-8b',
+  'gemini-pro',
 ].filter(Boolean);
 
 async function callGemini(prompt) {
@@ -56,43 +58,46 @@ async function callGemini(prompt) {
   if (!apiKey) throw new Error('GEMINI_API_KEY missing');
   let lastErr = null;
   for (const model of GEMINI_MODELS) {
-    try {
-      const url =
-        'https://generativelanguage.googleapis.com/v1beta/models/' +
-        model +
-        ':generateContent?key=' +
-        encodeURIComponent(apiKey);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 8192,
-            responseMimeType: 'application/json',
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        lastErr = new Error((data.error && data.error.message) || 'Gemini failed: ' + model);
-        continue;
+    for (const useJsonMime of [true, false]) {
+      try {
+        const url =
+          'https://generativelanguage.googleapis.com/v1beta/models/' +
+          model +
+          ':generateContent?key=' +
+          encodeURIComponent(apiKey);
+        const generationConfig = {
+          temperature: 0.55,
+          maxOutputTokens: 8192,
+        };
+        if (useJsonMime) generationConfig.responseMimeType = 'application/json';
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: generationConfig,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          lastErr = new Error((data.error && data.error.message) || 'Gemini failed: ' + model);
+          continue;
+        }
+        const text =
+          data.candidates &&
+          data.candidates[0] &&
+          data.candidates[0].content &&
+          data.candidates[0].content.parts
+            ? data.candidates[0].content.parts.map((p) => p.text || '').join('')
+            : '';
+        if (!text) {
+          lastErr = new Error('Empty Gemini: ' + model);
+          continue;
+        }
+        return text;
+      } catch (e) {
+        lastErr = e;
       }
-      const text =
-        data.candidates &&
-        data.candidates[0] &&
-        data.candidates[0].content &&
-        data.candidates[0].content.parts
-          ? data.candidates[0].content.parts.map((p) => p.text || '').join('')
-          : '';
-      if (!text) {
-        lastErr = new Error('Empty Gemini: ' + model);
-        continue;
-      }
-      return text;
-    } catch (e) {
-      lastErr = e;
     }
   }
   throw lastErr || new Error('Gemini failed');
@@ -105,7 +110,8 @@ async function callGroq(prompt) {
     env('GROQ_MODEL') || '',
     'llama-3.3-70b-versatile',
     'llama-3.1-8b-instant',
-    'llama-3.1-70b-versatile',
+    'gemma2-9b-it',
+    'mixtral-8x7b-32768',
   ].filter(Boolean);
   let lastErr = null;
   for (const model of models) {
@@ -118,7 +124,7 @@ async function callGroq(prompt) {
         },
         body: JSON.stringify({
           model,
-          temperature: 0.3,
+          temperature: 0.55,
           max_tokens: 8192,
           response_format: { type: 'json_object' },
           messages: [
@@ -175,7 +181,7 @@ function buildPrompt(payload) {
     (topicLines || 'General programming') +
     '\n\n' +
     'Return ONLY this JSON shape (no markdown):\n' +
-    '{"questions":[{"id":"q1","type":"mcq","prompt":"...","options":["A","B","C","D"],"answer":"0","topic":"...","explanation":"..."}]}\n\n' +
+    '{"questions":[{"id":"q1","type":"mcq","prompt":"...","options":["optA","optB","optC","optD"],"answer":"2","topic":"...","explanation":"..."}]}\n\n' +
     'Rules:\n' +
     '- Exactly ' +
     count +
@@ -192,6 +198,8 @@ function buildPrompt(payload) {
     '- Questions must test REAL knowledge of the modules (e.g. Dynamic Programming → memoization, optimal substructure)\n' +
     '- NEVER write "In the context of X, which statement is most accurate?"\n' +
     '- Wrong options must be plausible misconceptions\n' +
+    '- For mcq: put the CORRECT option at a RANDOM index (0, 1, 2, or 3) — do NOT always use answer "0"\n' +
+    '- answer field is the string index of the correct option\n' +
     '- Clear English for engineering students\n'
   );
 }
