@@ -4,7 +4,6 @@ import {
   Activity,
   ArrowDownRight,
   ArrowUpRight,
-  BadgeCheck,
   Briefcase,
   ClipboardCheck,
   Database,
@@ -14,7 +13,6 @@ import {
   MessageSquare,
   RefreshCw,
   Sparkles,
-  Star,
   Target,
   TrendingUp,
   Zap,
@@ -59,8 +57,6 @@ const EMERGING_COLORS: Record<string, string> = {
   Green: 'bg-teal-500/15 text-teal-700 ring-teal-300/50 dark:text-teal-300 dark:ring-teal-500/40',
 };
 
-const MH_DISTRICTS = new Set(DISTRICTS.map((d) => d.toLowerCase()));
-
 function mapLocationToDistrict(loc: string): DistrictKey {
   const l = loc.toLowerCase();
   if (l.includes('pune')) return 'Pune';
@@ -71,7 +67,6 @@ function mapLocationToDistrict(loc: string): DistrictKey {
   if (l.includes('thane') || l.includes('navi mumbai')) return 'Thane';
   if (l.includes('kolhapur')) return 'Kolhapur';
   if (l.includes('solapur')) return 'Solapur';
-  // default hub for Maharashtra-wide / unknown
   return 'Pune';
 }
 
@@ -94,7 +89,6 @@ function mapExperience(exp: string): Exclude<ExperienceKey, 'all'> {
   return '0-2 yrs';
 }
 
-/** Convert admin-collected MarketJob → Demand Intel JobSignal shape. */
 function marketJobsToSignals(jobs: MarketJob[]): JobSignal[] {
   return jobs.map((j, i) => {
     const district = mapLocationToDistrict(j.location || '');
@@ -116,7 +110,10 @@ function marketJobsToSignals(jobs: MarketJob[]): JobSignal[] {
       salaryBand: j.salaryText || '—',
       openings: 1,
       postedDaysAgo: j.postingDate
-        ? Math.min(89, Math.max(0, Math.floor((Date.now() - new Date(j.postingDate).getTime()) / 86400000) || 7))
+        ? Math.min(
+            89,
+            Math.max(0, Math.floor((Date.now() - new Date(j.postingDate).getTime()) / 86400000) || 7),
+          )
         : 7,
       emerging: emerging.length ? emerging : undefined,
       trend: 'rising' as const,
@@ -163,7 +160,6 @@ export function DemandIntelligence() {
     };
   }, [reloadLive]);
 
-  // Prefer live admin job pool (region-filtered); fall back to mock MH signals
   const regionJobs = useMemo(() => jobsForRegion(jobs, region), [jobs, region]);
   const liveSignals = useMemo(() => marketJobsToSignals(regionJobs), [regionJobs]);
   const useLive = liveSignals.length >= 8;
@@ -203,7 +199,6 @@ export function DemandIntelligence() {
   }, [market, filtered]);
 
   const heat = useMemo(() => aggregateDistricts(filtered), [filtered]);
-
   const risingSkills = market?.risingSkills?.slice(0, 6) || [];
   const decliningSkills = market?.decliningSkills?.slice(0, 4) || [];
 
@@ -241,19 +236,14 @@ export function DemandIntelligence() {
     setMsg('');
     try {
       writePreferredRegion(region);
-      // Ensure jobs exist first
-      if (readJobs().length < 10) {
-        await apiCollectJobs(region);
-      }
+      if (readJobs().length < 10) await apiCollectJobs(region);
       const res = await apiRefreshMarket(region);
       if (!res.ok) {
         setErr(res.error || 'AI refresh failed');
         return;
       }
       reloadLive();
-      setMsg(
-        `AI trends refreshed for ${region} via ${res.provider || 'AI'} on live API job data.`,
-      );
+      setMsg(`AI trends refreshed for ${region} via ${res.provider || 'AI'} on live API job data.`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Refresh error');
     } finally {
@@ -282,8 +272,7 @@ export function DemandIntelligence() {
             <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">Demand Intelligence</h1>
             <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
               Live job signals from the same pipeline as Market Trend Engine (Adzuna + data.gov.in +
-              curated). Collect / AI refresh pulls real API data. Mock MH signals used only if no live
-              jobs yet.
+              curated). Collect / AI refresh pulls real API data. Mock signals only if no live jobs yet.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -347,14 +336,13 @@ export function DemandIntelligence() {
           <p className="pb-2 text-xs text-[var(--text-muted)]">
             {useLive
               ? `${regionJobs.length} live jobs in scope · same pool as admin Market Trend Engine`
-              : 'No live jobs yet — showing mock Maharashtra signals. Click Collect jobs.'}
+              : 'No live jobs yet — showing mock signals. Click Collect jobs.'}
           </p>
         </div>
 
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.04 }}
           className="rounded-2xl border border-emerald-500/30 bg-[var(--bg-card)]/90 p-4 shadow-[var(--shadow-card)] backdrop-blur-sm"
         >
           <div className="mb-3 flex items-center gap-2">
@@ -363,38 +351,19 @@ export function DemandIntelligence() {
             </div>
             <div>
               <h2 className="text-sm font-bold">Employer validation results</h2>
-              <p className="text-xs text-[var(--text-muted)]">
-                From Industry workspace · surveys & course ratings
-              </p>
+              <p className="text-xs text-[var(--text-muted)]">From Industry workspace</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
-              {
-                label: 'Course ratings',
-                value: vSummary.ratingsCount,
-                sub: vSummary.avgRating ? `avg ${vSummary.avgRating}/5` : '—',
-              },
-              {
-                label: 'Skills tagged',
-                value: vSummary.skillsCount,
-                sub: `${vSummary.mustHave} must · ${vSummary.nice} nice`,
-              },
+              { label: 'Course ratings', value: vSummary.ratingsCount, sub: vSummary.avgRating ? `avg ${vSummary.avgRating}/5` : '—' },
+              { label: 'Skills tagged', value: vSummary.skillsCount, sub: `${vSummary.mustHave} must` },
               { label: 'Curriculum OK', value: vSummary.approved, sub: 'approved' },
               { label: 'Curriculum no', value: vSummary.rejected, sub: 'rejected' },
-              {
-                label: 'Surveys',
-                value: vSummary.surveysCount,
-                sub: vSummary.avgSurveyRelevance
-                  ? `relevance ${vSummary.avgSurveyRelevance}/5`
-                  : '—',
-              },
-              { label: 'Job-ready signal', value: vSummary.avgRating || '—', sub: 'avg rating' },
+              { label: 'Surveys', value: vSummary.surveysCount, sub: 'employer' },
+              { label: 'Job-ready', value: vSummary.avgRating || '—', sub: 'avg rating' },
             ].map((k) => (
-              <div
-                key={k.label}
-                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-3 py-2.5"
-              >
+              <div key={k.label} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-3 py-2.5">
                 <p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">{k.label}</p>
                 <p className="text-xl font-black">{k.value}</p>
                 <p className="text-[10px] text-[var(--text-muted)]">{k.sub}</p>
@@ -403,19 +372,13 @@ export function DemandIntelligence() {
           </div>
           {vSummary.ratingsCount === 0 && vSummary.surveysCount === 0 && (
             <p className="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]">
-              <MessageSquare className="h-3.5 w-3.5" />
-              No employer input yet — Industry role → Employer validation tab.
+              <MessageSquare className="h-3.5 w-3.5" /> No employer input yet.
             </p>
           )}
         </motion.section>
 
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4 shadow-[var(--shadow-card)] backdrop-blur-sm"
-        >
-          <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase text-[var(--text-muted)]">
             <Filter className="h-3.5 w-3.5" /> Filters
           </div>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -423,54 +386,36 @@ export function DemandIntelligence() {
               <span className="text-[10px] font-bold uppercase text-[var(--text-muted)]">Sector</span>
               <select className={selectCls} value={sector} onChange={(e) => setSector(e.target.value as SectorKey)}>
                 {SECTORS.map((s) => (
-                  <option key={s} value={s}>
-                    {s === 'all' ? 'All sectors' : s}
-                  </option>
+                  <option key={s} value={s}>{s === 'all' ? 'All sectors' : s}</option>
                 ))}
               </select>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[10px] font-bold uppercase text-[var(--text-muted)]">District</span>
-              <select
-                className={selectCls}
-                value={district}
-                onChange={(e) => setDistrict(e.target.value as DistrictKey | 'all')}
-              >
+              <select className={selectCls} value={district} onChange={(e) => setDistrict(e.target.value as DistrictKey | 'all')}>
                 <option value="all">All districts</option>
                 {DISTRICTS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
+                  <option key={d} value={d}>{d}</option>
                 ))}
               </select>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[10px] font-bold uppercase text-[var(--text-muted)]">Experience</span>
-              <select
-                className={selectCls}
-                value={experience}
-                onChange={(e) => setExperience(e.target.value as ExperienceKey)}
-              >
+              <select className={selectCls} value={experience} onChange={(e) => setExperience(e.target.value as ExperienceKey)}>
                 {EXPERIENCE_LEVELS.map((x) => (
-                  <option key={x} value={x}>
-                    {x === 'all' ? 'All levels' : x}
-                  </option>
+                  <option key={x} value={x}>{x === 'all' ? 'All levels' : x}</option>
                 ))}
               </select>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[10px] font-bold uppercase text-[var(--text-muted)]">Window</span>
-              <select
-                className={selectCls}
-                value={timeWindow}
-                onChange={(e) => setTimeWindow(e.target.value as WindowKey)}
-              >
+              <select className={selectCls} value={timeWindow} onChange={(e) => setTimeWindow(e.target.value as WindowKey)}>
                 <option value="30d">Last 30 days</option>
                 <option value="90d">Last 90 days</option>
               </select>
             </label>
           </div>
-        </motion.section>
+        </section>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           {[
@@ -479,20 +424,14 @@ export function DemandIntelligence() {
             { label: 'Skills in demand', value: kpis.skills, icon: Zap, tone: 'bg-amber-500/20 text-amber-300' },
             { label: 'Emerging-tagged', value: kpis.emerging, icon: Sparkles, tone: 'bg-emerald-500/20 text-emerald-300' },
             { label: 'Rising roles', value: kpis.rising, icon: TrendingUp, tone: 'bg-sky-500/20 text-sky-300' },
-          ].map((k, i) => (
-            <motion.div
-              key={k.label}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08 + i * 0.04 }}
-              className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4 shadow-[var(--shadow-card)] backdrop-blur-sm"
-            >
+          ].map((k) => (
+            <div key={k.label} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4">
               <div className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl ${k.tone}`}>
                 <k.icon className="h-4 w-4" />
               </div>
               <p className="text-xs font-bold uppercase text-[var(--text-muted)]">{k.label}</p>
               <p className="mt-1 text-2xl font-black">{k.value}</p>
-            </motion.div>
+            </div>
           ))}
         </div>
 
@@ -528,141 +467,68 @@ export function DemandIntelligence() {
         )}
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-          <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm xl:col-span-3">
-            <div className="mb-4 flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/20 text-violet-300">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold">Top skills in demand</h2>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {useLive ? 'From live Adzuna + data.gov + curated jobs' : 'From mock signals'}
-                </p>
-              </div>
-            </div>
+          <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 xl:col-span-3">
+            <h2 className="mb-1 text-sm font-bold">Top skills in demand</h2>
+            <p className="mb-4 text-xs text-[var(--text-muted)]">
+              {useLive ? 'From live Adzuna + data.gov + curated' : 'From mock signals'}
+            </p>
             {skills.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">No signals match these filters.</p>
+              <p className="text-sm text-[var(--text-muted)]">No signals match.</p>
             ) : (
               <ul className="space-y-3">
                 {skills.map((row) => (
                   <li key={row.skill}>
-                    <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
-                      <span className="inline-flex items-center gap-2">
-                        {row.skill}
-                        {row.emerging && (
-                          <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-black text-violet-600 dark:text-violet-300">
-                            EMERGING
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-[var(--text-muted)]">
-                        {row.openings} openings · {row.demand}% ·{' '}
-                        <span
-                          className={
-                            row.trend === 'rising'
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : row.trend === 'declining'
-                                ? 'text-rose-600 dark:text-rose-400'
-                                : ''
-                          }
-                        >
-                          {row.trend}
-                        </span>
-                      </span>
+                    <div className="mb-1 flex justify-between text-xs font-bold">
+                      <span>{row.skill}{row.emerging ? ' · EMERGING' : ''}</span>
+                      <span className="text-[var(--text-muted)]">{row.openings} · {row.demand}%</span>
                     </div>
                     <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500"
-                        style={{ width: `${Math.max(6, row.demand)}%` }}
-                      />
+                      <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500" style={{ width: `${Math.max(6, row.demand)}%` }} />
                     </div>
                   </li>
                 ))}
               </ul>
             )}
           </section>
-
-          <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm xl:col-span-2">
-            <div className="mb-4 flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-300">
-                <TrendingUp className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold">Rising vs declining roles</h2>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {market?.topRoles?.length ? 'From AI / live job titles' : 'Demand momentum'}
-                </p>
-              </div>
-            </div>
+          <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 xl:col-span-2">
+            <h2 className="mb-3 text-sm font-bold">Roles</h2>
             <ul className="space-y-2.5">
               {roles.map((r) => (
-                <li
-                  key={r.role}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-bold">{r.role}</p>
+                <li key={r.role} className="flex items-center justify-between rounded-xl border border-[var(--border-default)] px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-bold">{r.role}</p>
                     <p className="text-[10px] text-[var(--text-muted)]">Score {r.score}</p>
                   </div>
-                  <span
-                    className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-black ${
-                      r.direction === 'rising'
-                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                        : r.direction === 'declining'
-                          ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
-                          : 'bg-slate-500/10 text-[var(--text-muted)]'
-                    }`}
-                  >
-                    {r.direction === 'rising' ? (
-                      <ArrowUpRight className="h-3 w-3" />
-                    ) : r.direction === 'declining' ? (
-                      <ArrowDownRight className="h-3 w-3" />
-                    ) : null}
-                    {r.delta > 0 ? `+${r.delta}%` : r.delta < 0 ? `${r.delta}%` : '—'}
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-emerald-600 dark:text-emerald-300">
+                    <ArrowUpRight className="h-3 w-3" />+{r.delta}%
                   </span>
                 </li>
               ))}
-              {roles.length === 0 && (
-                <p className="text-sm text-[var(--text-muted)]">No role trends for this filter.</p>
-              )}
             </ul>
           </section>
         </div>
 
-        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/20 text-sky-300">
-              <MapPin className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold">District demand heatmap</h2>
-              <p className="text-xs text-[var(--text-muted)]">Openings intensity (mapped from job locations)</p>
-            </div>
-          </div>
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5">
+          <h2 className="mb-4 text-sm font-bold">District heatmap</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {heat.map((d) => (
               <button
                 key={d.district}
                 type="button"
                 onClick={() => setDistrict(d.district)}
-                className={`rounded-2xl border p-4 text-left transition hover:ring-2 hover:ring-[var(--accent)] ${
-                  district === d.district
-                    ? 'border-indigo-400 ring-2 ring-indigo-400/40'
-                    : 'border-[var(--border-default)]'
+                className={`rounded-2xl border p-4 text-left ${
+                  district === d.district ? 'border-indigo-400 ring-2 ring-indigo-400/40' : 'border-[var(--border-default)]'
                 }`}
-                style={{
-                  background: `linear-gradient(135deg, rgba(99,102,241,${0.08 + d.intensity / 200}) 0%, rgba(139,92,246,${0.05 + d.intensity / 250}) 100%)`,
-                }}
+                style={{ background: `linear-gradient(135deg, rgba(99,102,241,${0.08 + d.intensity / 200}) 0%, rgba(139,92,246,${0.05 + d.intensity / 250}) 100%)` }}
               >
                 <p className="text-sm font-bold">{d.district}</p>
                 <p className="mt-1 text-2xl font-black">{d.openings}</p>
-                <p className="text-[10px] text-[var(--text-muted)]">intensity {d.intensity}</p>
               </button>
             ))}
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5">
           <h2 className="mb-3 text-sm font-bold">Job postings sample</h2>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-xs">
@@ -685,20 +551,10 @@ export function DemandIntelligence() {
                     <td className="py-2.5">
                       <div className="flex flex-wrap gap-1">
                         {(job.emerging || []).map((tag) => (
-                          <span
-                            key={tag}
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-black ring-1 ${
-                              EMERGING_COLORS[tag] || EMERGING_COLORS.AI
-                            }`}
-                          >
+                          <span key={tag} className={`rounded-full px-2 py-0.5 text-[10px] font-black ring-1 ${EMERGING_COLORS[tag] || EMERGING_COLORS.AI}`}>
                             {tag}
                           </span>
                         ))}
-                        {job.trend === 'rising' && (
-                          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-700 dark:text-emerald-300">
-                            rising
-                          </span>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -706,7 +562,7 @@ export function DemandIntelligence() {
               </tbody>
             </table>
             {filtered.length === 0 && (
-              <p className="py-6 text-center text-sm text-[var(--text-muted)]">No postings match these filters.</p>
+              <p className="py-6 text-center text-sm text-[var(--text-muted)]">No postings match.</p>
             )}
           </div>
         </section>
