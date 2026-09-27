@@ -118,6 +118,9 @@ const CourseManager = lazy(() => import('./pages/Admin/CourseManager').then((mod
 const ProfileDashboard = lazy(() =>
   import('./pages/Profile/ProfileDashboard').then((module) => ({ default: module.ProfileDashboard ?? module.default })),
 );
+const PublicProfile = lazy(() =>
+  import('./pages/Public/PublicProfile').then((module) => ({ default: module.PublicProfile ?? module.default })),
+);
 const DSASheet = lazy(() => import('./pages/DSASheet').then((module) => ({ default: module.DSASheet })));
 const SkillProfile = lazy(() => import('./pages/SkillProfile').then((module) => ({ default: module.SkillProfile })));
 const DigitalPortfolio = lazy(() =>
@@ -207,7 +210,8 @@ const GlobalThemeButton = () => {
   const isAuthPage = AUTH_HIDE_GLOBAL_TOGGLE.some(
     (route) => path === route || path.startsWith(route + '/'),
   );
-  if (isDashboardArea || isAuthPage) return null;
+  const isPublicProfile = path.startsWith('/u/');
+  if (isDashboardArea || isAuthPage || isPublicProfile) return null;
   return <ThemeToggle movable />;
 };
 
@@ -218,6 +222,7 @@ export function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/u/:username" element={<PublicProfile />} />
           <Route path="/signup" element={<PublicOnlyRoute><Signup /></PublicOnlyRoute>} />
           <Route path="/sign-up" element={<Navigate to="/signup" replace />} />
           <Route path="/register" element={<Navigate to="/signup" replace />} />
