@@ -28,6 +28,7 @@ import {
   apiCollectJobs,
   computeSkillDemand,
   filterJobs,
+  jobsForRegion,
   readJobs,
   readRuns,
   readGovIndicators,
@@ -72,7 +73,9 @@ export function AdminMarketTrends() {
 
   const due = monthDueForRefresh(market?.updatedAt);
   const hoursAgo = hoursSinceMarketRefresh(market?.updatedAt);
-  const filtered = useMemo(() => filterJobs(jobs, filters), [jobs, filters]);
+  // Region-aware: Maharashtra demand uses only MH-located jobs, India (All) uses all
+  const regionJobs = useMemo(() => jobsForRegion(jobs, region), [jobs, region]);
+  const filtered = useMemo(() => filterJobs(regionJobs, filters), [regionJobs, filters]);
   const demand = useMemo(() => computeSkillDemand(filtered), [filtered]);
   const sourceBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -226,17 +229,14 @@ export function AdminMarketTrends() {
         </p>
       )}
       {err && (
-        <p
-          className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-700 dark:text-rose-300"
-          role="alert"
-        >
+        <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-700 dark:text-rose-300" role="alert">
           {err}
         </p>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi title="Jobs stored" value={String(jobs.length)} sub="After dedupe" />
-        <Kpi title="Filtered view" value={String(filtered.length)} sub="Role / industry / location" />
+        <Kpi title="Jobs stored" value={String(jobs.length)} sub="All sources" />
+        <Kpi title="In region" value={String(regionJobs.length)} sub={region} />
         <Kpi
           title="By source"
           value={
@@ -273,9 +273,12 @@ export function AdminMarketTrends() {
       </div>
 
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
-        <h2 className="mb-4 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
-          Skill demand from collected jobs
+        <h2 className="mb-1 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
+          Skill demand — {region}
         </h2>
+        <p className="mb-4 text-xs text-[var(--text-muted)]">
+          Demand % from {filtered.length} jobs in scope (region + filters). Sources: Adzuna + data.gov.in + curated.
+        </p>
         {demand.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">Collect jobs to compute demand %.</p>
         ) : (
@@ -298,18 +301,15 @@ export function AdminMarketTrends() {
             ))}
           </ul>
         )}
-        <p className="mt-3 text-[11px] text-[var(--text-muted)]">
-          Share of filtered postings mentioning each skill. All sources: Adzuna + data.gov + curated.
-        </p>
       </div>
 
       {(govInd.length > 0 || collectNote) && (
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
-          <h2 className="mb-2 text-sm font-black uppercase text-[var(--text-muted)]">Gov / PLFS indicators utilised</h2>
+          <h2 className="mb-2 text-sm font-black uppercase text-[var(--text-muted)]">Gov / PLFS + collect note</h2>
           {collectNote && <p className="mb-3 text-xs text-[var(--text-secondary)]">{collectNote}</p>}
           {govInd.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">
-              No numeric PLFS rows this run — Skill India catalog + job skills still used in demand %.
+              Skill India catalog is always merged as data-gov-in. Set DATA_GOV_RESOURCE_IDS for live PLFS rows.
             </p>
           ) : (
             <ul className="space-y-2 text-sm">
@@ -389,28 +389,25 @@ export function AdminMarketTrends() {
 
           {(market.topRoles?.length || market.sectors?.length) && (
             <div className="grid gap-4 md:grid-cols-2">
-              {market.topRoles && market.topRoles.length > 0 && (
+              {!!market.topRoles?.length && (
                 <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
                   <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
-                    <Briefcase className="h-4 w-4" /> Top roles (from job titles)
+                    <Briefcase className="h-4 w-4" /> Top roles
                   </h2>
                   <ul className="space-y-2">
                     {market.topRoles.map((r) => (
                       <li key={r.role} className="flex items-center justify-between gap-2 text-sm">
                         <span className="font-semibold">{r.role}</span>
-                        <span className="tabular-nums text-[var(--text-muted)]">
-                          {r.openingsIndex}
-                          {r.avgSalaryLpa != null ? ` · ~${r.avgSalaryLpa} LPA` : ''}
-                        </span>
+                        <span className="tabular-nums text-[var(--text-muted)]">{r.openingsIndex}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-              {market.sectors && market.sectors.length > 0 && (
+              {!!market.sectors?.length && (
                 <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
                   <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
-                    <Layers className="h-4 w-4" /> Sectors (from industries)
+                    <Layers className="h-4 w-4" /> Sectors
                   </h2>
                   <ul className="space-y-3">
                     {market.sectors.map((s) => (
@@ -433,7 +430,7 @@ export function AdminMarketTrends() {
             </div>
           )}
 
-          {market.emergingTech && market.emergingTech.length > 0 && (
+          {!!market.emergingTech?.length && (
             <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
               <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
                 <Zap className="h-4 w-4" /> Emerging tech
