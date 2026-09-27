@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Activity,
@@ -7,9 +7,12 @@ import {
   BadgeCheck,
   Briefcase,
   ClipboardCheck,
+  Database,
   Filter,
+  Loader2,
   MapPin,
   MessageSquare,
+  RefreshCw,
   Sparkles,
   Star,
   Target,
@@ -29,10 +32,26 @@ import {
   kpiFromSignals,
   type DistrictKey,
   type ExperienceKey,
+  type JobSignal,
   type SectorKey,
   type WindowKey,
 } from './demandIntelligenceData';
 import { validationSummary } from '../../utils/employerValidationStore';
+import {
+  apiCollectJobs,
+  computeSkillDemand,
+  jobsForRegion,
+  readJobs,
+  type MarketJob,
+} from '../../utils/marketEngineStore';
+import {
+  apiRefreshMarket,
+  MARKET_REGIONS,
+  readMarketSnapshot,
+  readPreferredRegion,
+  writePreferredRegion,
+  type MarketSnapshot,
+} from '../../utils/marketTrendStore';
 
 const EMERGING_COLORS: Record<string, string> = {
   AI: 'bg-violet-500/15 text-violet-700 ring-violet-300/50 dark:text-violet-300 dark:ring-violet-500/40',
@@ -40,12 +59,88 @@ const EMERGING_COLORS: Record<string, string> = {
   Green: 'bg-teal-500/15 text-teal-700 ring-teal-300/50 dark:text-teal-300 dark:ring-teal-500/40',
 };
 
+const MH_DISTRICTS = new Set(DISTRICTS.map((d) => d.toLowerCase()));
+
+function mapLocationToDistrict(loc: string): DistrictKey {
+  const l = loc.toLowerCase();
+  if (l.includes('pune')) return 'Pune';
+  if (l.includes('mumbai') || l.includes('bombay')) return 'Mumbai';
+  if (l.includes('nagpur')) return 'Nagpur';
+  if (l.includes('nashik') || l.includes('nasik')) return 'Nashik';
+  if (l.includes('aurangabad') || l.includes('chhatrapati sambhajinagar')) return 'Aurangabad';
+  if (l.includes('thane') || l.includes('navi mumbai')) return 'Thane';
+  if (l.includes('kolhapur')) return 'Kolhapur';
+  if (l.includes('solapur')) return 'Solapur';
+  // default hub for Maharashtra-wide / unknown
+  return 'Pune';
+}
+
+function mapSector(industry: string, title: string): Exclude<SectorKey, 'all'> {
+  const t = `${industry} ${title}`.toLowerCase();
+  if (/bfsi|bank|fintech|finance/.test(t)) return 'BFSI';
+  if (/health|hospital|clinical|pharma/.test(t)) return 'Healthcare';
+  if (/manufactur|cnc|plc|auto|industrial/.test(t)) return 'Manufacturing';
+  if (/logistics|warehouse|supply/.test(t)) return 'Logistics';
+  if (/ev|solar|green|renewable|battery/.test(t)) return 'EV / Green';
+  return 'IT / Software';
+}
+
+function mapExperience(exp: string): Exclude<ExperienceKey, 'all'> {
+  const e = (exp || '').toLowerCase();
+  if (/intern|fresher|0\s*-\s*0|trainee/.test(e)) return 'Intern';
+  if (/0\s*-\s*2|1\s*-\s*2|junior|entry/.test(e)) return '0-2 yrs';
+  if (/2\s*-\s*5|3\s*-\s*5|mid/.test(e)) return '2-5 yrs';
+  if (/5\+|5\s*-|senior|lead/.test(e)) return '5+ yrs';
+  return '0-2 yrs';
+}
+
+/** Convert admin-collected MarketJob → Demand Intel JobSignal shape. */
+function marketJobsToSignals(jobs: MarketJob[]): JobSignal[] {
+  return jobs.map((j, i) => {
+    const district = mapLocationToDistrict(j.location || '');
+    const skills = (j.skills || []).slice(0, 6);
+    const emerging: string[] = [];
+    const blob = `${j.title} ${skills.join(' ')}`.toLowerCase();
+    if (/ai|ml|machine learning|genai|llm/.test(blob)) emerging.push('AI');
+    if (/ev|electric vehicle|battery/.test(blob)) emerging.push('EV');
+    if (/solar|green|sustainab/.test(blob)) emerging.push('Green');
+    return {
+      id: `live-${j.source}-${j.externalId || i}`,
+      title: j.title || 'Job',
+      company: j.company || 'Unknown',
+      district,
+      sector: mapSector(j.industry || '', j.title || ''),
+      skills: skills.length ? skills : ['Software'],
+      proficiency: 'Intermediate' as const,
+      experience: mapExperience(j.experience || ''),
+      salaryBand: j.salaryText || '—',
+      openings: 1,
+      postedDaysAgo: j.postingDate
+        ? Math.min(89, Math.max(0, Math.floor((Date.now() - new Date(j.postingDate).getTime()) / 86400000) || 7))
+        : 7,
+      emerging: emerging.length ? emerging : undefined,
+      trend: 'rising' as const,
+    };
+  });
+}
+
 export function DemandIntelligence() {
   const [sector, setSector] = useState<SectorKey>('all');
   const [district, setDistrict] = useState<DistrictKey | 'all'>('all');
   const [experience, setExperience] = useState<ExperienceKey>('all');
   const [timeWindow, setTimeWindow] = useState<WindowKey>('90d');
   const [vSummary, setVSummary] = useState(() => validationSummary());
+  const [jobs, setJobs] = useState<MarketJob[]>(() => readJobs());
+  const [market, setMarket] = useState<MarketSnapshot | null>(() => readMarketSnapshot());
+  const [region, setRegion] = useState(() => readPreferredRegion() || 'Maharashtra');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  const reloadLive = useCallback(() => {
+    setJobs(readJobs());
+    setMarket(readMarketSnapshot());
+  }, []);
 
   useEffect(() => {
     const refresh = () => setVSummary(validationSummary());
@@ -54,18 +149,117 @@ export function DemandIntelligence() {
     return () => window.removeEventListener('eduroute:employer-validation-updated', refresh);
   }, []);
 
+  useEffect(() => {
+    const onUp = () => reloadLive();
+    window.addEventListener('eduroute:mt-jobs-updated', onUp);
+    window.addEventListener('eduroute:market-trends-updated', onUp);
+    window.addEventListener('storage', onUp);
+    window.addEventListener('focus', onUp);
+    return () => {
+      window.removeEventListener('eduroute:mt-jobs-updated', onUp);
+      window.removeEventListener('eduroute:market-trends-updated', onUp);
+      window.removeEventListener('storage', onUp);
+      window.removeEventListener('focus', onUp);
+    };
+  }, [reloadLive]);
+
+  // Prefer live admin job pool (region-filtered); fall back to mock MH signals
+  const regionJobs = useMemo(() => jobsForRegion(jobs, region), [jobs, region]);
+  const liveSignals = useMemo(() => marketJobsToSignals(regionJobs), [regionJobs]);
+  const useLive = liveSignals.length >= 8;
+  const baseSignals: JobSignal[] = useLive ? liveSignals : JOB_SIGNALS;
+
   const filtered = useMemo(
-    () => filterSignals(JOB_SIGNALS, { sector, district, experience, window: timeWindow }),
-    [sector, district, experience, timeWindow],
+    () => filterSignals(baseSignals, { sector, district, experience, window: timeWindow }),
+    [baseSignals, sector, district, experience, timeWindow],
   );
 
   const kpis = useMemo(() => kpiFromSignals(filtered), [filtered]);
-  const skills = useMemo(() => aggregateSkills(filtered), [filtered]);
-  const roles = useMemo(() => aggregateRoles(filtered), [filtered]);
+  const skills = useMemo(() => {
+    if (useLive && regionJobs.length) {
+      const demand = computeSkillDemand(regionJobs).slice(0, 12);
+      const maxPct = demand[0]?.demandPct || 1;
+      return demand.map((d) => ({
+        skill: d.skill,
+        openings: d.jobCount,
+        demand: Math.min(99, Math.round((d.demandPct / maxPct) * 95)),
+        trend: 'rising' as const,
+        emerging: /ai|ml|cloud|kubernetes|genai/i.test(d.skill),
+      }));
+    }
+    return aggregateSkills(filtered);
+  }, [useLive, regionJobs, filtered]);
+
+  const roles = useMemo(() => {
+    if (market?.topRoles?.length) {
+      return market.topRoles.slice(0, 8).map((r) => ({
+        role: r.role,
+        score: r.openingsIndex,
+        direction: 'rising' as const,
+        delta: Math.max(5, Math.round(r.openingsIndex / 10)),
+      }));
+    }
+    return aggregateRoles(filtered);
+  }, [market, filtered]);
+
   const heat = useMemo(() => aggregateDistricts(filtered), [filtered]);
+
+  const risingSkills = market?.risingSkills?.slice(0, 6) || [];
+  const decliningSkills = market?.decliningSkills?.slice(0, 4) || [];
 
   const selectCls =
     'rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-[var(--accent)]';
+
+  const collect = async () => {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      writePreferredRegion(region);
+      const res = await apiCollectJobs(region);
+      if (!res.ok) {
+        setErr(res.error || 'Collect failed');
+        return;
+      }
+      reloadLive();
+      setMsg(
+        `Collected live jobs for ${region}. Sources: Adzuna + data.gov.in + curated. ${res.note || ''}`.slice(
+          0,
+          200,
+        ),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Collect error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refreshAi = async () => {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      writePreferredRegion(region);
+      // Ensure jobs exist first
+      if (readJobs().length < 10) {
+        await apiCollectJobs(region);
+      }
+      const res = await apiRefreshMarket(region);
+      if (!res.ok) {
+        setErr(res.error || 'AI refresh failed');
+        return;
+      }
+      reloadLive();
+      setMsg(
+        `AI trends refreshed for ${region} via ${res.provider || 'AI'} on live API job data.`,
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Refresh error');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="relative min-h-full overflow-hidden text-[var(--text-primary)]">
@@ -87,15 +281,75 @@ export function DemandIntelligence() {
             </p>
             <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">Demand Intelligence</h1>
             <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-              Live job-posting signals by role, skill, location and proficiency — Maharashtra focus. Align
-              training capacity with what industry is hiring. Employer surveys feed this view.
+              Live job signals from the same pipeline as Market Trend Engine (Adzuna + data.gov.in +
+              curated). Collect / AI refresh pulls real API data. Mock MH signals used only if no live
+              jobs yet.
             </p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 px-3 py-2 text-xs font-bold shadow-[var(--shadow-card)] backdrop-blur-sm">
-            <Activity className="h-3.5 w-3.5 text-emerald-500" />
-            Mock signals · {filtered.length} postings
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 px-3 py-2 text-xs font-bold shadow-[var(--shadow-card)] backdrop-blur-sm">
+              <Activity className={`h-3.5 w-3.5 ${useLive ? 'text-emerald-500' : 'text-amber-500'}`} />
+              {useLive ? `Live · ${filtered.length} postings` : `Mock · ${filtered.length} postings`}
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void collect()}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-xs font-bold disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Database className="h-3.5 w-3.5" />}
+              Collect jobs
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void refreshAi()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-lg disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Refresh AI
+            </button>
           </div>
         </motion.div>
+
+        {msg && (
+          <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-800 dark:text-emerald-200">
+            {msg}
+          </p>
+        )}
+        {err && (
+          <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-700 dark:text-rose-300" role="alert">
+            {err}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-4">
+          <label className="flex min-w-[200px] flex-1 flex-col gap-1">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-[var(--text-muted)]">
+              <MapPin className="h-3 w-3" /> Region (live data)
+            </span>
+            <select
+              className={selectCls}
+              value={region}
+              disabled={busy}
+              onChange={(e) => {
+                setRegion(e.target.value);
+                writePreferredRegion(e.target.value);
+              }}
+            >
+              {MARKET_REGIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="pb-2 text-xs text-[var(--text-muted)]">
+            {useLive
+              ? `${regionJobs.length} live jobs in scope · same pool as admin Market Trend Engine`
+              : 'No live jobs yet — showing mock Maharashtra signals. Click Collect jobs.'}
+          </p>
+        </div>
 
         <motion.section
           initial={{ opacity: 0, y: 10 }}
@@ -110,17 +364,31 @@ export function DemandIntelligence() {
             <div>
               <h2 className="text-sm font-bold">Employer validation results</h2>
               <p className="text-xs text-[var(--text-muted)]">
-                From Industry workspace · surveys & course ratings close the loop with training providers
+                From Industry workspace · surveys & course ratings
               </p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
             {[
-              { label: 'Course ratings', value: vSummary.ratingsCount, sub: vSummary.avgRating ? `avg ${vSummary.avgRating}/5` : '—' },
-              { label: 'Skills tagged', value: vSummary.skillsCount, sub: `${vSummary.mustHave} must · ${vSummary.nice} nice` },
+              {
+                label: 'Course ratings',
+                value: vSummary.ratingsCount,
+                sub: vSummary.avgRating ? `avg ${vSummary.avgRating}/5` : '—',
+              },
+              {
+                label: 'Skills tagged',
+                value: vSummary.skillsCount,
+                sub: `${vSummary.mustHave} must · ${vSummary.nice} nice`,
+              },
               { label: 'Curriculum OK', value: vSummary.approved, sub: 'approved' },
               { label: 'Curriculum no', value: vSummary.rejected, sub: 'rejected' },
-              { label: 'Surveys', value: vSummary.surveysCount, sub: vSummary.avgSurveyRelevance ? `relevance ${vSummary.avgSurveyRelevance}/5` : '—' },
+              {
+                label: 'Surveys',
+                value: vSummary.surveysCount,
+                sub: vSummary.avgSurveyRelevance
+                  ? `relevance ${vSummary.avgSurveyRelevance}/5`
+                  : '—',
+              },
               { label: 'Job-ready signal', value: vSummary.avgRating || '—', sub: 'avg rating' },
             ].map((k) => (
               <div
@@ -133,42 +401,10 @@ export function DemandIntelligence() {
               </div>
             ))}
           </div>
-          {vSummary.recentRatings.length > 0 && (
-            <ul className="mt-3 space-y-1.5 border-t border-[var(--border-default)] pt-3">
-              {vSummary.recentRatings.slice(0, 3).map((r) => (
-                <li key={r.id} className="flex flex-wrap items-center gap-2 text-xs">
-                  <Star className="h-3 w-3 text-amber-500" />
-                  <span className="font-bold">{r.courseName}</span>
-                  <span className="font-black text-amber-600 dark:text-amber-400">{r.rating}/5</span>
-                  <span className="text-[var(--text-muted)]">{r.company}</span>
-                  {r.comment && <span className="text-[var(--text-secondary)]">— {r.comment}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {vSummary.recentDecisions.length > 0 && (
-            <ul className="mt-2 space-y-1">
-              {vSummary.recentDecisions.slice(0, 3).map((d) => (
-                <li key={d.id} className="flex flex-wrap items-center gap-2 text-xs">
-                  <BadgeCheck className="h-3 w-3 text-emerald-500" />
-                  <span className="font-bold">{d.title}</span>
-                  <span
-                    className={
-                      d.decision === 'approved'
-                        ? 'font-black text-emerald-600 dark:text-emerald-400'
-                        : 'font-black text-rose-600 dark:text-rose-400'
-                    }
-                  >
-                    {d.decision}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
           {vSummary.ratingsCount === 0 && vSummary.surveysCount === 0 && (
             <p className="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]">
               <MessageSquare className="h-3.5 w-3.5" />
-              No employer input yet — Industry role → Employer validation tab to rate courses & submit surveys.
+              No employer input yet — Industry role → Employer validation tab.
             </p>
           )}
         </motion.section>
@@ -200,7 +436,7 @@ export function DemandIntelligence() {
                 value={district}
                 onChange={(e) => setDistrict(e.target.value as DistrictKey | 'all')}
               >
-                <option value="all">All Maharashtra</option>
+                <option value="all">All districts</option>
                 {DISTRICTS.map((d) => (
                   <option key={d} value={d}>
                     {d}
@@ -260,6 +496,37 @@ export function DemandIntelligence() {
           ))}
         </div>
 
+        {(risingSkills.length > 0 || decliningSkills.length > 0) && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-bold">
+                <Sparkles className="h-4 w-4 text-violet-400" /> AI rising skills ({region})
+              </h2>
+              <ul className="space-y-2">
+                {risingSkills.map((s) => (
+                  <li key={s.skill} className="flex justify-between text-sm">
+                    <span className="font-semibold">{s.skill}</span>
+                    <span className="text-[var(--text-muted)]">{s.demandScore}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-bold">
+                <ArrowDownRight className="h-4 w-4 text-rose-400" /> AI declining skills
+              </h2>
+              <ul className="space-y-2">
+                {decliningSkills.map((s) => (
+                  <li key={s.skill} className="flex justify-between text-sm">
+                    <span className="font-semibold">{s.skill}</span>
+                    <span className="text-[var(--text-muted)]">{s.demandScore}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
           <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm xl:col-span-3">
             <div className="mb-4 flex items-center gap-2">
@@ -268,7 +535,9 @@ export function DemandIntelligence() {
               </div>
               <div>
                 <h2 className="text-sm font-bold">Top skills in demand</h2>
-                <p className="text-xs text-[var(--text-muted)]">From filtered job-posting signals</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {useLive ? 'From live Adzuna + data.gov + curated jobs' : 'From mock signals'}
+                </p>
               </div>
             </div>
             {skills.length === 0 ? (
@@ -320,7 +589,9 @@ export function DemandIntelligence() {
               </div>
               <div>
                 <h2 className="text-sm font-bold">Rising vs declining roles</h2>
-                <p className="text-xs text-[var(--text-muted)]">Demand momentum</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {market?.topRoles?.length ? 'From AI / live job titles' : 'Demand momentum'}
+                </p>
               </div>
             </div>
             <ul className="space-y-2.5">
@@ -364,8 +635,8 @@ export function DemandIntelligence() {
               <MapPin className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold">District demand heatmap (Maharashtra)</h2>
-              <p className="text-xs text-[var(--text-muted)]">Openings intensity by district</p>
+              <h2 className="text-sm font-bold">District demand heatmap</h2>
+              <p className="text-xs text-[var(--text-muted)]">Openings intensity (mapped from job locations)</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -385,74 +656,33 @@ export function DemandIntelligence() {
               >
                 <p className="text-sm font-bold">{d.district}</p>
                 <p className="mt-1 text-2xl font-black">{d.openings}</p>
-                <p className="text-[10px] font-semibold text-[var(--text-muted)]">{d.intensity}% intensity</p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-sky-500 to-indigo-500"
-                    style={{ width: `${Math.max(4, d.intensity)}%` }}
-                  />
-                </div>
+                <p className="text-[10px] text-[var(--text-muted)]">intensity {d.intensity}</p>
               </button>
             ))}
           </div>
         </section>
 
         <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-300">
-                <Briefcase className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold">Job-posting signals</h2>
-                <p className="text-xs text-[var(--text-muted)]">Title · skills · district · salary · proficiency</p>
-              </div>
-            </div>
-          </div>
+          <h2 className="mb-3 text-sm font-bold">Job postings sample</h2>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-xs">
+            <table className="w-full min-w-[640px] text-left text-xs">
               <thead>
-                <tr className="border-b border-[var(--border-default)] text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                  <th className="pb-2 pr-3">Role</th>
-                  <th className="pb-2 pr-3">District</th>
-                  <th className="pb-2 pr-3">Skills</th>
-                  <th className="pb-2 pr-3">Proficiency</th>
-                  <th className="pb-2 pr-3">Experience</th>
-                  <th className="pb-2 pr-3">Salary</th>
-                  <th className="pb-2 pr-3">Openings</th>
-                  <th className="pb-2">Tags</th>
+                <tr className="border-b border-[var(--border-default)] text-[10px] uppercase text-[var(--text-muted)]">
+                  <th className="py-2 pr-2">Role</th>
+                  <th className="py-2 pr-2">Company</th>
+                  <th className="py-2 pr-2">District</th>
+                  <th className="py-2 pr-2">Skills</th>
+                  <th className="py-2">Flags</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((job) => (
-                  <tr
-                    key={job.id}
-                    className="border-b border-[var(--border-default)]/60 last:border-0 hover:bg-[var(--accent-soft)]/40"
-                  >
-                    <td className="py-3 pr-3">
-                      <p className="font-bold text-[var(--text-primary)]">{job.title}</p>
-                      <p className="text-[10px] text-[var(--text-muted)]">
-                        {job.company} · {job.sector}
-                      </p>
-                    </td>
-                    <td className="py-3 pr-3 font-semibold">{job.district}</td>
-                    <td className="py-3 pr-3">
-                      <div className="flex flex-wrap gap-1">
-                        {job.skills.map((sk) => (
-                          <span
-                            key={sk}
-                            className="rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10px] font-bold"
-                          >
-                            {sk}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-3 pr-3">{job.proficiency}</td>
-                    <td className="py-3 pr-3">{job.experience}</td>
-                    <td className="py-3 pr-3 font-semibold">{job.salaryBand}</td>
-                    <td className="py-3 pr-3 font-black">{job.openings}</td>
-                    <td className="py-3">
+                {filtered.slice(0, 20).map((job) => (
+                  <tr key={job.id} className="border-b border-[var(--border-default)]/60">
+                    <td className="py-2.5 pr-2 font-bold">{job.title}</td>
+                    <td className="py-2.5 pr-2 text-[var(--text-secondary)]">{job.company}</td>
+                    <td className="py-2.5 pr-2">{job.district}</td>
+                    <td className="py-2.5 pr-2 text-[var(--text-muted)]">{job.skills.slice(0, 4).join(', ')}</td>
+                    <td className="py-2.5">
                       <div className="flex flex-wrap gap-1">
                         {(job.emerging || []).map((tag) => (
                           <span
@@ -467,11 +697,6 @@ export function DemandIntelligence() {
                         {job.trend === 'rising' && (
                           <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-700 dark:text-emerald-300">
                             rising
-                          </span>
-                        )}
-                        {job.trend === 'declining' && (
-                          <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-black text-rose-700 dark:text-rose-300">
-                            declining
                           </span>
                         )}
                       </div>
