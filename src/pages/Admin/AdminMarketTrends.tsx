@@ -10,9 +10,13 @@ import {
   Database,
   Filter,
   History,
+  Briefcase,
+  Layers,
+  Zap,
 } from 'lucide-react';
 import {
   apiRefreshMarket,
+  hoursSinceMarketRefresh,
   MARKET_REGIONS,
   monthDueForRefresh,
   readMarketSnapshot,
@@ -60,6 +64,7 @@ export function AdminMarketTrends() {
   }, [reload]);
 
   const due = monthDueForRefresh(market?.updatedAt);
+  const hoursAgo = hoursSinceMarketRefresh(market?.updatedAt);
   const filtered = useMemo(() => filterJobs(jobs, filters), [jobs, filters]);
   const demand = useMemo(() => computeSkillDemand(filtered), [filtered]);
   const sourceBreakdown = useMemo(() => {
@@ -69,6 +74,8 @@ export function AdminMarketTrends() {
     });
     return counts;
   }, [jobs]);
+
+  const maxDemand = demand[0]?.demandPct || 1;
 
   const onRegionChange = (value: string) => {
     setRegion(value);
@@ -126,11 +133,12 @@ export function AdminMarketTrends() {
     <div className="mx-auto max-w-6xl space-y-6 text-[var(--text-primary)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Admin · Engine</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Admin · LMI Engine</p>
           <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">Market Trend Engine</h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Collect live jobs via <strong>Adzuna API</strong> (when configured) plus curated public seed. Dedupe,
-            normalize skills, demand %. AI refresh updates the student-facing snapshot. No restricted scraping.
+            Live + public job signals → skill demand by <strong>state / All-India</strong> → AI trends → student gaps.
+            Sources: <strong>Adzuna API</strong> (when configured) + <strong>curated public</strong> seed. No restricted
+            scraping.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -173,18 +181,26 @@ export function AdminMarketTrends() {
             ))}
           </select>
         </label>
-        <p className="max-w-lg pb-1 text-xs text-[var(--text-muted)]">
-          Sources:{' '}
-          <strong>adzuna</strong> (official Jobs API, India) + <strong>curated-public</strong> seed. Netlify env:{' '}
-          <code className="text-[10px]">ADZUNA_APP_ID</code>, <code className="text-[10px]">ADZUNA_APP_KEY</code>. Optional
-          SQL: <code className="text-[10px]">docs/sql/market_trend_schema.sql</code>
-        </p>
+        <div className="flex flex-wrap gap-2 pb-1">
+          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">
+            adzuna
+          </span>
+          <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-sky-700 dark:text-sky-300">
+            curated-public
+          </span>
+          <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">
+            AI trends
+          </span>
+        </div>
       </div>
 
       {due && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          Monthly AI refresh due (or no snapshot yet).
+          AI snapshot due (24h+ or seed). Click <strong>Refresh AI trends</strong> for the selected region.
+          {hoursAgo != null && !market?.isSeed && (
+            <span className="ml-1 opacity-80">Last refresh ~{hoursAgo}h ago.</span>
+          )}
         </div>
       )}
       {msg && (
@@ -193,39 +209,33 @@ export function AdminMarketTrends() {
         </p>
       )}
       {err && (
-        <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-700 dark:text-rose-300" role="alert">
+        <p
+          className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-700 dark:text-rose-300"
+          role="alert"
+        >
           {err}
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
-          <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Jobs stored</p>
-          <p className="mt-1 text-2xl font-black">{jobs.length}</p>
-          <p className="text-xs text-[var(--text-muted)]">After dedupe by source + external id</p>
-        </div>
-        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
-          <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Filtered</p>
-          <p className="mt-1 text-2xl font-black">{filtered.length}</p>
-          <p className="text-xs text-[var(--text-muted)]">Role / industry / location / experience</p>
-        </div>
-        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
-          <p className="text-xs font-bold uppercase text-[var(--text-muted)]">By source</p>
-          <p className="mt-1 text-xs font-semibold leading-relaxed">
-            {Object.keys(sourceBreakdown).length === 0
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi title="Jobs stored" value={String(jobs.length)} sub="After dedupe" />
+        <Kpi title="Filtered view" value={String(filtered.length)} sub="Role / industry / location" />
+        <Kpi
+          title="By source"
+          value={
+            Object.keys(sourceBreakdown).length === 0
               ? '—'
               : Object.entries(sourceBreakdown)
-                  .map(([k, v]) => `${k}: ${v}`)
-                  .join(' · ')}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
-          <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Last collection</p>
-          <p className="mt-1 text-sm font-bold">
-            {runs[0] ? new Date(runs[0].finishedAt || runs[0].startedAt).toLocaleString() : '—'}
-          </p>
-          <p className="text-xs text-[var(--text-muted)]">{runs[0]?.status || 'No runs yet'}</p>
-        </div>
+                  .map(([k, v]) => `${k.split('-')[0]} ${v}`)
+                  .join(' · ')
+          }
+          sub="Live + public"
+        />
+        <Kpi
+          title="Last collection"
+          value={runs[0] ? new Date(runs[0].finishedAt || runs[0].startedAt).toLocaleDateString() : '—'}
+          sub={runs[0]?.status || 'No runs yet'}
+        />
       </div>
 
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
@@ -246,38 +256,33 @@ export function AdminMarketTrends() {
       </div>
 
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
-        <h2 className="mb-3 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
-          Skill demand (from collected jobs)
+        <h2 className="mb-4 text-sm font-black uppercase tracking-wide text-[var(--text-muted)]">
+          Skill demand from collected jobs
         </h2>
         {demand.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">Collect jobs to compute demand %.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border-default)] text-xs uppercase text-[var(--text-muted)]">
-                  <th className="py-2 pr-3">Skill</th>
-                  <th className="py-2 pr-3">Jobs</th>
-                  <th className="py-2 pr-3">Demand %</th>
-                  <th className="py-2">Trend / growth</th>
-                </tr>
-              </thead>
-              <tbody>
-                {demand.slice(0, 15).map((row) => (
-                  <tr key={row.skill} className="border-b border-[var(--border-default)]/60">
-                    <td className="py-2 pr-3 font-semibold">{row.skill}</td>
-                    <td className="py-2 pr-3 tabular-nums">{row.jobCount}</td>
-                    <td className="py-2 pr-3 tabular-nums">{row.demandPct}%</td>
-                    <td className="py-2 text-xs text-[var(--text-muted)]">{row.growthLabel}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="space-y-3">
+            {demand.slice(0, 12).map((row) => (
+              <li key={row.skill}>
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="font-semibold">{row.skill}</span>
+                  <span className="tabular-nums text-[var(--text-muted)]">
+                    {row.jobCount} jobs · <strong className="text-[var(--text-primary)]">{row.demandPct}%</strong>
+                  </span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500 transition-all"
+                    style={{ width: `${Math.min(100, (row.demandPct / maxDemand) * 100)}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
-        <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-          Historical growth requires multiple collection windows — shown as “Insufficient historical data” until then.
-          Live rows come from Adzuna when API keys are set on Netlify.
+        <p className="mt-3 text-[11px] text-[var(--text-muted)]">
+          Share of filtered postings mentioning each skill. Historical growth needs multiple collection windows.
         </p>
       </div>
 
@@ -323,20 +328,99 @@ export function AdminMarketTrends() {
                   ? 'Groq'
                   : market.provider === 'local-fallback'
                     ? 'Baseline'
-                    : 'Gemini'}
+                    : market.provider === 'seed'
+                      ? 'Seed'
+                      : 'Gemini'}
               </span>
               <span>{market.region || region}</span>
               <span>· Updated {new Date(market.updatedAt).toLocaleString()}</span>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-[var(--text-secondary)]">{market.summary}</p>
-            {market.sourcesNote && <p className="mt-2 text-[11px] text-[var(--text-muted)]">{market.sourcesNote}</p>}
+            {market.sourcesNote && (
+              <p className="mt-2 text-[11px] text-[var(--text-muted)]">{market.sourcesNote}</p>
+            )}
           </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <SkillList title="Rising skills (AI)" items={market.risingSkills} tone="emerald" />
             <SkillList title="Declining skills (AI)" items={market.decliningSkills} tone="rose" />
           </div>
+
+          {(market.topRoles?.length || market.sectors?.length) && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {market.topRoles && market.topRoles.length > 0 && (
+                <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
+                  <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
+                    <Briefcase className="h-4 w-4" /> Top roles
+                  </h2>
+                  <ul className="space-y-2">
+                    {market.topRoles.map((r) => (
+                      <li key={r.role} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-semibold">{r.role}</span>
+                        <span className="tabular-nums text-[var(--text-muted)]">
+                          {r.openingsIndex}
+                          {r.avgSalaryLpa != null ? ` · ~${r.avgSalaryLpa} LPA` : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {market.sectors && market.sectors.length > 0 && (
+                <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
+                  <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
+                    <Layers className="h-4 w-4" /> Sectors
+                  </h2>
+                  <ul className="space-y-3">
+                    {market.sectors.map((s) => (
+                      <li key={s.name}>
+                        <div className="mb-1 flex justify-between text-sm">
+                          <span className="font-semibold">{s.name}</span>
+                          <span className="tabular-nums text-[var(--text-muted)]">{s.demandScore}</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+                          <div
+                            className="h-full rounded-full bg-indigo-500"
+                            style={{ width: `${Math.min(100, s.demandScore)}%` }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {market.emergingTech && market.emergingTech.length > 0 && (
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-black uppercase text-[var(--text-muted)]">
+                <Zap className="h-4 w-4" /> Emerging tech
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {market.emergingTech.map((t) => (
+                  <span
+                    key={t}
+                    className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function Kpi({ title, value, sub }: { title: string; value: string; sub: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
+      <p className="text-xs font-bold uppercase text-[var(--text-muted)]">{title}</p>
+      <p className="mt-1 truncate text-xl font-black tracking-tight">{value}</p>
+      <p className="text-xs text-[var(--text-muted)]">{sub}</p>
     </div>
   );
 }
@@ -365,6 +449,7 @@ function SkillList({
             <div className="h-1.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
               <div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.min(100, s.demandScore)}%` }} />
             </div>
+            {s.note && <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{s.note}</p>}
           </li>
         ))}
       </ul>

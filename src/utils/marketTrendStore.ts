@@ -1,6 +1,7 @@
 /**
  * Client cache for market trends + student trend analysis.
- * Admin refresh anytime (optional region/state); student analysis every 7 days.
+ * Admin refresh anytime (region/state); student personal analysis every 3 days.
+ * Market snapshot is shared; only personal AI analysis is rate-limited.
  */
 
 export type MarketSkill = {
@@ -77,13 +78,16 @@ export type MarketRegion = (typeof MARKET_REGIONS)[number] | string;
 const MARKET_KEY = 'eduroute:market-trends-v1';
 const ANALYSIS_KEY = 'eduroute:student-trend-analysis-v1';
 const REGION_KEY = 'eduroute:market-region-v1';
-const STUDENT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+/** Personal AI analysis cooldown — 3 days (market snapshot itself is always shared). */
+const STUDENT_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
+/** Admin AI refresh nudge after 24 hours. */
+const ADMIN_DUE_MS = 24 * 60 * 60 * 1000;
 
 export const SEED_MARKET: MarketSnapshot = {
   updatedAt: '2026-09-01T00:00:00.000Z',
   region: 'India / Maharashtra',
   summary:
-    'Placeholder market snapshot (not live AI). Admin: select region → Refresh to load current demand via AI. Students will then see that data in Trend Analyse.',
+    'Placeholder market snapshot. Admin: select region → Collect jobs (Adzuna + curated public) → Refresh AI trends. Students then see demand, gaps, and actions in Trend Analyse.',
   risingSkills: [
     { skill: 'React / Next.js', demandScore: 88, trend: 'rising', note: 'Frontend hiring strong' },
     { skill: 'Python / AI basics', demandScore: 86, trend: 'rising', note: 'GenAI + automation' },
@@ -105,8 +109,14 @@ export const SEED_MARKET: MarketSnapshot = {
     { role: 'Cloud / DevOps', openingsIndex: 72, avgSalaryLpa: 9 },
     { role: 'Cybersecurity junior', openingsIndex: 65, avgSalaryLpa: 7 },
   ],
+  sectors: [
+    { name: 'Product SaaS', demandScore: 88 },
+    { name: 'IT Services', demandScore: 82 },
+    { name: 'BFSI / FinTech', demandScore: 78 },
+  ],
   emergingTech: ['GenAI apps', 'Edge computing', 'Platform engineering'],
-  sourcesNote: 'Seed data only — replace with AI refresh after deploy.',
+  sourcesNote:
+    'Seed only. Live: Adzuna Jobs API (India) + curated-public postings + AI (Groq/Gemini). Aligns with open skill/employment signals (data.gov.in / PLFS-style themes).',
   provider: 'seed',
   isSeed: true,
 };
@@ -193,7 +203,10 @@ export async function apiRefreshMarket(
   }
   if (data.market) {
     writeMarketSnapshot(data.market);
-    if (data.market.region) writePreferredRegion(String(data.market.region).split('/')[0].trim() || scope);
+    if (data.market.region) {
+      const first = String(data.market.region).split('/')[0].trim();
+      writePreferredRegion(first || scope);
+    }
   }
   return { ok: true, market: data.market, provider: data.provider };
 }
@@ -224,12 +237,18 @@ export async function apiAnalyzeStudent(payload: {
   return { ok: true, analysis: data.analysis };
 }
 
+/** Admin AI snapshot due after 24h (or seed / missing). */
 export function monthDueForRefresh(lastUpdated?: string | null): boolean {
   if (!lastUpdated) return true;
   const d = new Date(lastUpdated);
   if (Number.isNaN(d.getTime())) return true;
   if (lastUpdated.startsWith('2026-09-01')) return true;
-  const next = new Date(d);
-  next.setMonth(next.getMonth() + 1);
-  return Date.now() >= next.getTime();
+  return Date.now() - d.getTime() >= ADMIN_DUE_MS;
+}
+
+export function hoursSinceMarketRefresh(lastUpdated?: string | null): number | null {
+  if (!lastUpdated) return null;
+  const d = new Date(lastUpdated);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / (60 * 60 * 1000));
 }
