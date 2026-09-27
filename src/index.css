@@ -303,7 +303,6 @@ html[data-theme="dark"] .er-nav-item.active,
   }
 }
 
-/* Dashboard stat cards — equal size, readable at 100% zoom */
 .er-stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -514,7 +513,6 @@ main,
   }
 }
 
-/* Roadmap detail — soft aurora background animation */
 @keyframes roadmap-aurora-shift {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }

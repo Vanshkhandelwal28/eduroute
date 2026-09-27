@@ -224,7 +224,6 @@ export const LandingPage = () => {
   const whatsappUrl = 'https://wa.link/9mfubu';
   const supportEmail = 'vanshkhandelwal777@gmail.com';
 
-  // Pause hero video when off-screen (better performance)
   useEffect(() => {
     const el = videoRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
@@ -243,7 +242,6 @@ export const LandingPage = () => {
     return () => io.disconnect();
   }, [heroVideoSrc]);
 
-  // Stats count-up when scrolled into view
   useEffect(() => {
     const el = statsRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
@@ -399,7 +397,6 @@ export const LandingPage = () => {
           <div className="hidden min-h-[280px] lg:block" aria-hidden />
         </div>
 
-        {/* Stats bar — count-up on scroll */}
         <div className="relative z-10 mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
           <div
             ref={statsRef}
@@ -412,7 +409,6 @@ export const LandingPage = () => {
         </div>
       </section>
 
-      {/* How it works */}
       <section id="how-it-works" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="text-center">
           <h2 className="text-3xl font-black text-slate-900 dark:text-white">How it works</h2>
@@ -444,7 +440,6 @@ export const LandingPage = () => {
 
       <OfferStackSection onExploreAll={() => setIsAuthOpen(true)} />
 
-      {/* Journey */}
       <section id="journey" className="py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm sm:p-8 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950">
@@ -475,166 +470,103 @@ export const LandingPage = () => {
 
       <section className="px-4 pb-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-700 px-6 py-12 text-center text-white shadow-xl shadow-violet-200/40 sm:px-12 dark:shadow-violet-900/30">
-          <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Ready to build skills that get you hired?</h2>
-          <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-violet-100">Join thousands of learners using EDUROUTE roadmaps, practice sheets, and AI Buddy to grow faster.</p>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <button type="button" onClick={() => setIsAuthOpen(true)} className="rounded-full bg-white px-6 py-3 text-sm font-bold text-violet-700 shadow-sm transition hover:bg-violet-50">Create free account</button>
-            <Link to="/roadmaps" className="rounded-full border border-white/40 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/10">Browse roadmaps</Link>
+          <h2 className="text-2xl font-extrabold sm:text-3xl">Ready to start your journey?</h2>
+          <p className="mx-auto mt-3 max-w-lg text-sm text-violet-100">
+            Join thousands of students mapping skills, following roadmaps, and landing opportunities with EDUROUTE.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsAuthOpen(true)}
+              className="rounded-full bg-white px-6 py-3 text-sm font-bold text-violet-700 shadow-md transition hover:bg-violet-50"
+            >
+              Get Started Free
+            </button>
+            <Link
+              to="/roadmaps"
+              className="rounded-full border border-white/40 bg-white/10 px-6 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/20"
+            >
+              Explore Roadmaps
+            </Link>
           </div>
         </div>
       </section>
 
-      <footer
-        id="contact"
-        className="border-t border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-[#0a0a0f]"
-      >
-        <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8">
-          <div className="select-none overflow-hidden text-center" aria-hidden>
-            <span
-              className="inline-block whitespace-nowrap text-[16vw] font-black leading-none tracking-tight sm:text-[12vw] lg:text-[9.5rem]"
-              style={{
-                color: 'transparent',
-                WebkitTextStroke: '2px rgba(109, 40, 217, 0.55)',
+      <footer id="contact" className="border-t border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 lg:grid-cols-4 lg:px-8">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-black text-white">
+                E
+              </span>
+              <span className="text-lg font-extrabold tracking-tight">
+                EDU<span className="text-violet-600 dark:text-violet-400">ROUTE</span>
+              </span>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              Your growth partner in tech — roadmaps, skill mapping, internships, and placements in one place.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Quick links</h3>
+            <ul className="mt-3 space-y-2">
+              {QUICK_LINKS.map((l) => (
+                <li key={l.label}>
+                  <NavItem
+                    item={l}
+                    className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-400"
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Company</h3>
+            <ul className="mt-3 space-y-2">
+              {COMPANY_LINKS.map((l) => (
+                <li key={l.label}>
+                  <a href={l.href} className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-400">
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Stay updated</h3>
+            <form
+              className="mt-3 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setNewsletterEmail('');
               }}
             >
-              <span className="dark:hidden">EDUROUTE</span>
-            </span>
-            <span
-              className="hidden whitespace-nowrap text-[16vw] font-black leading-none tracking-tight dark:inline-block sm:text-[12vw] lg:text-[9.5rem]"
-              style={{
-                color: 'transparent',
-                WebkitTextStroke: '2px rgba(167, 139, 250, 0.55)',
-              }}
-            >
-              EDUROUTE
-            </span>
-          </div>
-
-          <div className="mt-6 grid gap-10 pb-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-black text-white shadow-md">
-                  E
-                </span>
-                <span className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
-                  EDU<span className="text-violet-600 dark:text-violet-400">ROUTE</span>
-                </span>
-              </div>
-              <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-100">
-                Learn. Build. Compete. Get Hired.
-              </p>
-              <p className="mt-2 max-w-xs text-xs leading-5 text-slate-500 dark:text-slate-400">
-                Your one stop platform to build skills, explore opportunities and grow your career in tech.
-              </p>
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <a
-                  href={instagramUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Instagram"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-pink-300 hover:text-pink-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-pink-500/50 dark:hover:text-pink-400"
-                >
-                  <Instagram className="h-4 w-4" />
-                </a>
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="WhatsApp"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-emerald-300 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-emerald-500/50 dark:hover:text-emerald-400"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                </a>
-                <a
-                  href={`mailto:${supportEmail}`}
-                  aria-label="Email"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-violet-500/50 dark:hover:text-violet-300"
-                >
-                  <Mail className="h-4 w-4" />
-                </a>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-900 dark:text-white">
-                Quick Links
-              </h3>
-              <ul className="space-y-2.5">
-                {QUICK_LINKS.map((l) => (
-                  <li key={l.label}>
-                    {l.href.startsWith('/') ? (
-                      <Link
-                        to={l.href}
-                        className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-300"
-                      >
-                        {l.label}
-                      </Link>
-                    ) : (
-                      <a
-                        href={l.href}
-                        className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-300"
-                      >
-                        {l.label}
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-900 dark:text-white">
-                Company
-              </h3>
-              <ul className="space-y-2.5">
-                {COMPANY_LINKS.map((l) => (
-                  <li key={l.label}>
-                    <a
-                      href={l.href}
-                      className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-300"
-                    >
-                      {l.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-900 dark:text-white">
-                Stay Updated
-              </h3>
-              <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                Get the latest roadmaps, opportunities and tips in your inbox.
-              </p>
-              <form
-                className="flex flex-col gap-2 sm:flex-row"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setNewsletterEmail('');
-                }}
-              >
-                <input
-                  type="email"
-                  value={newsletterEmail}
-                  onChange={(e) => setNewsletterEmail(e.target.value)}
-                  placeholder="Your email"
-                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-violet-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-violet-700"
-                >
-                  Subscribe
-                </button>
-              </form>
+              <input
+                type="email"
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                placeholder="Your email"
+                className="min-w-0 flex-1 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm outline-none focus:border-violet-400 dark:border-slate-700 dark:bg-slate-900"
+              />
+              <button type="submit" className="rounded-full bg-violet-600 px-4 py-2 text-sm font-bold text-white hover:bg-violet-700">
+                Join
+              </button>
+            </form>
+            <div className="mt-4 flex items-center gap-3">
+              <a href={instagramUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-violet-600" aria-label="Instagram">
+                <Instagram className="h-5 w-5" />
+              </a>
+              <a href={whatsappUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-violet-600" aria-label="WhatsApp">
+                <MessageCircle className="h-5 w-5" />
+              </a>
+              <a href={`mailto:${supportEmail}`} className="text-slate-400 hover:text-violet-600" aria-label="Email">
+                <Mail className="h-5 w-5" />
+              </a>
             </div>
           </div>
-
-          <div className="border-t border-slate-200 py-5 text-center text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
-            © {new Date().getFullYear()} EDUROUTE. All rights reserved.
-          </div>
+        </div>
+        <div className="border-t border-slate-200 py-4 text-center text-xs text-slate-400 dark:border-slate-800">
+          © {new Date().getFullYear()} EDUROUTE. All rights reserved.
         </div>
       </footer>
     </div>
