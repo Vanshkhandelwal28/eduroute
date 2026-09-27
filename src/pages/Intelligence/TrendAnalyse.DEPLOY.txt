@@ -1,0 +1,4 @@
+Deploy branch: fix/market-trends-live-ai
+Feature: state-wise gap analysis region selector + auto-refresh on skill-gap quiz
+Commit parent: feat(student): state-wise gap analysis
+If UI still shows "LIVE ADMIN DEMAND" without region dropdown, Netlify is not on this branch.
