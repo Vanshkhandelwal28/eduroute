@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Wand2,
   Loader2,
@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Pencil,
   Award,
-  Download,
 } from 'lucide-react';
 import { StarfieldBackground } from '../../components/StarfieldBackground';
 import { YouTubeCoursePlayer } from '../../components/YouTubeCoursePlayer';
@@ -17,18 +16,14 @@ import { CourseCertificate } from '../../components/CourseCertificate';
 import { CourseFinalAssessment } from '../../components/CourseFinalAssessment';
 import { hasPassedAssessment } from '../../utils/courseAssessmentStore';
 import { getCourseAchievement } from '../../utils/courseAchievementsStore';
-import { quizConfigForDays } from '../../utils/courseQuizGenerator';
 import { getAuthUser } from '../../utils/rbacAuth';
-import { readOnboarding, writeOnboarding } from '../../utils/onboardingStore';
-import { markPathNodeDone } from '../../utils/learningPathStore';
+import { readOnboarding } from '../../utils/onboardingStore';
 import {
   DURATION_PRESETS,
   INTEREST_PRESETS,
   deleteAiCourse,
   readAiCourses,
   saveAiCourse,
-  updateCourseTopics,
-  updateTopicVideoDuration,
   type AiDesignedCourse,
   type CourseTopic,
 } from '../../utils/aiCourseStore';
@@ -61,15 +56,13 @@ const FIELD_FROM_TRACK: Record<string, string> = {
 export function AiCourseDesigner() {
   const user = getAuthUser();
   const [searchParams] = useSearchParams();
-  const [profile, setProfile] = useState(() => readOnboarding());
+  const [profile] = useState(() => readOnboarding());
   const defaultField =
     profile.interests?.[0] && FIELD_FROM_TRACK[profile.interests[0]]
       ? FIELD_FROM_TRACK[profile.interests[0]]
       : 'Software Engineering';
 
-  const [duration, setDuration] = useState<number>(15);
-  const [customDays, setCustomDays] = useState('');
-  const [useCustomDays, setUseCustomDays] = useState(false);
+  const [duration, setDuration] = useState(15);
   const [selected, setSelected] = useState<string[]>([]);
   const [customInterest, setCustomInterest] = useState('');
   const [field, setField] = useState(defaultField);
@@ -78,16 +71,13 @@ export function AiCourseDesigner() {
   const [error, setError] = useState('');
   const [courses, setCourses] = useState<AiDesignedCourse[]>(() => readAiCourses());
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
   const [playingTopicId, setPlayingTopicId] = useState<string | null>(null);
   const [assessOpen, setAssessOpen] = useState(false);
   const [certOpen, setCertOpen] = useState(false);
   const [assessTick, setAssessTick] = useState(0);
   const [progressTick, setProgressTick] = useState(0);
-  const handleGenerateRef = useRef<() => void>(() => {});
 
   const active = courses.find((c) => c.id === activeId) || courses[0] || null;
-
   const refresh = () => setCourses(readAiCourses());
 
   useEffect(() => {
@@ -110,12 +100,8 @@ export function AiCourseDesigner() {
     () => (active ? getCourseAchievement(active.id) : null),
     [active, assessTick],
   );
-
   const stats = active
-    ? courseCompletionStats(
-        active.id,
-        active.topics.map((t) => t.id),
-      )
+    ? courseCompletionStats(active.id, active.topics.map((t) => t.id))
     : null;
   const canAssess = Boolean(active && stats && stats.percent >= 80);
 
@@ -133,16 +119,10 @@ export function AiCourseDesigner() {
         setBusy(false);
         return;
       }
-      const role =
-        searchParams.get('role')?.trim() ||
-        profile.customRole?.trim() ||
-        field.trim() ||
-        'Engineer';
-      const days = useCustomDays && customDays ? Number(customDays) || duration : duration;
-      const pathNodeId = searchParams.get('pathNode') || searchParams.get('nodeId') || '';
+      const role = searchParams.get('role')?.trim() || profile.customRole?.trim() || field.trim() || 'Engineer';
       const course = await generateAiCourse(
         {
-          durationDays: days,
+          durationDays: duration,
           interests,
           customInterest: custom,
           field: field.trim() || role || 'General',
@@ -155,13 +135,6 @@ export function AiCourseDesigner() {
       );
       saveAiCourse(course);
       setActiveId(course.id);
-      if (pathNodeId) {
-        try {
-          localStorage.setItem(`eduroute:course-path-node:${course.id}`, pathNodeId);
-        } catch {
-          /* ignore */
-        }
-      }
       refresh();
     } catch (e) {
       setPhase('error');
@@ -169,9 +142,6 @@ export function AiCourseDesigner() {
     } finally {
       setBusy(false);
     }
-  };
-  handleGenerateRef.current = () => {
-    void handleGenerate();
   };
 
   const handleDelete = (id: string) => {
@@ -186,6 +156,8 @@ export function AiCourseDesigner() {
   const certSkills = active?.interests?.length
     ? active.interests
     : active?.topics?.slice(0, 5).map((t) => t.title) || [];
+
+  const playingTopic = active?.topics?.find((t) => t.id === playingTopicId) || null;
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
@@ -210,14 +182,9 @@ export function AiCourseDesigner() {
                   <button
                     key={d}
                     type="button"
-                    onClick={() => {
-                      setDuration(d);
-                      setUseCustomDays(false);
-                    }}
+                    onClick={() => setDuration(d)}
                     className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                      !useCustomDays && duration === d
-                        ? 'bg-violet-600 text-white'
-                        : 'border border-[var(--border-default)]'
+                      duration === d ? 'bg-violet-600 text-white' : 'border border-[var(--border-default)]'
                     }`}
                   >
                     {d}d
@@ -234,9 +201,7 @@ export function AiCourseDesigner() {
                     <button
                       key={i}
                       type="button"
-                      onClick={() =>
-                        setSelected((prev) => (on ? prev.filter((x) => x !== i) : [...prev, i]))
-                      }
+                      onClick={() => setSelected((prev) => (on ? prev.filter((x) => x !== i) : [...prev, i]))}
                       className={`rounded-full px-3 py-1.5 text-xs font-bold ${
                         on ? 'bg-indigo-600 text-white' : 'border border-[var(--border-default)]'
                       }`}
@@ -246,12 +211,18 @@ export function AiCourseDesigner() {
                   );
                 })}
               </div>
+              <input
+                value={customInterest}
+                onChange={(e) => setCustomInterest(e.target.value)}
+                placeholder="Custom interest…"
+                className="mt-2 w-full rounded-xl border border-[var(--border-default)] bg-transparent px-3 py-2 text-sm"
+              />
             </div>
           </div>
           <button
             type="button"
             disabled={busy}
-            onClick={() => handleGenerateRef.current()}
+            onClick={() => void handleGenerate()}
             className="mt-5 inline-flex items-center gap-2 rounded-full bg-violet-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
@@ -268,9 +239,7 @@ export function AiCourseDesigner() {
                 type="button"
                 onClick={() => setActiveId(c.id)}
                 className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-xs font-semibold ${
-                  active?.id === c.id
-                    ? 'border-violet-500 bg-violet-500/10'
-                    : 'border-[var(--border-default)]'
+                  active?.id === c.id ? 'border-violet-500 bg-violet-500/10' : 'border-[var(--border-default)]'
                 }`}
               >
                 <span className="line-clamp-2">{c.title}</span>
@@ -311,40 +280,140 @@ export function AiCourseDesigner() {
                         result={computePlacementChance({
                           title: active.title,
                           description: (active.topics || []).map((x) => x.title).join(' '),
-                          category:
-                            active.field || (active.interests && active.interests[0]) || 'Development',
+                          category: (active as any).field || (active.interests && active.interests[0]) || 'Development',
                         })}
                       />
                     </div>
                   </div>
-                </div>
-                <ul className="mt-6 space-y-3">
-                  {active.topics.map((topic, index) => (
-                    <li
-                      key={topic.id}
-                      className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-base)]/50 p-4"
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={!canAssess}
+                      onClick={() => setAssessOpen(true)}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white ${
+                        canAssess ? 'bg-violet-600 hover:bg-violet-500' : 'cursor-not-allowed bg-slate-400 opacity-70'
+                      }`}
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-[10px] font-black uppercase text-[var(--text-muted)]">
-                          Module {index + 1}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setPlayingTopicId(topic.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-default)] px-2 py-1 text-[10px] font-bold"
-                        >
-                          <Play className="h-3 w-3" /> Play
-                        </button>
-                      </div>
-                      <p className="mt-1 text-sm font-bold">{topic.title}</p>
-                    </li>
-                  ))}
+                      <Award className="h-3.5 w-3.5" />
+                      {passedAssess ? 'Retake assessment' : 'Final assessment'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!passedAssess}
+                      onClick={() => setCertOpen(true)}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white ${
+                        passedAssess ? 'bg-emerald-600 hover:bg-emerald-500' : 'cursor-not-allowed bg-slate-400 opacity-70'
+                      }`}
+                    >
+                      Certificate
+                    </button>
+                  </div>
+                </div>
+
+                <ul className="mt-6 space-y-3">
+                  {active.topics.map((topic, index) => {
+                    const prog = getTopicProgress(active.id, topic.id);
+                    const done = prog.completed;
+                    return (
+                      <li
+                        key={topic.id}
+                        className={`rounded-2xl border p-4 ${
+                          done
+                            ? 'border-emerald-500/30 bg-emerald-500/5'
+                            : 'border-[var(--border-default)] bg-[var(--bg-base)]/50'
+                        }`}
+                      >
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[10px] font-black uppercase text-[var(--text-muted)]">
+                            Module {index + 1}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {done ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Done
+                              </span>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => setPlayingTopicId((id) => (id === topic.id ? null : topic.id))}
+                              className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-default)] px-2 py-1 text-[10px] font-bold"
+                            >
+                              <Play className="h-3 w-3" /> {playingTopicId === topic.id ? 'Hide' : 'Play'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTopicCompleted(active.id, topic.id, !done);
+                                setProgressTick((n) => n + 1);
+                              }}
+                              className="rounded-lg border border-[var(--border-default)] px-2 py-1 text-[10px] font-bold"
+                            >
+                              {done ? 'Undo' : 'Mark done'}
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-sm font-bold">{topic.title}</p>
+                        {topic.documentUrl && (
+                          <a
+                            href={topic.documentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 inline-block text-[11px] font-semibold text-indigo-500 hover:underline"
+                          >
+                            Open docs
+                          </a>
+                        )}
+                        {playingTopicId === topic.id && topic.youtubeUrl && (
+                          <div className="mt-3 overflow-hidden rounded-xl">
+                            <YouTubeCoursePlayer
+                              url={topic.youtubeUrl}
+                              onProgress={(ratio) => {
+                                recordWatchProgress(active.id, topic.id, ratio);
+                                setProgressTick((n) => n + 1);
+                              }}
+                            />
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </motion.div>
             )}
           </section>
         </div>
       </div>
+
+      {active && (
+        <CourseFinalAssessment
+          open={assessOpen}
+          onClose={() => setAssessOpen(false)}
+          course={active}
+          userId={user?.email || user?.id || 'demo-student'}
+          onPassed={() => {
+            setAssessTick((n) => n + 1);
+            setCertOpen(true);
+          }}
+        />
+      )}
+
+      {active && (
+        <CourseCertificate
+          open={certOpen}
+          onClose={() => setCertOpen(false)}
+          data={{
+            studentName,
+            courseName: active.title,
+            skills: certSkills,
+            level: certLevel,
+            durationLabel: `${active.durationDays} days`,
+            completionDate: achievement?.completedAt || formatCertDate(),
+            certId: achievement?.certId,
+            percent: achievement?.percent ?? 100,
+            badge: achievement?.badge,
+          }}
+        />
+      )}
     </div>
   );
 }
