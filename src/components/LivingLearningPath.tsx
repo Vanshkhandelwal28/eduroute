@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Sparkles,
 } from 'lucide-react';
+import { EmptyCoach } from './EmptyCoach';
 import {
   careerLabelForUser,
   continueHrefForNode,
@@ -168,7 +169,12 @@ export function LivingLearningPath() {
         </div>
 
         {loading && !nodes.length ? (
-          <p className="mt-6 text-sm text-[var(--text-muted)]">Loading your path…</p>
+          <EmptyCoach
+            className="mt-6 !py-8"
+            loading
+            title="Building your path…"
+            tip="Aligning career steps from your onboarding track. Hang tight."
+          />
         ) : (
           <>
             <div className="relative mt-6 -mx-1 overflow-x-auto pb-2 pt-1">
