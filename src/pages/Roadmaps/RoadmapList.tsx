@@ -8,7 +8,6 @@ import {
   Palette,
   Database,
   Layers,
-  TrendingUp,
   ChevronRight,
   Target,
   Search,
@@ -29,7 +28,6 @@ const ROLES = [
     description: 'Master HTML, CSS, React, and modern frontend architecture.',
     level: 'Beginner to Advanced',
     modules: 12,
-    trending: true,
   },
   {
     id: 'backend',
@@ -39,7 +37,6 @@ const ROLES = [
     description: 'Learn Node.js, SQL/NoSQL, and system design patterns.',
     level: 'Beginner to Advanced',
     modules: 15,
-    trending: true,
   },
   {
     id: 'data-analyst',
@@ -49,7 +46,6 @@ const ROLES = [
     description: 'Master Python, SQL, and data visualization tools.',
     level: 'Beginner to Pro',
     modules: 10,
-    trending: true,
   },
   {
     id: 'cybersecurity',
@@ -59,7 +55,6 @@ const ROLES = [
     description: 'Learn ethical hacking, network security, and defense.',
     level: 'Beginner to Advanced',
     modules: 12,
-    trending: true,
   },
   {
     id: 'ui-ux',
@@ -69,7 +64,6 @@ const ROLES = [
     description: 'Learn Figma, user research, and interactive design.',
     level: 'Creative focused',
     modules: 8,
-    trending: true,
   },
   {
     id: 'fullstack',
@@ -79,7 +73,6 @@ const ROLES = [
     description: 'The complete path from frontend to infrastructure.',
     level: 'Beginner to Pro',
     modules: 10,
-    trending: true,
   },
   {
     id: 'dsa',
@@ -89,7 +82,6 @@ const ROLES = [
     description: 'Arrays to DP — structured problem-solving for interviews.',
     level: 'Intermediate',
     modules: 10,
-    trending: true,
   },
 ];
 
@@ -346,11 +338,6 @@ export const RoadmapList = () => {
                   <div className="absolute left-3 top-3 z-10">
                     <PlacementChanceStrip result={chance} compact />
                   </div>
-                  {role.trending && (
-                    <span className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-amber-500/95 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-900">
-                      <TrendingUp className="h-3 w-3" /> Trending
-                    </span>
-                  )}
                   <motion.div
                     className={`absolute bottom-3 left-3 flex h-11 w-11 items-center justify-center rounded-2xl ${role.color} text-white shadow-lg`}
                     whileHover={{ scale: 1.1, rotate: -3 }}
