@@ -222,10 +222,7 @@ export function LivingLearningPath() {
                         </span>
                       </button>
                       {!isLast && (
-                        <span
-                          className="mt-5 hidden h-0.5 w-2 shrink-0 rounded-full bg-transparent md:block"
-                          aria-hidden
-                        />
+                        <span className="mt-5 hidden h-0.5 w-2 shrink-0 rounded-full bg-transparent md:block" aria-hidden />
                       )}
                     </motion.li>
                   );
@@ -239,7 +236,7 @@ export function LivingLearningPath() {
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
-                className="mt-4 rounded-2xl border border-indigo-500/20 bg-[var(--bg-elevated)]/90 p-4 backdrop-blur-sm"
+                className="er-signal-card er-signal-card--path mt-4 !bg-[var(--bg-elevated)]/90 p-4 backdrop-blur-sm"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
