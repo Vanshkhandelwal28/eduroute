@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { staggerContainer } from '../../utils/motionPresets';
 import {
   ArrowRight,
   BarChart3,
@@ -221,7 +223,12 @@ export function TrendAnalyse() {
   const displayScore = localMatch.matchScore;
 
   return (
-    <div className="er-page mx-auto max-w-5xl space-y-6">
+    <motion.div
+      className="er-page mx-auto max-w-5xl space-y-6"
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-600 dark:text-cyan-400">
@@ -364,13 +371,15 @@ export function TrendAnalyse() {
                     </span>
                   </div>
                   <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
-                    <div
-                      className={`h-full rounded-full transition-all ${
+                    <motion.div
+                      className={`h-full rounded-full ${
                         have
                           ? 'bg-gradient-to-r from-emerald-500 to-cyan-500'
                           : 'bg-gradient-to-r from-indigo-500 to-cyan-500'
                       }`}
-                      style={{ width: `${Math.min(100, (row.demandPct / maxDemand) * 100)}%` }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, (row.demandPct / maxDemand) * 100)}%` }}
+                      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
                     />
                   </div>
                 </li>
@@ -515,7 +524,7 @@ export function TrendAnalyse() {
           </ul>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
