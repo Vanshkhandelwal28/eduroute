@@ -98,8 +98,7 @@ export function LivingLearningPath() {
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-indigo-500/25 bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)] ring-1 ring-indigo-500/15 md:p-6">
-      {/* Soft animated background — no external image (deploy-safe) */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      <div className="er-ambient-motion pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <motion.div
           className="absolute -left-16 -top-20 h-56 w-56 rounded-full bg-indigo-500/20 blur-3xl"
           animate={{ x: [0, 24, 0], y: [0, 16, 0], scale: [1, 1.12, 1] }}
