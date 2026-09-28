@@ -82,12 +82,12 @@ export const Rewards = () => {
 
   return (
     <div className="relative flex-1 min-h-[calc(100vh-4rem)] overflow-hidden">
-      {/* Gradient-dots wave background — light + dark */}
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
         <GradientDotsBackground />
-        {/* Readable overlays: soft white in light, deep navy in dark */}
         <div className="absolute inset-0 bg-gradient-to-b from-white/80 via-white/65 to-white/75 dark:from-slate-950/75 dark:via-slate-950/50 dark:to-slate-950/70" />
         <div className="absolute inset-0 bg-violet-50/25 dark:bg-indigo-950/15" />
+        <div className="absolute -left-16 top-20 h-64 w-64 rounded-full bg-violet-500/15 blur-3xl" />
+        <div className="absolute right-0 top-48 h-72 w-72 rounded-full bg-fuchsia-500/10 blur-3xl" />
       </div>
 
       <div className="relative z-10 p-4 md:p-8 max-w-7xl mx-auto">
@@ -152,19 +152,22 @@ export const Rewards = () => {
           initial="hidden"
           animate="show"
           className="grid grid-cols-1 md:grid-cols-2 gap-6"
+          style={{ perspective: 1200 }}
         >
           {REWARDS.map((reward) => (
             <motion.div
               key={reward.id}
               variants={card}
-              whileHover={{ y: -8, scale: 1.015 }}
+              whileHover={{ y: -10, scale: 1.02, rotateX: 4, rotateY: -3 }}
               whileTap={{ scale: 0.99 }}
-              className={`relative rounded-[32px] border p-8 shadow-sm transition-shadow duration-300 hover:shadow-xl dark:shadow-black/30 backdrop-blur-md ${
+              style={{ transformPerspective: 900 }}
+              className={`group relative rounded-[32px] border p-8 shadow-[0_8px_32px_rgba(15,23,42,0.06)] transition-shadow duration-300 hover:shadow-[0_24px_50px_rgba(139,92,246,0.2)] dark:shadow-black/30 backdrop-blur-xl ${
                 reward.locked
-                  ? 'border-slate-200/80 dark:border-slate-700/80 bg-white/80 dark:bg-slate-900/75'
-                  : 'border-violet-100/90 dark:border-violet-500/25 bg-white/88 dark:bg-slate-900/80'
+                  ? 'border-white/15 dark:border-white/10 bg-white/70 dark:bg-slate-900/60'
+                  : 'border-violet-200/50 dark:border-violet-500/30 bg-white/80 dark:bg-slate-900/65'
               }`}
             >
+              <div className="pointer-events-none absolute -inset-[1px] rounded-[32px] bg-gradient-to-br from-violet-500/30 via-fuchsia-500/15 to-transparent opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100" />
               {reward.locked && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[32px] bg-slate-900/40 backdrop-blur-[2px]">
                   <div className="flex items-center gap-2 rounded-full bg-slate-900/90 px-4 py-2 text-sm font-bold text-white">
