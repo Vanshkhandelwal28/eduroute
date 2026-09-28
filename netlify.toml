@@ -1,3 +1,4 @@
+# EDUROUTE Netlify — REDEPLOY_STAMP 2026-09-28T18:15IST (TrendAnalyse restored)
 [build]
   command = "npm run build"
   publish = "dist"
@@ -5,6 +6,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  NODE_OPTIONS = "--max-old-space-size=4096"
 
 [functions]
   node_bundler = "esbuild"
