@@ -137,7 +137,7 @@ export const Events = () => {
             type="button"
             disabled={loading || aiLoading}
             onClick={() => void load({ region, query: query.trim() })}
-            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="er-cta-ghost !rounded-2xl disabled:opacity-60"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
@@ -146,7 +146,7 @@ export const Events = () => {
             type="button"
             disabled={loading || aiLoading}
             onClick={() => void load({ region, query: query.trim(), aiRefresh: true })}
-            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/30 ring-2 ring-violet-400/40 transition hover:opacity-95 disabled:opacity-60"
+            className="er-cta-primary !rounded-2xl px-5 disabled:opacity-60"
           >
             {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             AI Refresh
@@ -284,7 +284,7 @@ export const Events = () => {
                   href={event.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-auto flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-50 py-3.5 text-sm font-bold text-slate-900 transition-all group-hover:bg-indigo-600 group-hover:text-white dark:bg-slate-800 dark:text-white dark:group-hover:bg-indigo-600"
+                  className="er-cta-primary mt-auto w-full !rounded-2xl py-3.5"
                 >
                   Open event page
                   <ExternalLink className="h-4 w-4" />
