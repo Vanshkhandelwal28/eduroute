@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { fadeUpItem, staggerContainer } from '../../utils/motionPresets';
 import {
   ArrowRight,
   Calendar,
@@ -110,7 +111,12 @@ export const Events = () => {
   }, [events, category]);
 
   return (
-    <div className="mx-auto max-w-7xl flex-1 p-4 md:p-8">
+    <motion.div
+      className="mx-auto max-w-7xl flex-1 p-4 md:p-8"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+    >
       <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex-1">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-600 dark:text-sky-400">
@@ -230,12 +236,18 @@ export const Events = () => {
           <Loader2 className="h-5 w-5 animate-spin" /> Loading live events…
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <motion.div
+          className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+        >
           {filtered.map((event) => (
             <motion.article
               key={event.id}
-              whileHover={{ y: -6 }}
-              className="group flex flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-md transition-all hover:-translate-y-1 hover:border-sky-400/40 hover:shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:border-sky-500/40"
+              variants={fadeUpItem}
+              whileHover={{ y: -6, transition: { duration: 0.2 } }}
+              className="group flex flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-md transition-shadow hover:border-sky-400/40 hover:shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:border-sky-500/40"
             >
               <div className="flex flex-1 flex-col p-6">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -280,7 +292,7 @@ export const Events = () => {
               </div>
             </motion.article>
           ))}
-        </div>
+        </motion.div>
       )}
 
       {!loading && filtered.length === 0 && (
@@ -290,7 +302,7 @@ export const Events = () => {
       <p className="mt-10 text-center text-[11px] text-slate-400 dark:text-slate-500">
         Links open the official organizer page. Live roles need Adzuna keys. AI Refresh never invents URLs.
       </p>
-    </div>
+    </motion.div>
   );
 };
 

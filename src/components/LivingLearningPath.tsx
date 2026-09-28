@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fadeUpItem, staggerContainer } from '../utils/motionPresets';
 import {
   BookOpen,
   CheckCircle2,
@@ -101,9 +102,11 @@ export function LivingLearningPath() {
           </span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
-            style={{ width: `${progressPct}%` }}
+          <motion.div
+            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+            initial={{ width: 0 }}
+            animate={{ width: `${progressPct}%` }}
+            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           />
         </div>
       </div>
@@ -111,13 +114,13 @@ export function LivingLearningPath() {
       {loading && !nodes.length ? (
         <p className="mt-6 text-sm text-[var(--text-muted)]">Loading your path…</p>
       ) : (
-        <ul className="mt-5 space-y-2">
+        <motion.ul className="mt-5 space-y-2" variants={staggerContainer} initial="initial" animate="animate">
           {nodes.map((n, i) => {
             const active = selected?.id === n.id;
             const done = n.status === 'completed';
             const current = n.status === 'current';
             return (
-              <li key={n.id}>
+              <motion.li key={n.id} variants={fadeUpItem}>
                 <button
                   type="button"
                   onClick={() => setSelectedId(n.id)}
@@ -144,10 +147,10 @@ export function LivingLearningPath() {
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
                 </button>
-              </li>
+              </motion.li>
             );
           })}
-        </ul>
+        </motion.ul>
       )}
 
       {selected && (
