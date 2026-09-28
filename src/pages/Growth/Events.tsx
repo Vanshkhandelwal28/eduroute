@@ -247,7 +247,7 @@ export const Events = () => {
               key={event.id}
               variants={fadeUpItem}
               whileHover={{ y: -6, transition: { duration: 0.2 } }}
-              className="group flex flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-md transition-shadow hover:border-sky-400/40 hover:shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:border-sky-500/40"
+              className="er-signal-card er-signal-card--event group flex flex-col overflow-hidden !rounded-[28px] !p-0 shadow-md transition-shadow hover:border-sky-400/40 hover:shadow-xl dark:shadow-black/30"
             >
               <div className="flex flex-1 flex-col p-6">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
