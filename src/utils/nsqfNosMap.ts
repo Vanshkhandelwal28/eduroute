@@ -27,8 +27,8 @@ const MAP: Record<string, NsqfNosEntry> = {
   sql: { nsqf: 4, nos: 'SSC/Q0901', label: 'Data' },
   mongodb: { nsqf: 5, nos: 'SSC/Q0509' },
   docker: { nsqf: 6, nos: 'SSC/Q0903', label: 'Cloud' },
-  kubernetes: { nsqf: 6, nos: 'SSC/Q0903' },
-  kubernetes: { nsqf: 6, nos: 'SSC/Q0903' },
+  azure: { nsqf: 6, nos: 'SSC/Q0903' },
+  gcp: { nsqf: 6, nos: 'SSC/Q0903' },
   aws: { nsqf: 6, nos: 'SSC/Q0903' },
   devops: { nsqf: 6, nos: 'SSC/Q0903' },
   // Data
@@ -75,6 +75,7 @@ export function lookupNsqfNos(skillOrRole: string): NsqfNosEntry | null {
   const key = norm(skillOrRole);
   if (!key) return null;
   if (MAP[key]) return MAP[key];
+  // substring / contains match on map keys
   for (const [k, v] of Object.entries(MAP)) {
     if (key.includes(k) || k.includes(key)) return v;
   }
