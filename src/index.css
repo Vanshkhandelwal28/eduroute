@@ -548,76 +548,101 @@ main,
   line-height: 1.65;
 }
 
-/* ——— Responsive + smooth (laptop/mobile) ——— */
-img,
-video,
-svg,
-canvas {
-  max-width: 100%;
-  height: auto;
-}
-
-.er-page,
-main {
-  max-width: 100%;
-}
-
-table {
-  max-width: 100%;
-}
+img, video, svg, canvas { max-width: 100%; height: auto; }
+.er-page, main { max-width: 100%; }
+table { max-width: 100%; }
 
 @media (max-width: 767px) {
-  button,
-  a.er-btn,
-  .er-nav-item {
-    min-height: 44px;
-  }
-
-  main.flex-1,
-  main {
+  button, a.er-btn, .er-nav-item { min-height: 44px; }
+  main.flex-1, main {
     padding-bottom: max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem));
   }
-
-  .er-ambient-motion,
-  .roadmap-aurora {
-    animation: none !important;
-  }
-
-  .er-ambient-motion > * {
-    animation: none !important;
-  }
-
-  .er-page {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-  }
-
-  .er-stat-grid {
-    gap: 0.5rem;
-  }
+  .er-ambient-motion, .roadmap-aurora { animation: none !important; }
+  .er-ambient-motion > * { animation: none !important; }
+  .er-page { padding-left: 0.75rem; padding-right: 0.75rem; }
+  .er-stat-grid { gap: 0.5rem; }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
-  .er-page {
-    max-width: 100%;
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
-  }
+  .er-page { max-width: 100%; padding-left: 1.25rem; padding-right: 1.25rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .er-ambient-motion,
-  .er-ambient-motion *,
-  .roadmap-aurora,
-  .buddy-fab-pulse,
-  .buddy-logo-bob {
+  .er-ambient-motion, .er-ambient-motion *, .roadmap-aurora, .buddy-fab-pulse, .buddy-logo-bob {
     animation: none !important;
     transition: none !important;
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
+  html { scroll-behavior: smooth; }
+}
+
+/* Skill signal cards */
+.er-signal-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  padding: 1rem 1rem 1rem 1.15rem;
+}
+.er-signal-card::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--signal-color, var(--accent)), transparent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+.er-signal-card::after {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--signal-color, var(--accent));
+  border-radius: 4px 0 0 4px;
+  pointer-events: none;
+}
+.er-signal-card--match {
+  --signal-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, var(--bg-card) 48%);
+}
+.er-signal-card--gap {
+  --signal-color: #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.07) 0%, var(--bg-card) 48%);
+}
+.er-signal-card--ai {
+  --signal-color: #8b5cf6;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, var(--bg-card) 48%);
+}
+.er-signal-card--event {
+  --signal-color: #0ea5e9;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.06) 0%, var(--bg-card) 50%);
+}
+.er-signal-card--path {
+  --signal-color: #6366f1;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, var(--bg-card) 48%);
+}
+html[data-theme="dark"] .er-signal-card--match,
+.dark .er-signal-card--match {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, var(--bg-card) 50%);
+}
+html[data-theme="dark"] .er-signal-card--gap,
+.dark .er-signal-card--gap {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, var(--bg-card) 50%);
+}
+html[data-theme="dark"] .er-signal-card--ai,
+.dark .er-signal-card--ai {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.14) 0%, var(--bg-card) 50%);
+}
+html[data-theme="dark"] .er-signal-card--event,
+.dark .er-signal-card--event {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, var(--bg-card) 50%);
+}
+html[data-theme="dark"] .er-signal-card--path,
+.dark .er-signal-card--path {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14) 0%, var(--bg-card) 50%);
 }
