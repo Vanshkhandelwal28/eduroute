@@ -141,7 +141,7 @@ export function LivingLearningPath() {
             type="button"
             onClick={() => void load(true)}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-3 py-1.5 text-xs font-bold text-[var(--text-secondary)] backdrop-blur hover:border-indigo-500/40 disabled:opacity-50"
+            className="er-cta-ghost !px-3 !py-1.5 !text-xs disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh path
@@ -265,7 +265,7 @@ export function LivingLearningPath() {
                   {selected.status !== 'locked' && (
                     <Link
                       to={continueHrefForNode(selected)}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-indigo-500/20 hover:opacity-95"
+                      className="er-cta-primary !px-3.5 !py-2 !text-xs shrink-0"
                     >
                       Continue <ChevronRight className="h-3.5 w-3.5" />
                     </Link>
