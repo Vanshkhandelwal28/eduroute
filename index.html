@@ -41,9 +41,19 @@
   <body>
     <div id="root"></div>
     <div id="boot-fallback" role="alert">
-      <p>Something went wrong loading EduRoute.</p>
-      <p><a href="/">Reload</a></p>
+      <p style="font-size:1.25rem;font-weight:800;margin:0 0 0.5rem">EDUROUTE</p>
+      <p style="color:#94a3b8;margin:0 0 1rem">Something went wrong loading the app.</p>
+      <a href="/">Reload</a>
     </div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      setTimeout(function () {
+        var root = document.getElementById('root');
+        if (root && !root.hasChildNodes()) {
+          var fb = document.getElementById('boot-fallback');
+          if (fb) fb.classList.add('show');
+        }
+      }, 8000);
+    </script>
   </body>
 </html>
