@@ -42,7 +42,7 @@ export function PlacementChanceStrip({ result, compact = false, className = '' }
               <span>
                 Roles for these skills: <span className="font-semibold text-[var(--text-primary)]">{h.role}</span>
                 {' · '}
-                {h.viaSkills.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')}
+                {h.viaSkills.join(', ')}
               </span>
             </li>
           ))}
