@@ -101,3 +101,209 @@ body {
   max-width: 100vw;
   overflow-x: clip;
 }
+
+html[data-theme="dark"],
+html[data-theme="dark"] body,
+html[data-theme="dark"] #root {
+  background-color: var(--bg-primary);
+}
+
+html,
+body {
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+button,
+input,
+textarea,
+select,
+a,
+.er-card,
+.er-nav-item {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+/* Layout helpers used across student/admin shells */
+.er-page {
+  padding: 1rem;
+}
+
+@media (min-width: 768px) {
+  .er-page {
+    padding: 1.5rem 2rem;
+  }
+}
+
+.er-card {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.er-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.85rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.er-nav-item:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.er-nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Inputs */
+.er-input {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.er-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Buttons */
+.er-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: var(--radius-md);
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.er-btn-primary {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.er-btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.er-btn-ghost {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+
+.er-btn-ghost:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Badges */
+.er-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Section titles */
+.er-section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.er-section-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.er-muted {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Roadmap aurora (existing motion) */
+@keyframes roadmap-aurora-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.roadmap-aurora {
+  background: linear-gradient(
+    120deg,
+    rgba(124, 58, 237, 0.12),
+    rgba(99, 102, 241, 0.08),
+    rgba(236, 72, 153, 0.1),
+    rgba(124, 58, 237, 0.12)
+  );
+  background-size: 200% 200%;
+  animation: roadmap-aurora-shift 14s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roadmap-aurora {
+    animation: none;
+  }
+}
+
+/* Long-form AI / coach copy — softer reading face */
+.font-ai,
+.buddy-md,
+.er-ai-prose {
+  font-family: var(--font-ai);
+  line-height: 1.65;
+}
