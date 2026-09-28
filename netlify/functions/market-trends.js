@@ -2,6 +2,8 @@
  * Market trends + Skill Market Trend Engine
  * Actions: refresh_market | analyze_student | collect_jobs | list_jobs
  * Region-aware: rising / top roles / declining from jobs in selected state or India (All)
+ *
+ * Deploy note: requires full netlify/functions/_lib/marketDemand.js (never PLACEHOLDER).
  */
 const shared = require('./_lib/marketShared');
 const collect = require('./_lib/marketCollect');
