@@ -80,6 +80,8 @@ html[data-theme="dark"],
 html {
   min-height: 100%;
   background: var(--bg-primary);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -305,7 +307,6 @@ html[data-theme="dark"] .er-nav-item.active,
   }
 }
 
-/* Dashboard stat cards — equal size, readable at 100% zoom */
 .er-stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -516,7 +517,6 @@ main,
   }
 }
 
-/* Roadmap detail — soft aurora background animation */
 @keyframes roadmap-aurora-shift {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -541,10 +541,83 @@ main,
   }
 }
 
-/* Long-form AI / coach copy — softer reading face */
 .font-ai,
 .buddy-md,
 .er-ai-prose {
   font-family: var(--font-ai);
   line-height: 1.65;
+}
+
+/* ——— Responsive + smooth (laptop/mobile) ——— */
+img,
+video,
+svg,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+.er-page,
+main {
+  max-width: 100%;
+}
+
+table {
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  button,
+  a.er-btn,
+  .er-nav-item {
+    min-height: 44px;
+  }
+
+  main.flex-1,
+  main {
+    padding-bottom: max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem));
+  }
+
+  .er-ambient-motion,
+  .roadmap-aurora {
+    animation: none !important;
+  }
+
+  .er-ambient-motion > * {
+    animation: none !important;
+  }
+
+  .er-page {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .er-stat-grid {
+    gap: 0.5rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .er-page {
+    max-width: 100%;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .er-ambient-motion,
+  .er-ambient-motion *,
+  .roadmap-aurora,
+  .buddy-fab-pulse,
+  .buddy-logo-bob {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
