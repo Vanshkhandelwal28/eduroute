@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { apiGetCourses } from '../utils/authApi';
 import { getManagedCourses } from '../utils/courseManagerStorage';
+import {
+  computePlacementChance,
+  courseTypeImage,
+  getUserSkills,
+} from '../utils/placementChance';
+import { PlacementChanceStrip } from '../components/PlacementChanceStrip';
 
 const categories = ['All', 'Development', 'Design', 'Data Science', 'Business'];
 
@@ -11,6 +17,7 @@ export const BrowseCourses = () => {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [courses, setCourses] = useState<any[]>([]);
+  const { skills } = useMemo(() => getUserSkills(), []);
 
   useEffect(() => {
     apiGetCourses()
@@ -52,8 +59,12 @@ export const BrowseCourses = () => {
   return (
     <div className="mx-auto max-w-7xl flex-1 p-4 md:p-8">
       <header className="mb-10">
-        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white md:text-4xl">Browse Courses</h1>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Pick a route — skills, level, and one clear start action.</p>
+        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white md:text-4xl">
+          Browse Courses
+        </h1>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          Placement chance is computed from your skill profile vs each course — not fixed marketing numbers.
+        </p>
       </header>
 
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -86,38 +97,59 @@ export const BrowseCourses = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredCourses.map((course) => (
-          <motion.div
-            key={course._id}
-            layout
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="er-route-card"
-          >
-            {course.link ? (
-              <a href={course.link} target="_blank" rel="noreferrer" className="flex h-full flex-col p-5">
-                <div className="text-xs font-bold uppercase text-indigo-600">{course.level}</div>
-                <h3 className="mt-2 text-lg font-bold text-[var(--text-primary)]">{course.title}</h3>
-                <p className="mt-1 line-clamp-2 flex-1 text-sm text-[var(--text-secondary)]">{course.description}</p>
-                <div className="mt-3 flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                  <Clock className="h-4 w-4" /> {course.duration}
+        {filteredCourses.map((course) => {
+          const id = course._id || course.id;
+          const chance = computePlacementChance(course, skills);
+          const img = courseTypeImage(course);
+          const inner = (
+            <>
+              <div className="relative h-36 overflow-hidden rounded-xl bg-slate-200 dark:bg-slate-800">
+                <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
+                <div className="absolute left-2 top-2">
+                  <PlacementChanceStrip result={chance} compact />
                 </div>
-                <span className="er-cta-primary mt-4 !w-full !py-2.5 !text-xs">Open link</span>
-              </a>
-            ) : (
-              <Link to={`/course/${course._id}`} className="flex h-full flex-col p-5">
-                <div className="text-xs font-bold uppercase text-indigo-600">{course.level}</div>
-                <h3 className="mt-2 text-lg font-bold text-[var(--text-primary)]">{course.title}</h3>
-                <p className="mt-1 line-clamp-2 flex-1 text-sm text-[var(--text-secondary)]">{course.description}</p>
-                <div className="mt-3 flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                  <Clock className="h-4 w-4" /> {course.duration}
-                </div>
-                <span className="er-cta-primary mt-4 !w-full !py-2.5 !text-xs">Start route</span>
-              </Link>
-            )}
-          </motion.div>
-        ))}
+              </div>
+              <div className="mt-3 text-xs font-bold uppercase text-indigo-600 dark:text-indigo-400">
+                {course.level || course.category}
+              </div>
+              <h3 className="mt-1 text-lg font-bold text-[var(--text-primary)]">{course.title}</h3>
+              <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">{course.description}</p>
+              <div className="mt-3">
+                <PlacementChanceStrip result={chance} />
+              </div>
+              <div className="mt-auto flex items-center gap-2 pt-3 text-xs text-[var(--text-muted)]">
+                <Clock className="h-3.5 w-3.5" />
+                {course.duration || 'Self-paced'}
+              </div>
+            </>
+          );
+
+          return (
+            <motion.div
+              key={id}
+              layout
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="er-route-card flex flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3 shadow-sm"
+            >
+              {course.link ? (
+                <a href={course.link} target="_blank" rel="noreferrer" className="flex h-full flex-col">
+                  {inner}
+                </a>
+              ) : (
+                <Link to={`/course/${id}`} className="flex h-full flex-col">
+                  {inner}
+                </Link>
+              )}
+            </motion.div>
+          );
+        })}
       </div>
+
+      {filteredCourses.length === 0 && (
+        <p className="mt-12 text-center text-sm text-slate-500">No courses match your filters.</p>
+      )}
     </div>
   );
 };
