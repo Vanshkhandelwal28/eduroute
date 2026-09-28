@@ -14,6 +14,7 @@ import {
   Database,
   MapPin,
 } from 'lucide-react';
+import { EmptyCoach } from '../../components/EmptyCoach';
 import {
   Bar,
   BarChart,
@@ -331,9 +332,13 @@ export function TrendAnalyse() {
           <Database className="h-4 w-4" /> Skill demand — {region}
         </h2>
         {demandRows.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">
-            Admin has not collected jobs for this region yet. Click Refresh analysis to live-collect.
-          </p>
+          <EmptyCoach
+            title="No jobs for this region yet"
+            tip="Live-collect Adzuna/gov openings so we can score your skills against real demand."
+            actionLabel={busy ? 'Analyzing…' : 'Refresh analysis'}
+            onAction={() => void runAnalysis()}
+            icon={<Database className="h-5 w-5" />}
+          />
         ) : (
           <ul className="space-y-3">
             {demandRows.slice(0, 10).map((row) => {
@@ -380,7 +385,13 @@ export function TrendAnalyse() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-[var(--text-muted)]">No strong matches yet — complete the skill gap quiz.</p>
+            <EmptyCoach
+              className="!py-6"
+              title="No strong matches yet"
+              tip="Complete the skill gap quiz so we can map what you already know to market demand."
+              actionLabel="Take skill quiz"
+              actionTo="/onboarding"
+            />
           )}
         </div>
         <div className="er-signal-card er-signal-card--gap p-5">
@@ -448,13 +459,13 @@ export function TrendAnalyse() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-elevated)]/50 px-4 py-12 text-center">
-            <BarChart3 className="h-8 w-8 text-[var(--text-muted)] opacity-50" />
-            <p className="text-sm font-semibold text-[var(--text-secondary)]">No chart data yet</p>
-            <p className="max-w-sm text-xs text-[var(--text-muted)]">
-              Click <strong>Refresh analysis</strong> to live-collect jobs and compare your skills to market demand.
-            </p>
-          </div>
+          <EmptyCoach
+            title="No chart data yet"
+            tip="Refresh analysis to live-collect jobs for this region and compare your skills to market demand."
+            actionLabel={busy ? 'Analyzing…' : 'Refresh analysis'}
+            onAction={() => void runAnalysis()}
+            icon={<BarChart3 className="h-5 w-5" />}
+          />
         )}
       </div>
 
@@ -463,7 +474,14 @@ export function TrendAnalyse() {
           <TrendingUp className="h-4 w-4" /> Rising skills in {region}
         </h2>
         {risingDisplay.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No rising-skill signals yet.</p>
+          <EmptyCoach
+            className="!py-6"
+            title="No rising-skill signals yet"
+            tip="After jobs are collected for this region, rising skills will show here as market signals."
+            actionLabel={busy ? 'Analyzing…' : 'Refresh analysis'}
+            onAction={() => void runAnalysis()}
+            icon={<TrendingUp className="h-5 w-5" />}
+          />
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
             {risingDisplay.map((r: { skill?: string; demandScore?: number; note?: string }, i: number) => (
