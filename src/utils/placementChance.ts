@@ -22,6 +22,26 @@ const SKILL_ALIASES: Record<string, string[]> = {
   system: ['system design', 'architecture', 'microservices'],
 };
 
+const SKILL_LABELS: Record<string, string> = {
+  react: 'React',
+  typescript: 'TypeScript',
+  javascript: 'JavaScript',
+  node: 'Node.js',
+  python: 'Python',
+  java: 'Java',
+  sql: 'SQL',
+  dsa: 'DSA',
+  ml: 'Machine Learning',
+  data: 'Data Science',
+  cyber: 'Cybersecurity',
+  design: 'UI/UX',
+  system: 'System Design',
+};
+
+function skillLabel(key: string): string {
+  return SKILL_LABELS[key] || (key.charAt(0).toUpperCase() + key.slice(1));
+}
+
 /** Roles commonly tied to skill clusters — used only when skills actually match */
 const ROLE_FOR_SKILLS: { skills: string[]; role: string; track: string }[] = [
   { skills: ['react', 'typescript', 'javascript'], role: 'Frontend / SDE', track: 'Web' },
@@ -151,7 +171,6 @@ export function computePlacementChance(
   const { skills: profileSkills, hasProfile } = getUserSkills();
   const skills = userSkills && userSkills.length ? userSkills : profileSkills;
   const courseSkills = extractCourseSkillKeys(course);
-
   const matchedSkills = courseSkills.filter((k) => skillMatchesUser(skills, k));
 
   const baseline = 40;
@@ -178,14 +197,14 @@ export function computePlacementChance(
   for (const row of ROLE_FOR_SKILLS) {
     const via = row.skills.filter((s) => matchedSkills.includes(s) || skillMatchesUser(skills, s));
     if (via.length >= 1 && matchedSkills.some((m) => row.skills.includes(m))) {
-      roleHints.push({ role: row.role, track: row.track, viaSkills: via });
+      roleHints.push({ role: row.role, track: row.track, viaSkills: via.map(skillLabel) });
     }
   }
 
   return {
     chancePercent,
     boostPercent,
-    matchedSkills: matchedSkills.map((k) => k.charAt(0).toUpperCase() + k.slice(1)),
+    matchedSkills: matchedSkills.map(skillLabel),
     courseSkills,
     roleHints: roleHints.slice(0, 3),
     hasProfile,
