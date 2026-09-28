@@ -27,6 +27,7 @@ import {
   type CurriculumDecision,
   type SkillValidation,
 } from '../../utils/employerValidationStore';
+import { nsqfNosBadgeText } from '../../utils/nsqfNosMap';
 
 export function EmployerValidationPanel({ companyName = 'EduRoute Partners' }: { companyName?: string }) {
   const [ratings, setRatings] = useState<CourseRating[]>([]);
@@ -208,7 +209,14 @@ export function EmployerValidationPanel({ companyName = 'EduRoute Partners' }: {
                   key={sk}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2"
                 >
-                  <span className="text-sm font-bold">{sk}</span>
+                  <span className="inline-flex flex-wrap items-center gap-1.5 text-sm font-bold">
+                    {sk}
+                    {nsqfNosBadgeText(sk) && (
+                      <span className="rounded-full border border-indigo-400/30 bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-indigo-300">
+                        {nsqfNosBadgeText(sk)}
+                      </span>
+                    )}
+                  </span>
                   <div className="flex gap-1.5">
                     <button
                       type="button"
