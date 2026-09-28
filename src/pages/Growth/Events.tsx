@@ -89,9 +89,8 @@ export const Events = () => {
         aiUsed: Boolean(data.aiUsed),
         warnings: Array.isArray(data.warnings) ? data.warnings : [],
       });
-      if (!list.length) setError('No events found — try another region or keyword.');
     } catch (e) {
-      setError(String((e as Error).message || e));
+      setError(e instanceof Error ? e.message : 'Network error');
       setEvents([]);
     } finally {
       setLoading(false);
@@ -100,23 +99,15 @@ export const Events = () => {
   }, []);
 
   useEffect(() => {
-    void load({ region, query: '' });
-  }, [region]);
+    void load({ region, query: query.trim() });
+  }, [region]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
       if (category === 'All') return true;
-      const cat = (e.category || '').toLowerCase();
-      const tags = (e.tags || []).join(' ').toLowerCase();
-      if (category === 'Gov') return cat.includes('gov') || tags.includes('government');
-      return cat.includes(category.toLowerCase()) || tags.includes(category.toLowerCase());
+      return (e.category || '').toLowerCase().includes(category.toLowerCase());
     });
   }, [events, category]);
-
-  const onSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    void load({ region, query: query.trim() });
-  };
 
   return (
     <div className="mx-auto max-w-7xl flex-1 p-4 md:p-8">
@@ -149,7 +140,7 @@ export const Events = () => {
             type="button"
             disabled={loading || aiLoading}
             onClick={() => void load({ region, query: query.trim(), aiRefresh: true })}
-            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition hover:opacity-95 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/30 ring-2 ring-violet-400/40 transition hover:opacity-95 disabled:opacity-60"
           >
             {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             AI Refresh
@@ -165,8 +156,8 @@ export const Events = () => {
             onClick={() => setRegion(t.id)}
             className={`rounded-2xl px-5 py-2.5 text-sm font-bold transition ${
               region === t.id
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-950/40'
-                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                : 'border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
             }`}
           >
             {t.label}
@@ -174,22 +165,29 @@ export const Events = () => {
         ))}
       </div>
 
-      <form onSubmit={onSearch} className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      <div className="mb-4 flex flex-wrap gap-2">
+        <div className="relative min-w-[200px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search hackathon, internship, workshop, city..."
-            className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void load({ region, query: query.trim() });
+            }}
+            placeholder="Search hackathons, internships…"
+            className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           />
         </div>
-        <button type="submit" className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white dark:bg-slate-100 dark:text-slate-900">
+        <button
+          type="button"
+          onClick={() => void load({ region, query: query.trim() })}
+          className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white dark:bg-slate-100 dark:text-slate-900"
+        >
           Search
         </button>
-      </form>
+      </div>
 
-      <div className="mb-6 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         {CATEGORY_FILTERS.map((c) => (
           <button
             key={c}
@@ -197,7 +195,7 @@ export const Events = () => {
             onClick={() => setCategory(c)}
             className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
               category === c
-                ? 'bg-sky-600 text-white'
+                ? 'bg-indigo-600 text-white'
                 : 'border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
             }`}
           >
@@ -206,7 +204,7 @@ export const Events = () => {
         ))}
       </div>
 
-      <div className="mb-6 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-2.5 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
         <span className="rounded-lg bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-700 dark:text-emerald-400">
           {meta.liveCount} live (Adzuna)
         </span>
@@ -237,7 +235,7 @@ export const Events = () => {
             <motion.article
               key={event.id}
               whileHover={{ y: -6 }}
-              className="group flex flex-col overflow-hidden rounded-[28px] border border-slate-100 bg-white shadow-sm transition-all hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/30"
+              className="group flex flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-md transition-all hover:-translate-y-1 hover:border-sky-400/40 hover:shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:border-sky-500/40"
             >
               <div className="flex flex-1 flex-col p-6">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
