@@ -1,6 +1,6 @@
 /**
  * AI prompts + demand aggregation grounded on ALL collected jobs + gov indicators
- * (PR12: fixed PLACEHOLDER crash that caused HTTP 502 on /api/market-trends)
+ * (PR12: fixed PLACEHOLDER crash — REDEPLOY_STAMP 2026-09-28T12:00Z)
  */
 const shared = require('./marketShared');
 const normalizeRegion = shared.normalizeRegion;
