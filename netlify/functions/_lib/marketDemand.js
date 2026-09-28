@@ -1,5 +1,6 @@
 /**
  * AI prompts + demand aggregation grounded on ALL collected jobs + gov indicators
+ * (PR12: fixed PLACEHOLDER crash that caused HTTP 502 on /api/market-trends)
  */
 const shared = require('./marketShared');
 const normalizeRegion = shared.normalizeRegion;
