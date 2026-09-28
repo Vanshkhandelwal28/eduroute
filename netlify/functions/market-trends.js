@@ -3,11 +3,32 @@
  * Actions: refresh_market | analyze_student | collect_jobs | list_jobs
  * Region-aware: rising / top roles / declining from jobs in selected state or India (All)
  *
- * Deploy note: requires full netlify/functions/_lib/marketDemand.js (never PLACEHOLDER).
+ * REDEPLOY_STAMP: 2026-09-28T17:15IST — force Netlify function rebuild (no PLACEHOLDER).
  */
-const shared = require('./_lib/marketShared');
-const collect = require('./_lib/marketCollect');
-const demand = require('./_lib/marketDemand');
+let shared, collect, demand, loadError;
+
+try {
+  shared = require('./_lib/marketShared');
+  collect = require('./_lib/marketCollect');
+  demand = require('./_lib/marketDemand');
+} catch (e) {
+  loadError = e;
+  console.error('market-trends require failed:', e && e.message, e && e.stack);
+}
+
+function safeJson(statusCode, body) {
+  if (shared && typeof shared.json === 'function') return shared.json(statusCode, body);
+  return {
+    statusCode: statusCode,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    },
+    body: JSON.stringify(body),
+  };
+}
 
 /** Ground rising + roles + sectors + declining on REGION-FILTERED jobs. */
 function groundOnJobs(market, demandRows, jobs, govIndicators, region) {
@@ -73,6 +94,14 @@ function groundOnJobs(market, demandRows, jobs, govIndicators, region) {
 }
 
 exports.handler = async (event) => {
+  if (loadError) {
+    return safeJson(200, {
+      ok: false,
+      error: 'Function load failed: ' + String(loadError.message || loadError).slice(0, 200),
+      redeployStamp: '2026-09-28T17:15IST',
+    });
+  }
+
   if (event.httpMethod === 'OPTIONS') return shared.json(200, { ok: true });
 
   if (event.httpMethod === 'GET') {
@@ -84,6 +113,7 @@ exports.handler = async (event) => {
       hasGroq: Boolean(shared.env('GROQ_API_KEY')),
       hasAdzuna: shared.hasAdzuna(),
       hasDataGov: shared.hasDataGov(),
+      redeployStamp: '2026-09-28T17:15IST',
       sources: [
         { code: 'curated-public', name: 'Curated public demo postings', permitted: true },
         { code: 'adzuna', name: 'Adzuna Jobs API (India)', permitted: true, configured: shared.hasAdzuna() },
