@@ -71,7 +71,7 @@ export function LivingLearningPath() {
   );
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm">
+    <section className="relative overflow-hidden rounded-3xl border border-indigo-500/25 bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)] ring-1 ring-indigo-500/15 backdrop-blur-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Your Learning Path</p>
@@ -79,189 +79,91 @@ export function LivingLearningPath() {
             Path for <span className="text-indigo-400">{track}</span>{' '}
             <span className="font-semibold text-[var(--text-secondary)]">— master in-demand skills toward internship & job readiness.</span>
           </h2>
-          <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-            {source === 'ai' ? 'AI-designed for your career' : source === 'template' ? 'Career template path' : 'Saved path for your account'}
-            {completedCount > 0 && ` · ${completedCount} steps already covered by your CV skills`}
-          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-indigo-500/15 px-3 py-1 text-xs font-bold text-indigo-300">
-            {progressPct}% complete
-            {completedCount > 0 && (
-              <span className="ml-1 font-medium text-indigo-200/80">
-                · {completedCount}/{nodes.length}
-              </span>
-            )}
+        <button
+          type="button"
+          onClick={() => void load(true)}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs font-bold text-[var(--text-secondary)] hover:border-indigo-500/40 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh path
+        </button>
+      </div>
+
+      <div className="mt-4">
+        <div className="mb-1 flex items-center justify-between text-xs">
+          <span className="font-semibold text-[var(--text-muted)]">
+            {completedCount}/{nodes.length || 0} steps · {progressPct}%
           </span>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => void load(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-default)] px-3 py-1.5 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh AI
-          </button>
+          <span className="text-[var(--text-muted)]">
+            {source === 'ai' ? 'AI path' : source === 'template' ? 'Template' : 'Saved'}
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
       </div>
 
       {loading && !nodes.length ? (
-        <div className="mt-8 flex items-center justify-center gap-2 py-12 text-sm text-[var(--text-muted)]">
-          <Sparkles className="h-4 w-4 animate-pulse text-indigo-400" />
-          Designing your path…
-        </div>
+        <p className="mt-6 text-sm text-[var(--text-muted)]">Loading your path…</p>
       ) : (
-        <>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-0 sm:gap-1">
-            {nodes.map((node, i) => {
-              const isSelected = selected?.id === node.id;
-              const done = node.status === 'completed';
-              const current = node.status === 'current';
-              const locked = node.status === 'locked';
-              return (
-                <div key={node.id} className="flex items-center">
-                  {i > 0 && (
-                    <div
-                      className={`mx-0.5 h-0.5 w-4 sm:w-8 ${
-                        nodes[i - 1]?.status === 'completed' ? 'bg-indigo-500' : 'bg-[var(--border-default)]'
-                      }`}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(node.id)}
-                    className="group flex flex-col items-center gap-1.5"
-                  >
-                    <span
-                      className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition ${
-                        done
-                          ? 'border-indigo-500 bg-indigo-600 text-white'
-                          : current
-                            ? 'border-violet-400 bg-violet-500/20 text-violet-200 ring-4 ring-violet-500/20'
-                            : 'border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-muted)]'
-                      } ${isSelected ? 'scale-110' : ''}`}
-                    >
-                      {done ? (
-                        <CheckCircle2 className="h-5 w-5" />
-                      ) : locked ? (
-                        <Lock className="h-4 w-4" />
-                      ) : (
-                        <Target className="h-4 w-4" />
-                      )}
-                    </span>
-                    <span className="max-w-[72px] text-center text-[10px] font-bold leading-tight text-[var(--text-secondary)]">
-                      {node.short}
-                    </span>
-                    <span
-                      className={`text-[9px] font-semibold ${
-                        done ? 'text-emerald-400' : current ? 'text-violet-300' : 'text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {done ? 'Completed' : current ? 'In Progress' : 'Locked'}
-                    </span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <p className="mt-4 text-center text-[11px] text-[var(--text-muted)]">
-            Tip: click a node for details · Green check = skill you already have from CV/onboarding
-          </p>
-        </>
-      )}
-
-      <AnimatePresence mode="wait">
-        {selected && (
-          <motion.div
-            key={selected.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className="mt-6 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 p-4"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-indigo-400" />
-                  <h3 className="text-base font-black text-[var(--text-primary)]">{selected.title}</h3>
-                </div>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3" />{' '}
-                    {selected.days
-                      ? `${selected.days} days · ${selected.hours}h`
-                      : `${selected.hours} hours`}
-                  </span>
+        <ul className="mt-5 space-y-2">
+          {nodes.map((n, i) => {
+            const active = selected?.id === n.id;
+            const done = n.status === 'completed';
+            const current = n.status === 'current';
+            return (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(n.id)}
+                  className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition ${
+                    active
+                      ? 'border-indigo-500/40 bg-indigo-500/10'
+                      : 'border-[var(--border-default)] bg-[var(--bg-elevated)]/50 hover:border-indigo-500/25'
+                  }`}
+                >
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                      selected.status === 'completed'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : selected.status === 'current'
-                          ? 'bg-violet-500/20 text-violet-300'
-                          : 'bg-slate-500/20 text-slate-400'
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                      done
+                        ? 'bg-emerald-500/20 text-emerald-600'
+                        : current
+                          ? 'bg-indigo-500/20 text-indigo-400'
+                          : 'bg-[var(--bg-card)] text-[var(--text-muted)]'
                     }`}
                   >
-                    {selected.status === 'completed'
-                      ? 'Completed'
-                      : selected.status === 'current'
-                        ? 'In Progress'
-                        : 'Locked'}
+                    {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                   </span>
-                </p>
-                {selected.skills?.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">Key skills</p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {selected.skills.map((s) => (
-                        <span
-                          key={s}
-                          className="rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)]"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {selected.resources?.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">Resources</p>
-                    <ul className="mt-1.5 space-y-1.5">
-                      {selected.resources.map((r, idx) => (
-                        <li
-                          key={`${r.label}-${idx}`}
-                          className="flex items-center justify-between rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/80 px-3 py-2 text-xs"
-                        >
-                          <span className="font-semibold text-[var(--text-primary)]">{r.label}</span>
-                          <span className="text-[10px] text-[var(--text-muted)]">
-                            {r.kind} · {r.mins} min
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col gap-2">
-                {selected.status !== 'locked' ? (
-                  <Link
-                    to={continueHrefForNode(selected)}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500"
-                  >
-                    {selected.status === 'current' ? 'Continue learning' : 'Review module'}
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
-                ) : (
-                  <p className="rounded-xl border border-[var(--border-default)] px-3 py-2 text-[11px] text-[var(--text-muted)]">
-                    Complete previous steps to unlock
-                  </p>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold text-[var(--text-primary)]">{n.title}</span>
+                    <span className="text-[11px] text-[var(--text-muted)]">{n.status}</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {selected && (
+        <div className="mt-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4">
+          <p className="text-sm font-bold text-[var(--text-primary)]">{selected.title}</p>
+          {selected.summary && (
+            <p className="mt-1 text-xs text-[var(--text-secondary)]">{selected.summary}</p>
+          )}
+          <Link
+            to={continueHrefForNode(selected)}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500"
+          >
+            Continue <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
     </section>
   );
 }
