@@ -60,8 +60,7 @@ export const Dashboard = () => {
   const [skillAnalyze, setSkillAnalyze] = useState(() => readDashboardSkillAnalyze());
 
   useEffect(() => {
-    const result = runDashboardSkillAnalyze();
-    setSkillAnalyze(result);
+    setSkillAnalyze(runDashboardSkillAnalyze());
   }, []);
 
   const userSkills = useMemo(() => {
@@ -99,10 +98,7 @@ export const Dashboard = () => {
     let sum = 0;
     for (const c of enrolledCourses) {
       const topics = courseTopicIds(c);
-      if (!topics.length) {
-        sum += 0;
-        continue;
-      }
+      if (!topics.length) continue;
       sum += courseCompletionStats(c.id, topics).percent;
     }
     return Math.round(sum / enrolledCourses.length);
@@ -261,7 +257,7 @@ export const Dashboard = () => {
               <p className="text-[10px] font-bold uppercase tracking-widest text-fuchsia-600 dark:text-fuchsia-300">New · AI-powered</p>
               <h2 className="text-base font-bold text-[var(--text-primary)]">Design your own mixed course</h2>
               <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
-                Pick duration + interests. AI builds a roadmap with real YouTube + docs you can edit.
+                Pick duration + interests. AI builds a roadmap with real YouTube + docs.
               </p>
             </div>
           </div>
@@ -271,100 +267,49 @@ export const Dashboard = () => {
         </div>
       </Link>
 
-      <Link
-        to="/trend-analyse"
-        className="group relative block overflow-hidden rounded-[var(--radius-xl)] border border-sky-200/70 bg-gradient-to-br from-sky-50 via-cyan-50 to-teal-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-sky-500/25 dark:from-sky-950/40 dark:via-cyan-950/30 dark:to-teal-950/30 sm:p-5"
-      >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-teal-600 text-white shadow-md">
-              <TrendingUp className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-300">Market vs you</p>
-              <h2 className="text-base font-bold text-[var(--text-primary)]">Trend Analyse — skill gaps vs market demand</h2>
-              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
-                Compare market trends with your skill profile. Gaps, charts, refresh every 7 days.
-              </p>
-            </div>
+      {enrolledCourses.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">Continue Learning</h2>
+            <Link to="/courses" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
+              View all
+            </Link>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-sky-600 px-4 py-2 text-sm font-bold text-white shadow-sm sm:self-center">
-            Open <ArrowRight className="h-4 w-4" />
-          </span>
-        </div>
-      </Link>
-
-      <section>
-        {nextPlan.kind === 'gaps' && nextPlan.primary ? (
-          <div className="er-card border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 p-5 dark:border-amber-500/30 dark:from-amber-950/20 dark:to-orange-950/20">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md">
-                  <Target className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">Next step</p>
-                  <h2 className="text-base font-bold text-[var(--text-primary)]">Close a skill gap</h2>
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                    Track <span className="font-semibold text-[var(--text-primary)]">{nextPlan.trackLabel}</span>
-                    {' · '}
-                    <span className="font-semibold text-[var(--text-primary)]">{nextPlan.primary.skill}</span>
-                    {' → '}{nextPlan.primary.courseTitle}
-                  </p>
-                </div>
-              </div>
-              <Link
-                to={nextPlan.primary.to}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-500"
-              >
-                Start: {nextPlan.primary.courseTitle} <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {enrolledCourses.map((course) => {
+              const topics = courseTopicIds(course);
+              const pct = topics.length ? courseCompletionStats(course.id, topics).percent : 0;
+              const boost = computePlacementChance(course, userSkills).boostPercent;
+              return (
+                <Link
+                  key={course.id}
+                  to={courseHref(course)}
+                  className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition hover:shadow-md"
+                >
+                  <div className="relative h-28 overflow-hidden bg-slate-200 dark:bg-slate-800">
+                    <img src={course.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
+                    {boost > 0 && (
+                      <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
+                        High chance +{boost}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1 p-3">
+                    <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">{course.title}</p>
+                    <div className="mt-auto">
+                      <div className="er-progress h-1.5">
+                        <div className="er-progress-bar" style={{ width: `${Math.max(4, pct)}%` }} />
+                      </div>
+                      <p className="mt-1 text-[11px] text-[var(--text-muted)]">{pct}% complete</p>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
-        ) : nextPlan.kind === 'quiz' ? (
-          <Link
-            to="/onboarding"
-            className="er-card er-card-hover group flex flex-col gap-4 border-indigo-200/80 bg-gradient-to-r from-indigo-50 to-violet-50 p-5 transition-all dark:border-indigo-500/30 dark:from-indigo-950/30 dark:to-violet-950/20 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="flex items-start gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Next step</p>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">Complete your skill quiz</h2>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Map strengths and gaps to unlock a personal learning path and better internship matches.
-                </p>
-              </div>
-            </div>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white">
-              Start quiz <ArrowRight className="h-4 w-4" />
-            </span>
-          </Link>
-        ) : nextPlan.kind === 'internships' ? (
-          <Link
-            to="/internships"
-            className="er-card er-card-hover group flex flex-col gap-4 border-emerald-200/80 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 transition-all dark:border-emerald-500/30 dark:from-emerald-950/30 dark:to-teal-950/20 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="flex items-start gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md">
-                <Briefcase className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Next step</p>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">Apply with skill match</h2>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Your profile{nextPlan.trackLabel ? ` for ${nextPlan.trackLabel}` : ''} is ready. Browse internships ranked by match.
-                </p>
-              </div>
-            </div>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-white">
-              View internships <ArrowRight className="h-4 w-4" />
-            </span>
-          </Link>
-        ) : null}
-      </section>
+        </section>
+      )}
 
       <section>
         <div className="mb-3 flex items-center justify-between">
