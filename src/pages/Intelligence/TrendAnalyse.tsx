@@ -245,7 +245,7 @@ export function TrendAnalyse() {
           type="button"
           disabled={busy}
           onClick={() => void runAnalysis()}
-          className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg disabled:opacity-50"
+          className="er-cta-primary disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           {busy ? 'Analyzing…' : !analysis ? 'Generate analysis' : 'Refresh analysis'}
@@ -406,7 +406,7 @@ export function TrendAnalyse() {
                 <span className="font-bold">{r.skill}</span>
                 <p className="text-xs text-[var(--text-secondary)]">{r.action}</p>
               </div>
-              <Link to={r.roadmapTo} className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">
+              <Link to={r.roadmapTo} className="er-cta-ghost !rounded-full !px-3 !py-1.5 !text-xs">
                 Open path <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </li>
