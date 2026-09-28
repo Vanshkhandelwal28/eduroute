@@ -210,32 +210,6 @@ export const Dashboard = () => {
         </div>
       </section>
 
-      {nextPlan.kind !== 'none' && (
-        <section className="er-card border border-[var(--border-default)] p-4 md:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-500/20">
-                <Target className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Next step</p>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">{nextPlan.title}</h2>
-                <p className="mt-0.5 text-sm text-[var(--text-secondary)]">{nextPlan.subtitle}</p>
-                {gapCount > 0 && nextPlan.kind === 'gaps' && (
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">{gapCount} skill gaps to close</p>
-                )}
-              </div>
-            </div>
-            <Link
-              to={nextPlan.to}
-              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-500"
-            >
-              {nextPlan.cta} <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </section>
-      )}
-
       <section className="er-stat-grid">
         {stats.map((s) => {
           const Icon = s.icon;
@@ -299,6 +273,104 @@ export const Dashboard = () => {
           </span>
         </div>
       </Link>
+
+      <section>
+        {nextPlan.kind === 'gaps' && nextPlan.primary ? (
+          <div className="er-card border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 p-5 dark:border-amber-500/30 dark:from-amber-950/30 dark:to-orange-950/20">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md">
+                  <Target className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">Next step</p>
+                  <h2 className="text-base font-bold text-[var(--text-primary)]">Close a skill gap</h2>
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                    Track <span className="font-semibold text-[var(--text-primary)]">{nextPlan.trackLabel}</span>
+                    {' · '}
+                    <span className="font-semibold text-[var(--text-primary)]">{nextPlan.primary.skill}</span>
+                    {' → '}{nextPlan.primary.courseTitle}
+                  </p>
+                </div>
+              </div>
+              <Link
+                to={nextPlan.primary.to}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-500"
+              >
+                Start: {nextPlan.primary.courseTitle} <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        ) : nextPlan.kind === 'quiz' ? (
+          <Link
+            to="/onboarding"
+            className="er-card er-card-hover group flex flex-col gap-4 border-indigo-200/80 bg-gradient-to-r from-indigo-50 to-violet-50 p-5 transition-all dark:border-indigo-500/30 dark:from-indigo-950/30 dark:to-violet-950/20 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Next step</p>
+                <h2 className="text-base font-bold text-[var(--text-primary)]">Complete your skill quiz</h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  Map strengths and gaps to unlock a personal learning path and better internship matches.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white">
+              Start quiz <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
+        ) : nextPlan.kind === 'internships' ? (
+          <Link
+            to="/internships"
+            className="er-card er-card-hover group flex flex-col gap-4 border-emerald-200/80 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 transition-all dark:border-emerald-500/30 dark:from-emerald-950/30 dark:to-teal-950/20 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Next step</p>
+                <h2 className="text-base font-bold text-[var(--text-primary)]">Apply with skill match</h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  Your profile{nextPlan.trackLabel ? ` for ${nextPlan.trackLabel}` : ''} is ready. Browse internships ranked by match.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-white">
+              View internships <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
+        ) : null}
+      </section>
+
+      <section>
+        <Link
+          to="/skill-profile"
+          className="er-card er-card-hover group flex flex-col gap-4 p-5 transition-all sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+              <Target className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)]">Student Skill Profile</h2>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                {hasSkillProfile
+                  ? gapCount > 0
+                    ? `You have ${gapCount} skill gap${gapCount === 1 ? '' : 's'} marked — view strengths and next steps.`
+                    : 'View your strengths, target tracks, and recommended next steps.'
+                  : 'Complete onboarding to unlock strengths, gaps, and a personal path.'}
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
+            Open profile <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+          </span>
+        </Link>
+      </section>
 
       {enrolledCourses.length > 0 && (
         <section>
