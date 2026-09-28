@@ -86,9 +86,7 @@ export function TrendAnalyse() {
   }, []);
 
   useEffect(() => {
-    const onUp = () => {
-      reloadAll();
-    };
+    const onUp = () => reloadAll();
     window.addEventListener('eduroute:market-trends-updated', onUp);
     window.addEventListener('eduroute:student-trend-updated', onUp);
     window.addEventListener('eduroute:mt-jobs-updated', onUp);
@@ -122,13 +120,6 @@ export function TrendAnalyse() {
     if (regionJobs.length > 0) return risingFromDemand(regionJobs, 6);
     return market?.risingSkills || [];
   }, [regionJobs, market]);
-  const sourceBreakdown = useMemo(() => {
-    const counts: Record<string, number> = {};
-    regionJobs.forEach((j) => {
-      counts[j.source] = (counts[j.source] || 0) + 1;
-    });
-    return counts;
-  }, [regionJobs]);
 
   const onRegionChange = (value: string) => {
     setRegion(value);
@@ -149,7 +140,11 @@ export function TrendAnalyse() {
         const s = sp.ownedSkills.length ? sp.ownedSkills : strengthsFromProfile(o);
         const g = sp.quizGaps.length ? sp.quizGaps : gapsFromProfile(o);
         const skills = sp.allSkills.length ? sp.allSkills : normalizeSkillList([...new Set([...s, ...g])]);
-        const f = sp.field || (o.interests?.[0] != null ? interestLabel(o.interests[0] as InterestTrack) : 'Software Engineering');
+        const f =
+          sp.field ||
+          (o.interests?.[0] != null
+            ? interestLabel(o.interests[0] as InterestTrack)
+            : 'Software Engineering');
         const scope = opts?.regionOverride || region;
         const res = await apiAnalyzeStudent({
           skills,
@@ -182,7 +177,14 @@ export function TrendAnalyse() {
   );
 
   useEffect(() => {
-    const key = allSkills.slice().sort().join('|') + '::' + gaps.join(',') + '::' + region + '::' + skillProfile.certCount;
+    const key =
+      allSkills.slice().sort().join('|') +
+      '::' +
+      gaps.join(',') +
+      '::' +
+      region +
+      '::' +
+      skillProfile.certCount;
     if (key === skillKeyRef.current) return;
     const prev = skillKeyRef.current;
     skillKeyRef.current = key;
@@ -229,7 +231,8 @@ export function TrendAnalyse() {
             Skill Trend Analysis
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Match uses quiz + CV + certificates vs admin job pool for the selected region. Refresh collects live Adzuna/gov jobs then AI.
+            Match uses quiz + CV + certificates vs admin job pool for the selected region. Refresh collects
+            live Adzuna/gov jobs then AI.
           </p>
         </div>
         <button
@@ -262,7 +265,8 @@ export function TrendAnalyse() {
           </select>
         </label>
         <p className="pb-2 text-xs text-[var(--text-muted)]">
-          {regionJobs.length} of {jobs.length} jobs · Certs: {skillProfile.certCount} · CV skills: {skillProfile.cvSkillCount}
+          {regionJobs.length} of {jobs.length} jobs · Certs: {skillProfile.certCount} · CV skills:{' '}
+          {skillProfile.cvSkillCount}
         </p>
       </div>
 
@@ -272,7 +276,10 @@ export function TrendAnalyse() {
         </p>
       )}
       {err && (
-        <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-700 dark:text-rose-300" role="alert">
+        <p
+          className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-700 dark:text-rose-300"
+          role="alert"
+        >
           {err}
         </p>
       )}
@@ -290,11 +297,23 @@ export function TrendAnalyse() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="er-card p-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-5">
+        <div
+          className={`er-card p-4 ring-1 ${
+            displayScore === 0 ? 'ring-amber-500/30 bg-amber-500/5' : 'ring-cyan-500/20'
+          }`}
+        >
           <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Match score</p>
-          <p className="mt-1 text-3xl font-black text-[var(--text-primary)]">{displayScore}%</p>
-          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">vs {region} demand</p>
+          <p
+            className={`mt-1 text-3xl font-black ${
+              displayScore === 0 ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--text-primary)]'
+            }`}
+          >
+            {displayScore}%
+          </p>
+          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+            {displayScore === 0 ? 'Complete quiz or Refresh to score' : `vs ${region} demand`}
+          </p>
         </div>
         <div className="er-card p-4">
           <p className="text-xs font-bold uppercase text-[var(--text-muted)]">Your track</p>
@@ -317,7 +336,9 @@ export function TrendAnalyse() {
           <Database className="h-4 w-4" /> Skill demand — {region}
         </h2>
         {demandRows.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">Admin has not collected jobs for this region yet. Click Refresh analysis to live-collect.</p>
+          <p className="text-sm text-[var(--text-muted)]">
+            Admin has not collected jobs for this region yet. Click Refresh analysis to live-collect.
+          </p>
         ) : (
           <ul className="space-y-3">
             {demandRows.slice(0, 10).map((row) => {
@@ -328,19 +349,26 @@ export function TrendAnalyse() {
                     <span className="font-semibold">
                       {row.skill}{' '}
                       {have ? (
-                        <span className="ml-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">matched</span>
+                        <span className="ml-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">
+                          matched
+                        </span>
                       ) : (
-                        <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800 dark:text-amber-200">gap</span>
+                        <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800 dark:text-amber-200">
+                          gap
+                        </span>
                       )}
                     </span>
                     <span className="tabular-nums text-[var(--text-muted)]">
-                      {row.jobCount} jobs · <strong className="text-[var(--text-primary)]">{row.demandPct}%</strong>
+                      {row.jobCount} jobs ·{' '}
+                      <strong className="text-[var(--text-primary)]">{row.demandPct}%</strong>
                     </span>
                   </div>
                   <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        have ? 'bg-gradient-to-r from-emerald-500 to-cyan-500' : 'bg-gradient-to-r from-indigo-500 to-cyan-500'
+                        have
+                          ? 'bg-gradient-to-r from-emerald-500 to-cyan-500'
+                          : 'bg-gradient-to-r from-indigo-500 to-cyan-500'
                       }`}
                       style={{ width: `${Math.min(100, (row.demandPct / maxDemand) * 100)}%` }}
                     />
@@ -358,7 +386,12 @@ export function TrendAnalyse() {
           {localMatch.matched.length ? (
             <div className="flex flex-wrap gap-2">
               {localMatch.matched.map((s) => (
-                <span key={s} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-200">{s}</span>
+                <span
+                  key={s}
+                  className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-200"
+                >
+                  {s}
+                </span>
               ))}
             </div>
           ) : (
@@ -370,7 +403,12 @@ export function TrendAnalyse() {
           {localMatch.gaps.length ? (
             <div className="flex flex-wrap gap-2">
               {localMatch.gaps.map((s) => (
-                <span key={s} className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-900 dark:text-amber-200">{s}</span>
+                <span
+                  key={s}
+                  className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-900 dark:text-amber-200"
+                >
+                  {s}
+                </span>
               ))}
             </div>
           ) : (
@@ -380,15 +418,23 @@ export function TrendAnalyse() {
       </div>
 
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5">
-        <h2 className="mb-3 text-sm font-black uppercase text-[var(--text-muted)]">Priority skills → learning recommendations</h2>
+        <h2 className="mb-3 text-sm font-black uppercase text-[var(--text-muted)]">
+          Priority skills → learning recommendations
+        </h2>
         <ul className="space-y-3">
           {localMatch.recommendations.map((r) => (
-            <li key={r.skill} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-default)] px-3 py-2 text-sm">
+            <li
+              key={r.skill}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-default)] px-3 py-2 text-sm"
+            >
               <div>
                 <span className="font-bold">{r.skill}</span>
                 <p className="text-xs text-[var(--text-secondary)]">{r.action}</p>
               </div>
-              <Link to={r.roadmapTo} className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">
+              <Link
+                to={r.roadmapTo}
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white"
+              >
                 Open path <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </li>
@@ -402,7 +448,9 @@ export function TrendAnalyse() {
             <Sparkles className="h-4 w-4" /> AI market summary
           </div>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{analysis.summary}</p>
-          {analysis.provider && <p className="mt-2 text-[10px] text-[var(--text-muted)]">Provider: {analysis.provider}</p>}
+          {analysis.provider && (
+            <p className="mt-2 text-[10px] text-[var(--text-muted)]">Provider: {analysis.provider}</p>
+          )}
         </div>
       )}
 
@@ -418,7 +466,10 @@ export function TrendAnalyse() {
                 <XAxis dataKey="skill" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                 <Tooltip
-                  formatter={(value: number, name: string) => [value, name === 'market' ? 'Market demand' : 'Your level']}
+                  formatter={(value: number, name: string) => [
+                    value,
+                    name === 'market' ? 'Market demand' : 'Your level',
+                  ]}
                   labelFormatter={(_, payload) => payload?.[0]?.payload?.full || ''}
                 />
                 <Legend />
@@ -428,7 +479,14 @@ export function TrendAnalyse() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <p className="py-8 text-center text-sm text-[var(--text-muted)]">Chart appears after jobs are collected or analysis runs.</p>
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-elevated)]/50 px-4 py-12 text-center">
+            <BarChart3 className="h-8 w-8 text-[var(--text-muted)] opacity-50" />
+            <p className="text-sm font-semibold text-[var(--text-secondary)]">No chart data yet</p>
+            <p className="max-w-sm text-xs text-[var(--text-muted)]">
+              Click <strong>Refresh analysis</strong> to live-collect jobs and compare your skills to market
+              demand.
+            </p>
+          </div>
         )}
       </div>
 
@@ -440,13 +498,20 @@ export function TrendAnalyse() {
           <p className="text-sm text-[var(--text-muted)]">No rising-skill signals yet.</p>
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
-            {risingDisplay.map((r: { skill?: string; demandScore?: number; note?: string }, i: number) => (
-              <li key={(r.skill || 's') + i} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-sm">
-                <span className="font-bold">{r.skill}</span>
-                {r.demandScore != null && <span className="ml-2 tabular-nums text-[var(--text-muted)]">{r.demandScore}</span>}
-                {r.note && <p className="text-[11px] text-[var(--text-muted)]">{r.note}</p>}
-              </li>
-            ))}
+            {risingDisplay.map(
+              (r: { skill?: string; demandScore?: number; note?: string }, i: number) => (
+                <li
+                  key={(r.skill || 's') + i}
+                  className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-sm"
+                >
+                  <span className="font-bold">{r.skill}</span>
+                  {r.demandScore != null && (
+                    <span className="ml-2 tabular-nums text-[var(--text-muted)]">{r.demandScore}</span>
+                  )}
+                  {r.note && <p className="text-[11px] text-[var(--text-muted)]">{r.note}</p>}
+                </li>
+              ),
+            )}
           </ul>
         )}
       </div>
