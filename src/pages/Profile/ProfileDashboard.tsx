@@ -397,7 +397,8 @@ export const ProfileDashboard = () => {
   }, [courseSkills, onboarding]);
 
   const heatmap = useMemo(() => {
-    const WEEKS = 17;
+    // Full-year LeetCode/GitHub-style contribution grid (~53 weeks)
+    const WEEKS = 53;
     const raw = (profileData as any)?.activityHeatmap;
     const values: number[] = [];
     if (Array.isArray(raw) && raw.length > 0) {
@@ -408,7 +409,7 @@ export const ProfileDashboard = () => {
     }
     while (values.length < WEEKS * 7) {
       const i = values.length;
-      values.push(i % 13 === 0 ? 3 : i % 7 === 0 ? 2 : i % 5 === 0 ? 1 : 0);
+      values.push(i % 17 === 0 ? 4 : i % 11 === 0 ? 3 : i % 7 === 0 ? 2 : i % 4 === 0 ? 1 : 0);
     }
     const grid = values.slice(-WEEKS * 7);
     const today = new Date();
@@ -628,79 +629,77 @@ export const ProfileDashboard = () => {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-[24px] border border-white/10 bg-slate-900/70 p-3.5 shadow-[0_8px_28px_rgba(15,23,42,0.3)] backdrop-blur-xl">
+            <div className="rounded-[24px] border border-white/10 bg-slate-900/70 p-3 shadow-[0_8px_28px_rgba(15,23,42,0.3)] backdrop-blur-xl">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="flex items-center gap-1.5 text-xs font-black text-white">
                   <Flame className="h-3.5 w-3.5 text-orange-400" /> Activity
                 </h3>
-                <span className="text-[10px] font-semibold text-slate-500">Last {heatmap.weeks} weeks</span>
+                <span className="text-[10px] font-semibold text-slate-500">Past year</span>
               </div>
 
-              <div className="mb-0.5 ml-6 flex text-[9px] font-semibold text-slate-500">
-                {heatmap.months.map((m, i) => (
-                  <span
-                    key={`${m.label}-${m.col}-${i}`}
-                    className="shrink-0"
-                    style={{
-                      marginLeft: i === 0 ? `${m.col * 12}px` : undefined,
-                      width:
-                        i < heatmap.months.length - 1
-                          ? `${Math.max(1, (heatmap.months[i + 1].col - m.col) * 12)}px`
-                          : undefined,
-                    }}
-                  >
-                    {m.label}
-                  </span>
-                ))}
-              </div>
+              <div className="w-full overflow-x-auto">
+                <div className="inline-block min-w-full">
+                  <div className="relative mb-1 ml-[18px] h-3 text-[9px] font-semibold text-slate-500">
+                    {heatmap.months.map((m, i) => (
+                      <span
+                        key={`${m.label}-${m.col}-${i}`}
+                        className="absolute top-0"
+                        style={{ left: `${m.col * 11}px` }}
+                      >
+                        {m.label}
+                      </span>
+                    ))}
+                  </div>
 
-              <div className="flex gap-1">
-                <div className="flex w-5 flex-col justify-between py-[1px] text-[9px] font-medium leading-none text-slate-500">
-                  <span className="h-[10px]" />
-                  <span className="flex h-[10px] items-center">M</span>
-                  <span className="h-[10px]" />
-                  <span className="flex h-[10px] items-center">W</span>
-                  <span className="h-[10px]" />
-                  <span className="flex h-[10px] items-center">F</span>
-                  <span className="h-[10px]" />
-                </div>
-
-                <div className="flex gap-[3px]">
-                  {Array.from({ length: heatmap.weeks }).map((_, week) => (
-                    <div key={week} className="flex flex-col gap-[3px]">
-                      {Array.from({ length: 7 }).map((_, day) => {
-                        const idx = week * 7 + day;
-                        const c = heatmap.grid[idx] ?? 0;
-                        const level =
-                          c >= 4
-                            ? 'bg-teal-300'
-                            : c >= 3
-                              ? 'bg-teal-400'
-                              : c >= 2
-                                ? 'bg-teal-600'
-                                : c >= 1
-                                  ? 'bg-teal-800'
-                                  : 'bg-slate-800';
-                        return (
-                          <div
-                            key={day}
-                            className={`h-[10px] w-[10px] rounded-[2px] ${level}`}
-                            title={c ? `${c} contributions` : 'No activity'}
-                          />
-                        );
-                      })}
+                  <div className="flex gap-[2px]">
+                    <div className="flex w-[16px] shrink-0 flex-col gap-[2px] text-[8px] font-medium leading-none text-slate-500">
+                      <span className="h-[9px]" />
+                      <span className="flex h-[9px] items-center">M</span>
+                      <span className="h-[9px]" />
+                      <span className="flex h-[9px] items-center">W</span>
+                      <span className="h-[9px]" />
+                      <span className="flex h-[9px] items-center">F</span>
+                      <span className="h-[9px]" />
                     </div>
-                  ))}
+
+                    <div className="flex gap-[2px]">
+                      {Array.from({ length: heatmap.weeks }).map((_, week) => (
+                        <div key={week} className="flex flex-col gap-[2px]">
+                          {Array.from({ length: 7 }).map((_, day) => {
+                            const idx = week * 7 + day;
+                            const c = heatmap.grid[idx] ?? 0;
+                            const level =
+                              c >= 4
+                                ? 'bg-teal-300'
+                                : c >= 3
+                                  ? 'bg-teal-400'
+                                  : c >= 2
+                                    ? 'bg-teal-600'
+                                    : c >= 1
+                                      ? 'bg-teal-800'
+                                      : 'bg-slate-800';
+                            return (
+                              <div
+                                key={day}
+                                className={`h-[9px] w-[9px] rounded-[2px] ${level}`}
+                                title={c ? `${c} contributions` : 'No activity'}
+                              />
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div className="mt-2 flex items-center justify-end gap-1 text-[9px] text-slate-500">
                 <span>Less</span>
-                <span className="h-[10px] w-[10px] rounded-[2px] bg-slate-800" />
-                <span className="h-[10px] w-[10px] rounded-[2px] bg-teal-800" />
-                <span className="h-[10px] w-[10px] rounded-[2px] bg-teal-600" />
-                <span className="h-[10px] w-[10px] rounded-[2px] bg-teal-400" />
-                <span className="h-[10px] w-[10px] rounded-[2px] bg-teal-300" />
+                <span className="h-[9px] w-[9px] rounded-[2px] bg-slate-800" />
+                <span className="h-[9px] w-[9px] rounded-[2px] bg-teal-800" />
+                <span className="h-[9px] w-[9px] rounded-[2px] bg-teal-600" />
+                <span className="h-[9px] w-[9px] rounded-[2px] bg-teal-400" />
+                <span className="h-[9px] w-[9px] rounded-[2px] bg-teal-300" />
                 <span>More</span>
               </div>
             </div>
