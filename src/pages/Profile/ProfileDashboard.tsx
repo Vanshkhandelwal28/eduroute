@@ -55,11 +55,7 @@ export const ProfileDashboard = () => {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     const skills = Array.from(
-      new Set(
-        [...courseSkills]
-          .map((s) => String(s || '').trim())
-          .filter(Boolean),
-      ),
+      new Set([...courseSkills].map((s) => String(s || '').trim()).filter(Boolean)),
     );
     if (skills.length === 0 && achievements.length === 0) return;
     void syncMyPublicData({
@@ -275,10 +271,10 @@ export const ProfileDashboard = () => {
 
         <LivingLearningPath />
 
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)]">
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
-              <Sparkles className="h-5 w-5 text-violet-500" /> Skills gained through courses
+        <section className="rounded-3xl border border-[var(--border-default)]/80 bg-[var(--bg-card)]/80 p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-base font-bold text-[var(--text-secondary)]">
+              <Sparkles className="h-4 w-4 text-violet-500" /> Skills gained through courses
             </h2>
             <Link to="/ai-course-designer" className="text-xs font-bold text-[var(--accent)] hover:underline">
               AI Course Designer →
@@ -323,20 +319,9 @@ export const ProfileDashboard = () => {
                   <div className="min-w-0">
                     <div className="font-bold text-[var(--text-primary)]">{a.courseTitle}</div>
                     <div className="text-xs text-[var(--text-secondary)]">
-                      {a.level} · {a.durationLabel} · Score {a.percent}% · {(a.badge || 'bronze').toUpperCase()} · {a.completedAt}
+                      {a.level} · {a.durationLabel} · Score {a.percent}% · {(a.badge || 'bronze').toUpperCase()} ·{' '}
+                      {a.completedAt}
                     </div>
-                    {a.skills.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {a.skills.slice(0, 5).map((s) => (
-                          <span
-                            key={s}
-                            className="rounded-full bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-bold text-[var(--text-secondary)]"
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                   <button
                     type="button"
@@ -355,7 +340,10 @@ export const ProfileDashboard = () => {
 
         {isEditing && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 dark:bg-black/70" role="dialog" aria-modal="true">
-            <form onSubmit={saveProfile} className="w-full max-w-md rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-elevated)]">
+            <form
+              onSubmit={saveProfile}
+              className="w-full max-w-md rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-elevated)]"
+            >
               <div className="mb-6 flex items-center justify-between">
                 <h2 className="text-xl font-black text-[var(--text-primary)]">Edit Profile</h2>
                 <button type="button" onClick={() => setIsEditing(false)} className="text-sm font-semibold text-[var(--text-muted)]">
@@ -364,15 +352,31 @@ export const ProfileDashboard = () => {
               </div>
               <label className="block text-sm font-semibold text-[var(--text-secondary)]">
                 Name
-                <input value={editName} onChange={(e) => setEditName(e.target.value)} className="mt-2 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)] px-4 py-3 text-[var(--text-primary)] outline-none focus:border-[var(--accent)]" required />
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)] px-4 py-3 text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                  required
+                />
               </label>
               <label className="mt-4 block text-sm font-semibold text-[var(--text-secondary)]">
                 Email
-                <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="mt-2 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)] px-4 py-3 text-[var(--text-primary)] outline-none focus:border-[var(--accent)]" required />
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)] px-4 py-3 text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                  required
+                />
               </label>
               <label className="mt-4 block text-sm font-semibold text-[var(--text-secondary)]">
                 Bio
-                <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} rows={3} className="mt-2 w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)] px-4 py-3 text-[var(--text-primary)] outline-none focus:border-[var(--accent)]" />
+                <textarea
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)] px-4 py-3 text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                />
               </label>
               <button type="submit" className="mt-6 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-500">
                 Save Changes
@@ -391,7 +395,10 @@ export const ProfileDashboard = () => {
               badges: String((profileData.badges || []).length),
             };
             return (
-              <article key={item.key} className="group rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)] transition hover:-translate-y-1 hover:border-[var(--accent)]">
+              <article
+                key={item.key}
+                className="group rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)] transition hover:-translate-y-1 hover:border-[var(--accent)]"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="rounded-2xl bg-[var(--accent-soft)] p-2.5 text-[var(--accent)]">
                     <Icon className="h-5 w-5" />
@@ -426,7 +433,8 @@ export const ProfileDashboard = () => {
               <Flame className="h-5 w-5 text-orange-500" /> Activity
             </h2>
             <p className="text-sm text-[var(--text-secondary)]">
-              Current streak: <strong>{profileData.streak?.current ?? 0}</strong> days · Best: {profileData.streak?.max ?? 0}
+              Current streak: <strong>{profileData.streak?.current ?? 0}</strong> days · Best:{' '}
+              {profileData.streak?.max ?? 0}
             </p>
           </article>
         </section>
@@ -440,11 +448,7 @@ export const ProfileDashboard = () => {
       </div>
 
       {certOpen && certData && (
-        <CourseCertificate
-          open={certOpen}
-          onClose={() => setCertOpen(false)}
-          achievement={certData}
-        />
+        <CourseCertificate open={certOpen} onClose={() => setCertOpen(false)} achievement={certData} />
       )}
     </div>
   );
