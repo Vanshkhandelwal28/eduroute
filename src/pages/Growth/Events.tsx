@@ -13,6 +13,7 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
+import { EmptyCoach } from '../../components/EmptyCoach';
 
 type Region = 'india' | 'international' | 'all';
 
@@ -232,9 +233,11 @@ export const Events = () => {
       )}
 
       {loading && !filtered.length ? (
-        <div className="flex items-center justify-center gap-2 py-24 text-slate-500">
-          <Loader2 className="h-5 w-5 animate-spin" /> Loading live events…
-        </div>
+        <EmptyCoach
+          loading
+          title="Finding live events…"
+          tip="Pulling Adzuna roles and platform hubs for your region. This usually takes a few seconds."
+        />
       ) : (
         <motion.div
           className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
@@ -296,7 +299,12 @@ export const Events = () => {
       )}
 
       {!loading && filtered.length === 0 && (
-        <p className="py-16 text-center text-sm text-slate-500 dark:text-slate-400">No events match your filters.</p>
+        <EmptyCoach
+          title="No events in this view"
+          tip="Try All regions, clear the category filter, or run AI Refresh to re-rank openings for students."
+          actionLabel="AI Refresh"
+          onAction={() => void load({ region, query: query.trim(), aiRefresh: true })}
+        />
       )}
 
       <p className="mt-10 text-center text-[11px] text-slate-400 dark:text-slate-500">
