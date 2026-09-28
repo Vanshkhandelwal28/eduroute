@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { staggerContainer, fadeUpItem } from '../../utils/motionPresets';
 import { Link } from 'react-router-dom';
 import {
   Award,
@@ -201,8 +203,13 @@ export const ProfileDashboard = () => {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] p-4 text-[var(--text-primary)] md:p-8">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)] backdrop-blur md:p-8">
+      <motion.div
+        className="mx-auto max-w-7xl space-y-8"
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
+        <motion.section variants={fadeUpItem} className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-card)] backdrop-blur md:p-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4 md:gap-6">
               <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-[var(--border-default)] bg-linear-to-br from-indigo-500 to-violet-600 text-3xl font-black uppercase text-white">
@@ -267,7 +274,7 @@ export const ProfileDashboard = () => {
             <span className="font-semibold text-[var(--accent)]">View strengths, skill gaps & recommended next steps</span>
             <ArrowRight className="h-4 w-4 shrink-0 text-[var(--accent)]" />
           </Link>
-        </section>
+        </motion.section>
 
         <LivingLearningPath />
 
@@ -445,7 +452,7 @@ export const ProfileDashboard = () => {
             Portfolio
           </Link>
         </p>
-      </div>
+      </motion.div>
 
       {certOpen && certData && (
         <CourseCertificate open={certOpen} onClose={() => setCertOpen(false)} achievement={certData} />
