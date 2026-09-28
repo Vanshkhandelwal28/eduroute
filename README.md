@@ -1,267 +1,220 @@
 # EDUROUTE
 
-### Academia–Industry Collaboration Portal  
-**Skill Mapping · Internships · Placement**
+### Labour-Market Intelligence & Curriculum Alignment Platform  
+**Demand signals · Skill gaps · Employer validation · District training plans**
 
 ---
 
 | | |
 |---|---|
 | **Hackathon** | Smart India Hackathon 2026 |
-| **Problem Statement** | **SIH26144** — Portal for Academia–Industry collaboration for Skill Mapping, Internships and Placement |
+| **Problem Statement** | **SIH26134** — Challenges in aligning skill development programs with industry requirements and emerging job market demands |
+| **Organization** | Government of Maharashtra |
+| **Department** | Maharashtra State Innovation Society, Department of Skills, Employment, Entrepreneurship and Innovation |
 | **Category** | Software |
-| **Theme** | Smart Education / Automation |
+| **Theme** | Miscellaneous |
 | **Live demo** | **https://eduroutee.netlify.app/** |
 
 [![SIH 2026](https://img.shields.io/badge/SIH-2026-violet)](https://www.sih.gov.in/)
-[![PS SIH26144](https://img.shields.io/badge/PS-SIH26144-indigo)](https://sih.gov.in/sih2026PS)
+[![PS SIH26134](https://img.shields.io/badge/PS-SIH26134-indigo)](https://sih2026.vuce.in/ps/SIH26134)
 [![Live](https://img.shields.io/badge/Demo-Live%20on%20Netlify-00C7B7)](https://eduroutee.netlify.app/)
 
-> **For jury / shortlisters:** Open the live demo → walk the 3 roles below → match each screen to SIH26144 in Section 5.
+> **For jury / shortlisters:** Open the live demo → Demand Intel · Curriculum Gaps · Employer Validation · Student path → map each screen to SIH26134 outcomes below.
 
 ---
 
-## Slide 1 — The problem (30 seconds)
+## 1 — The problem (SIH26134)
 
-Colleges teach skills. Industry needs different skills. Students get stuck in between.
+Skill-development programmes are often designed around **broad or historical occupation categories** that lag changing technologies, **local industry demand**, job roles, productivity standards and employer expectations.
 
-```text
-   COLLEGE                          INDUSTRY
-   What is taught          ≠        What is hired
-        │                                │
-        └──────── STUDENT ───────────────┘
-                   │
-         Unclear gaps · Random applications
-         Weak portfolio · No placement view
-```
+| Stakeholder | Pain today |
+|-------------|------------|
+| **Trainees / students** | Finish courses with weak placement potential; unclear which skills the market actually needs |
+| **Employers** | Struggle to find job-ready candidates; limited feedback loop into curriculum |
+| **Training providers / colleges** | Curricula, equipment and assessments lag demand; hard to know what to **add / remove / update** |
+| **District planners** | No continuous, evidence-based view of demand by role, skill, location and proficiency |
 
-| Who | Pain today |
-|-----|------------|
-| **Student** | Doesn’t know skill gaps; applies randomly; portfolio is incomplete |
-| **Industry** | Hard to find skill-matched candidates; too many noisy applications |
-| **College** | Cannot see placement funnel or cohort skill gaps |
-
-**EDUROUTE** connects all three on one portal: assess → map → match → apply → place.
+**EDUROUTE** is a continuous, evidence-based platform that turns **live job-market signals + employer validation** into curriculum decisions, capacity planning and candidate guidance.
 
 ---
 
-## Slide 2 — Solution in one picture
+## 2 — Expected solution (mapped to the product)
+
+Per SIH26134, the platform should combine job-posting signals, employer surveys, sector trends and placement context to:
+
+| Required capability | EDUROUTE feature |
+|---------------------|------------------|
+| Labour-market intelligence from job signals | **Demand Intelligence** — live Adzuna + curated signals, filters, KPIs, skills & role trends, district heatmap |
+| Demand by role, skill, location, proficiency | Demand Intel filters + trend analyse; skill gap bars vs market |
+| Map gaps to courses / qualifications | **Curriculum ↔ Skill Gap Mapper** (admin) — taught % vs demand %; flags |
+| Recommend curriculum updates | Gap mapper: **add / remove / update** module recommendations |
+| Flag obsolete or oversupplied courses | Flags: `obsolete` · `oversupplied` · `critical_gap` · `healthy` |
+| Employer validation | **Industry → Employer validation** — ratings, must-have vs nice-to-have skills, approve/reject curriculum suggestions, surveys |
+| District-level training plans | **District Training Plan** (admin) — capacity-oriented planning view |
+| Candidate guidance | Student **Skill Profile**, **Living Learning Path**, matched internships, AI Course Designer, Buddy AI |
+
+---
+
+## 3 — Solution architecture (one picture)
 
 ```mermaid
 flowchart TB
-  subgraph S["👤 STUDENT"]
-    S1[Sign up / Login] --> S2[Skill assessment]
-    S2 --> S3[Skill Profile + gaps]
-    S3 --> S4[Roadmaps · DSA · Buddy AI]
-    S3 --> S5[Matched internships]
-    S5 --> S6[Apply & track status]
+  subgraph SIGNALS["📡 MARKET SIGNALS"]
+    J[Job postings · Adzuna]
+    G[Gov / sector indicators]
+    E[Employer surveys & ratings]
   end
 
-  subgraph I["🏢 INDUSTRY"]
-    I1[Post internship / job] --> I2[See applicants]
-    I2 --> I3[Shortlist by Match %]
+  subgraph CORE["EDUROUTE CORE"]
+    DI[Demand Intelligence]
+    CG[Curriculum Gap Mapper]
+    EV[Employer Validation Loop]
+    TP[District Training Plans]
   end
 
-  subgraph C["🏫 COLLEGE"]
-    C1[Placement dashboard] --> C2[Funnel + cohort gaps]
+  subgraph ACTORS["👥 ACTORS"]
+    ST[Student · trainee guidance]
+    IN[Industry · validation]
+    AD[Admin / college · curriculum & placement]
   end
 
-  S6 --> I2
-  I3 --> C1
-  S3 --> C1
+  J --> DI
+  G --> DI
+  E --> EV
+  DI --> CG
+  EV --> CG
+  CG --> TP
+  DI --> ST
+  CG --> AD
+  EV --> IN
+  TP --> AD
+  ST --> IN
 ```
 
-**One sentence:** Students discover gaps and apply to matched roles; industry shortlists by fit; colleges see the full placement funnel.
+**One sentence:** Live demand and employer feedback drive curriculum decisions and trainee guidance on one portal.
 
 ---
 
-## Slide 3 — How a student uses EDUROUTE (workflow)
+## 4 — Role workflows
 
-```mermaid
-flowchart LR
-  A[1. Auth] --> B[2. Onboarding]
-  B --> C[3. Skill Profile]
-  C --> D[4. Learn]
-  C --> E[5. Internships]
-  E --> F[6. Apply]
-  F --> G[7. Track]
-  C --> H[8. Portfolio / CV]
-```
-
-| Step | What happens | Where in app |
-|------|----------------|--------------|
-| **1. Auth** | Email signup/login or **GitHub / LinkedIn** | `/signup` · `/login` |
-| **2. Onboarding** | Interest track + yes/no gap quiz | `/onboarding` |
-| **3. Skill Profile** | Scores · Good / Improve / Gap · next steps | Skill Profile |
-| **4. Learn** | Roadmaps (YouTube + docs per topic) · DSA Sheet · Assessments · **Buddy AI** | Roadmaps · DSA · Assessments |
-| **5. Internships** | Cards with **Match %** · “Recommended for you” | Internships |
-| **6. Apply** | One-click apply to openings | Internship detail |
-| **7. Track** | Applied → Shortlisted → Interview → Hired | Applications / Journey |
-| **8. Showcase** | Digital portfolio + CV Builder | Portfolio · CV Builder |
-
-**Bonus learning path:** Profile → **Living Learning Path** (nodes: completed / in-progress / locked) with progress % and detail panel.
-
----
-
-## Slide 4 — Industry & College workflows
+### Student / trainee
+1. Auth → onboarding (track + skill gap quiz)  
+2. **Skill Profile** — strengths, gaps, match vs live demand  
+3. **Demand Intel** — see rising roles & skills in their region  
+4. **Learning path / roadmaps / AI Course Designer** — close gaps  
+5. Matched **internships** → apply & track · portfolio & certificates  
 
 ### Industry
+1. Post roles / internships  
+2. Review applicants with match context  
+3. **Employer validation** — rate course job-readiness, list must-have skills, approve or reject curriculum suggestions  
 
-```mermaid
-flowchart LR
-  A[Login as Industry] --> B[Post internship / job]
-  B --> C[Applicants list]
-  C --> D[Sort by Match %]
-  D --> E[Shortlist / Interview]
-```
-
-- Workspace: `/industry`  
-- Post roles with required skills  
-- Review applicants ranked by **match score**
-
-### College
-
-```mermaid
-flowchart LR
-  A[Login as College] --> B[Placement dashboard]
-  B --> C[KPIs: Applied · Shortlisted · Interview · Hired]
-  B --> D[Skill gaps of cohort]
-  B --> E[Top hiring companies]
-```
-
-- Workspace: `/college/placements`  
-- Funnel chart · readiness score · open jobs/internships  
-- One theme toggle + logout in the college header
+### Admin / college / planner
+1. **Curriculum Gaps** — taught vs demand; obsolete / oversupplied / critical  
+2. **District Training Plan** — planning outputs for capacity & modules  
+3. Placement / cohort visibility where available  
 
 ---
 
-## Slide 5 — Mapping to SIH26144 (jury checklist)
+## 5 — Feature map (demo routes)
 
-| SIH26144 requirement | EDUROUTE delivers |
-|----------------------|-------------------|
-| Skill assessment | Onboarding tracks + gap questions |
-| Skill mapping | Skill Profile (Good / Improve / Gap) + recommendations |
-| Internship & job opportunities | Student feed + industry postings |
-| Matching students ↔ openings | **Match %** on cards · recommended list |
-| Application & tracking | Apply → Shortlisted → Interview → Hired |
-| Industry collaboration | Industry workspace to post & shortlist |
-| Institution visibility | College placement dashboard |
-| Learning support | Roadmaps, DSA, Assessments, **Buddy AI**, Living Path |
-| Student portfolio | Portfolio + CV Builder |
-| Faculty collaboration | Faculty opportunities + official portal links |
+| Area | Route / entry | What jury sees |
+|------|----------------|----------------|
+| Demand Intelligence | Career → **Demand Intel** (`/demand-intelligence`) | Job signals, filters, KPIs, skills, role trends, district heatmap, employer validation feed |
+| Trend analyse | Intelligence → Trend Analyse | Student vs live market skill gap analysis (Groq/Gemini when keyed) |
+| Curriculum gaps | Admin → **Curriculum Gaps** | Course ↔ industry demand matrix; add/remove/update recommendations; status flags |
+| District plans | Admin → District Training Plan | District-oriented training plan data |
+| Employer validation | Industry → **Employer validation** | Ratings, skill lists, surveys, curriculum decision loop |
+| Skill assessment & profile | Onboarding · Skill Profile · Profile | Gaps, XP, railway learning path, heatmap |
+| Learn & close gaps | Roadmaps · AI Course Designer · Buddy AI · Assessments | Paths, designed courses, mentor chat, quizzes |
+| Match & place | Internships · Certifications · Portfolio · Events | Apply, certs, digital portfolio, live events |
 
 ---
 
-## Slide 6 — Feature map (product tree)
+## 6 — Tech stack
 
 ```text
-EDUROUTE
-│
-├─ 👤 Student
-│   ├─ Auth (email · GitHub · LinkedIn)
-│   ├─ AI onboarding (track + gap quiz)
-│   ├─ Skill Profile + Living Learning Path
-│   ├─ Internships (Match % · apply pipeline)
-│   ├─ Roadmaps (YouTube + Document per topic)
-│   ├─ DSA Sheet · Assessments · Leaderboard · Rewards
-│   ├─ Community (+ Discord)
-│   ├─ CV Builder · Portfolio
-│   └─ Buddy AI mentor (floating assistant)
-│
-├─ 👨‍🏫 Faculty
-│   └─ Opportunities + official portal links
-│
-├─ 🏢 Industry
-│   ├─ Post internship / job
-│   └─ Applicants + shortlist by match
-│
-└─ 🏫 College
-    └─ Placement funnel dashboard
-```
-
----
-
-## Slide 7 — Architecture (how it is built)
-
-```mermaid
-flowchart TB
-  UI["Frontend\nReact · TypeScript · Vite · Tailwind"]
-  NF["Netlify Functions\n(serverless API)"]
-  DB[("MySQL / Railway\nauth · progress")]
-  AI["Groq AI\nBuddy mentor"]
-  LS["Browser localStorage\ndemo applications · UI state"]
-
-  UI --> NF
-  UI --> LS
-  NF --> DB
-  NF --> AI
+React 18 + TypeScript + Vite + Tailwind + Framer Motion
+        │
+        ▼
+Netlify (static site + serverless functions)
+        │
+        ├── MySQL / Railway   (auth · progress where configured)
+        ├── Adzuna API        (live job / event signals)
+        ├── Groq / Gemini     (Buddy · trend summarise · course AI)
+        └── localStorage      (demo applications · path UI · seeds)
 ```
 
 | Layer | Choice |
 |-------|--------|
-| UI | React 18 · TypeScript · Vite · Tailwind · Framer Motion · Lucide |
-| Hosting | Netlify (static site + serverless functions) |
-| Auth / data | MySQL (Railway) via Netlify functions |
-| AI | Buddy chat powered by Groq (Llama) |
-| Demo data | localStorage for applications, path UI, placement seed |
+| UI | React 18 · TypeScript · Vite · Tailwind · Framer Motion · Lucide · Recharts |
+| Hosting | Netlify (pages + functions) |
+| Auth / data | MySQL (Railway) via Netlify functions · JWT |
+| Live demand | Adzuna · optional data.gov / curated gov hubs |
+| AI | Groq (Llama) and/or Gemini for Buddy, trend notes, course design |
+| Demo state | localStorage for applications, learning path, placement seeds |
 
 ---
 
-## Slide 8 — Why this works for SIH (impact)
+## 7 — Why this fits SIH26134
 
 | Jury lens | EDUROUTE response |
 |-----------|-------------------|
-| **Problem clarity** | Directly targets academia–industry skill gap |
-| **Completeness** | Student + Industry + College in **one** product |
-| **Working demo** | Live site · apply → shortlist → placement path |
-| **Innovation** | Gap onboarding · match scoring · AI mentor · living path UI |
-| **Feasibility** | Standard web stack · deployed on Netlify |
-| **Impact** | Better employability · cleaner hiring · college visibility |
+| **Problem clarity** | Directly targets curriculum lag vs industry demand (Maharashtra skills dept PS) |
+| **Evidence-based loop** | Job signals + employer validation → gap flags → curriculum recommendations |
+| **Completeness** | Student guidance + industry validation + admin curriculum / district views |
+| **Working demo** | Live Netlify deploy · Demand Intel · Curriculum Gaps · Employer Validation |
+| **Feasibility** | Standard web stack · serverless APIs · optional AI keys |
+| **Impact** | Stronger placement alignment · less obsolete training · clearer district planning |
 
 ---
 
-## Slide 9 — Demo script (5 minutes)
+## 8 — Demo script (≈ 5 minutes)
 
 Use **https://eduroutee.netlify.app/**
 
 | Time | Action | What to show |
 |------|--------|--------------|
-| 0:00 | Open live site | Landing · nav · theme toggle |
-| 0:30 | Student login / signup | Auth (optional GitHub / LinkedIn) |
-| 1:00 | Onboarding | Track + gap quiz → Skill Profile |
-| 1:45 | Roadmaps | Open any course → YouTube + Document per topic |
-| 2:15 | Internships | Match % cards → Apply |
-| 2:45 | Profile path | Living Learning Path nodes + panel |
-| 3:15 | Buddy AI | Floating “How can I help you?” → ask |
-| 3:45 | Industry (if demo account) | Post role · applicants |
-| 4:15 | College (if demo account) | Placement funnel · skill gaps |
-| 4:45 | Close | One portal · three stakeholders |
+| 0:00 | Open live site | Landing · roles · theme |
+| 0:30 | Student login / signup | Auth |
+| 1:00 | Onboarding → Skill Profile | Gaps vs market |
+| 1:30 | **Demand Intel** | Live signals · filters · district heatmap |
+| 2:15 | **Curriculum Gaps** (admin) | Taught vs demand · obsolete / critical flags · recommendations |
+| 3:00 | **Employer validation** (industry) | Rate course · must-have skills · approve suggestion |
+| 3:45 | Learning path / internships | Close gaps · apply with match context |
+| 4:30 | Close | Continuous demand → curriculum → trainee guidance |
 
 ---
 
-## Slide 10 — Future scope
+## 9 — Future scope
 
-- NSQF / NOS competency taxonomy  
-- Faculty FDP modules  
-- Server-synced applications for all roles  
-- Verifiable digital credentials on portfolio  
-- Adaptive assessments tied to learning-path nodes  
+- Deeper NSQF / NOS competency mapping  
+- Longitudinal placement & wage outcome tracking  
+- Expanded district capacity (equipment · trainer) plans  
+- Stronger multi-source LMI (more states / sectors)  
+- Verifiable credentials on portfolio  
 
 ---
 
 ## Quick start (developers)
 
 ```bash
-git clone https://github.com/laxmikhandelwal690-svg/eduroute_.git
-cd eduroute_
+git clone https://github.com/Vanshkhandelwal28/eduroute.git
+cd eduroute
 npm install
 npm run dev
 ```
 
-Optional env (cloud auth / Buddy): `MYSQL_URL` · `JWT_SECRET` · `GROQ_API_KEY` · GitHub/LinkedIn OAuth secrets.
+Optional env (Netlify / local):
+
+- `MYSQL_URL` · `JWT_SECRET`
+- `ADZUNA_APP_ID` · `ADZUNA_APP_KEY`
+- `GROQ_API_KEY` and/or `GEMINI_API_KEY`
+- Optional: `DATA_GOV_API_KEY` · GitHub/LinkedIn OAuth secrets
 
 ---
 
-**EDUROUTE — Learn · Map skills · Match · Get hired**
+**EDUROUTE — Sense demand · Align curriculum · Guide talent · Get hired**
 
+**Problem statement:** [SIH26134](https://sih2026.vuce.in/ps/SIH26134)  
 **Live demo:** https://eduroutee.netlify.app/
