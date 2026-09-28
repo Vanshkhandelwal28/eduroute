@@ -106,6 +106,7 @@ export const MainLayout = () => {
     }
   });
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState(SAMPLE_NOTIFICATIONS);
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -129,23 +130,35 @@ export const MainLayout = () => {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const authUser = getAuthUser();
-  const profile = getStoredUserProfile();
-  const profileIdentity = useMemo(() => {
-    const name = profile?.fullName || authUser?.name || 'Student';
-    const initial = (name.trim()[0] || 'S').toUpperCase();
-    return { name, initial, photo: profile?.photoUrl };
-  }, [profile, authUser]);
-
   const handleLogout = () => {
     clearAuthSession();
+    setIsMobileMenuOpen(false);
     window.location.href = '/login';
   };
+
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+  };
+
+  const profileIdentity = useMemo(() => {
+    const authUser = getAuthUser();
+    const storedProfile = getStoredUserProfile();
+    const name = authUser?.name || storedProfile?.name || 'Learner';
+    const photo = storedProfile?.avatar || authUser?.avatar || '';
+    return {
+      name,
+      photo,
+      initial: name.trim().charAt(0).toUpperCase() || 'L',
+      role: 'Learner',
+    };
+  }, []);
 
   const toggleCollapsed = () => setCollapsed((c) => !c);
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/');
+
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   const renderNavLink = (item: NavItem, onClick?: () => void) => {
     const active = isActive(item.path);
@@ -166,6 +179,7 @@ export const MainLayout = () => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      {/* Desktop sidebar */}
       <aside
         className={`er-sidebar !hidden lg:!flex shrink-0 transition-[width] duration-300 ease-out ${
           collapsed ? 'w-[72px]' : 'w-[var(--sidebar-width)]'
@@ -177,6 +191,7 @@ export const MainLayout = () => {
             {!collapsed && <span className="truncate text-sm font-black tracking-tight">EDUROUTE</span>}
           </Link>
         </div>
+
         <div className={`flex items-center border-b border-[var(--border-default)] ${collapsed ? 'justify-center p-2' : 'justify-end px-3 py-2'}`}>
           <button
             type="button"
@@ -187,6 +202,7 @@ export const MainLayout = () => {
             {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </button>
         </div>
+
         <nav className={`flex-1 overflow-y-auto py-2 ${collapsed ? 'px-2 space-y-0.5' : 'px-3 space-y-3'}`}>
           {collapsed
             ? FLAT_NAV.map((item) => renderNavLink(item))
@@ -199,6 +215,7 @@ export const MainLayout = () => {
                 </div>
               ))}
         </nav>
+
         <div className={`border-t border-[var(--border-default)] p-3 space-y-1 ${collapsed ? 'px-2' : ''}`}>
           <Link
             to="/profile"
@@ -212,7 +229,12 @@ export const MainLayout = () => {
                 profileIdentity.initial
               )}
             </div>
-            {!collapsed && <span className="truncate text-sm font-semibold">{profileIdentity.name}</span>}
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-[var(--text-primary)]">{profileIdentity.name}</div>
+                <div className="text-xs text-[var(--text-muted)]">{profileIdentity.role}</div>
+              </div>
+            )}
           </Link>
           <button
             type="button"
@@ -223,18 +245,24 @@ export const MainLayout = () => {
             {!collapsed && <span>Logout</span>}
           </button>
           {collapsed && (
-            <button type="button" onClick={toggleCollapsed} className="er-nav-item !justify-center !px-0 w-full" title="Expand sidebar" aria-label="Expand sidebar">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className="er-nav-item !justify-center !px-0 w-full"
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >
               <PanelLeftOpen className="h-[18px] w-[18px]" />
             </button>
           )}
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col min-w-0 overflow-hidden transition-all duration-300">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden transition-all duration-300">
         <header className="er-header">
           <button
             type="button"
-            className="lg:hidden shrink-0 p-2 -ml-1 rounded-xl hover:bg-[var(--accent-soft)]"
+            className="-ml-1 shrink-0 rounded-xl p-2 hover:bg-[var(--accent-soft)] lg:hidden"
             onClick={() => setIsMobileMenuOpen(true)}
             aria-label="Open menu"
           >
@@ -243,7 +271,7 @@ export const MainLayout = () => {
           <div className="min-w-0 flex-1">
             <GlobalSearch />
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <ThemeToggle />
             <div className="relative" ref={notifRef}>
               <button
@@ -253,21 +281,31 @@ export const MainLayout = () => {
                 aria-label="Notifications"
               >
                 <Bell className="h-5 w-5" />
-                {SAMPLE_NOTIFICATIONS.some((n) => n.unread) && (
+                {unreadCount > 0 && (
                   <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
                 )}
               </button>
               {notifOpen && (
                 <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(100vw-1.5rem,22rem)] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-[var(--shadow-elevated)]">
-                  <div className="border-b border-[var(--border-default)] px-4 py-3">
+                  <div className="flex items-center justify-between border-b border-[var(--border-default)] px-4 py-3">
                     <p className="text-sm font-bold">Notifications</p>
+                    {unreadCount > 0 && (
+                      <button type="button" onClick={markAllRead} className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                        Mark all read
+                      </button>
+                    )}
                   </div>
                   <ul className="max-h-[min(60vh,20rem)] overflow-y-auto">
-                    {SAMPLE_NOTIFICATIONS.map((n) => (
+                    {notifications.map((n) => (
                       <li key={n.id}>
                         <Link
                           to={n.to}
-                          onClick={() => setNotifOpen(false)}
+                          onClick={() => {
+                            setNotifOpen(false);
+                            setNotifications((prev) =>
+                              prev.map((x) => (x.id === n.id ? { ...x, unread: false } : x)),
+                            );
+                          }}
                           className="block border-b border-[var(--border-default)] px-4 py-3 hover:bg-[var(--accent-soft)]"
                         >
                           <div className="flex items-start gap-2">
@@ -285,7 +323,7 @@ export const MainLayout = () => {
                 </div>
               )}
             </div>
-            <Link to="/profile" className="flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-[var(--accent-soft)]">
+            <Link to="/profile" className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 hover:bg-[var(--accent-soft)]">
               <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[var(--accent)] text-xs font-bold text-white">
                 {profileIdentity.photo ? (
                   <img src={profileIdentity.photo} alt="" className="h-full w-full object-cover" />
@@ -293,8 +331,8 @@ export const MainLayout = () => {
                   profileIdentity.initial
                 )}
               </div>
-              <span className="hidden sm:inline text-sm font-semibold">{profileIdentity.name}</span>
-              <ChevronDown className="h-3.5 w-3.5 text-[var(--text-muted)] hidden sm:block" />
+              <span className="hidden text-sm font-semibold sm:inline">{profileIdentity.name}</span>
+              <ChevronDown className="hidden h-3.5 w-3.5 text-[var(--text-muted)] sm:block" />
             </Link>
           </div>
         </header>
@@ -304,6 +342,7 @@ export const MainLayout = () => {
         </main>
       </div>
 
+      {/* Mobile drawer */}
       {isMobileMenuOpen && (
         <>
           <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} aria-hidden />
@@ -317,7 +356,7 @@ export const MainLayout = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <nav className="flex-1 overflow-y-auto px-3 space-y-3 py-3">
+            <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
               {NAV_GROUPS.map((group) => (
                 <div key={group.label}>
                   <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">{group.label}</p>
@@ -337,7 +376,7 @@ export const MainLayout = () => {
                 </div>
               ))}
             </nav>
-            <div className="border-t border-[var(--border-default)] p-3 space-y-1">
+            <div className="space-y-1 border-t border-[var(--border-default)] p-3">
               <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)} className="er-nav-item">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white">
                   {profileIdentity.initial}
