@@ -29,6 +29,48 @@ import {
 
 const storageKey = (role: string) => `eduroute-roadmap-topics-${role}`;
 
+/** Sample placement outcomes per path (template / social proof — not live LinkedIn). */
+const PLACED_FROM_PATH: Record<
+  string,
+  { name: string; role: string; company: string; months: number; quote: string; initials: string }[]
+> = {
+  frontend: [
+    { name: 'Aarav Mehta', role: 'SDE-1', company: 'Amazon', months: 4, quote: 'Roadmap modules + projects helped me clear the UI round.', initials: 'AM' },
+    { name: 'Priya Sharma', role: 'Frontend Engineer', company: 'Flipkart', months: 6, quote: 'React + portfolio projects gave me the edge in interviews.', initials: 'PS' },
+    { name: 'Rohan Patel', role: 'Full Stack Intern', company: 'Razorpay', months: 3, quote: 'The roadmap gave me structure and real projects.', initials: 'RP' },
+  ],
+  backend: [
+    { name: 'Kabir Singh', role: 'Backend Engineer', company: 'Swiggy', months: 5, quote: 'Node + SQL path matched what the hiring bar expected.', initials: 'KS' },
+    { name: 'Ananya Iyer', role: 'SDE-1', company: 'Microsoft', months: 7, quote: 'Auth, APIs, and system design modules were interview gold.', initials: 'AI' },
+    { name: 'Dev Mehta', role: 'API Engineer', company: 'PhonePe', months: 4, quote: 'Hands-on Express + MongoDB topics closed my gaps.', initials: 'DM' },
+  ],
+  'data-analyst': [
+    { name: 'Neha Gupta', role: 'Data Analyst', company: 'Zoho', months: 5, quote: 'Python + SQL track mapped directly to the job tests.', initials: 'NG' },
+    { name: 'Vikram Rao', role: 'Business Analyst', company: 'Deloitte', months: 6, quote: 'Visualization modules helped me present insights clearly.', initials: 'VR' },
+    { name: 'Sana Khan', role: 'Data Intern', company: 'Freshworks', months: 3, quote: 'Structured path made learning analytics less overwhelming.', initials: 'SK' },
+  ],
+  cybersecurity: [
+    { name: 'Arjun Nair', role: 'Security Analyst', company: 'Wipro', months: 6, quote: 'Network + ethical hacking labs built real confidence.', initials: 'AN' },
+    { name: 'Meera Joshi', role: 'SOC Analyst', company: 'TCS', months: 5, quote: 'Defense modules aligned with entry SOC interviews.', initials: 'MJ' },
+    { name: 'Harsh Vardhan', role: 'Security Intern', company: 'Infosys', months: 4, quote: 'Clear path from basics to practical tools.', initials: 'HV' },
+  ],
+  'ui-ux': [
+    { name: 'Isha Reddy', role: 'UI Designer', company: 'CRED', months: 5, quote: 'Figma + research steps improved my case studies.', initials: 'IR' },
+    { name: 'Kunal Shah', role: 'Product Designer', company: 'Paytm', months: 6, quote: 'User research modules stood out in portfolio reviews.', initials: 'KS' },
+    { name: 'Diya Kapoor', role: 'UX Intern', company: 'Zomato', months: 3, quote: 'Structured design path helped me ship a solid case study.', initials: 'DK' },
+  ],
+  fullstack: [
+    { name: 'Rahul Verma', role: 'Fullstack Engineer', company: 'Razorpay', months: 6, quote: 'End-to-end path prepared me for product interviews.', initials: 'RV' },
+    { name: 'Sneha Pillai', role: 'SDE-1', company: 'Amazon', months: 8, quote: 'Frontend + backend together matched the role scope.', initials: 'SP' },
+    { name: 'Aditya Bose', role: 'Fullstack Intern', company: 'Postman', months: 4, quote: 'Projects from the path became my interview talking points.', initials: 'AB' },
+  ],
+  dsa: [
+    { name: 'Yash Agarwal', role: 'SDE-1', company: 'Google', months: 7, quote: 'DSA path discipline helped me clear coding rounds.', initials: 'YA' },
+    { name: 'Pooja Nair', role: 'Software Engineer', company: 'Uber', months: 6, quote: 'Arrays to DP order matched what interviewers asked.', initials: 'PN' },
+    { name: 'Manav Joshi', role: 'SDE Intern', company: 'Oracle', months: 4, quote: 'Structured problem sets built pattern recognition fast.', initials: 'MJ' },
+  ],
+};
+
 export const RoadmapDetail = () => {
   const { role = 'frontend' } = useParams();
   const reduceMotion = useReducedMotion();
@@ -65,7 +107,6 @@ export const RoadmapDetail = () => {
   }, [role, completed]);
 
   useEffect(() => {
-    // Sync progress-store completions into local completed map
     const next = { ...completed };
     let changed = false;
     data.topics.forEach((t) => {
@@ -77,70 +118,61 @@ export const RoadmapDetail = () => {
     });
     if (changed) setCompleted(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, progressTick, courseKey]);
+  }, [role, courseKey, data.topics]);
 
   const doneCount = data.topics.filter((t) => completed[t.id]).length;
   const progress = Math.round((doneCount / Math.max(data.topics.length, 1)) * 100);
   const allDone = doneCount === data.topics.length && data.topics.length > 0;
 
-  /** Minimum time to complete = sum of unique YouTube video lengths */
   const minWatchLabel = useMemo(() => {
-    const sec = minWatchSecondsFromTopics(
+    const secs = minWatchSecondsFromTopics(
       data.topics.map((t) => ({
-        youtubeUrl: t.youtubeUrl,
         duration: t.duration,
+        youtubeUrl: t.youtubeUrl,
       })),
     );
-    if (sec > 0) return formatWatchDuration(sec);
-    return data.totalHours || '—';
-  }, [data.topics, data.totalHours, progressTick]);
+    return formatWatchDuration(secs);
+  }, [data.topics, progressTick]);
 
-  const toggleTopic = (id: string) => {
-    setCompleted((prev) => {
-      const next = !prev[id];
-      setTopicCompleted(courseKey, id, next);
-      return { ...prev, [id]: next };
-    });
-    setProgressTick((n) => n + 1);
-  };
-
-  const onVideoProgress = useCallback(
-    (topicId: string, ratio: number) => {
-      const { justCompleted } = recordWatchProgress(courseKey, topicId, ratio);
-      if (justCompleted) {
-        setCompleted((prev) => ({ ...prev, [topicId]: true }));
-      }
-      setProgressTick((n) => n + 1);
+  const toggleTopic = useCallback(
+    (id: string) => {
+      setCompleted((prev) => {
+        const next = { ...prev, [id]: !prev[id] };
+        setTopicCompleted(courseKey, id, !!next[id]);
+        return next;
+      });
     },
     [courseKey],
   );
 
+  const onVideoProgress = useCallback(
+    (topicId: string, ratio: number) => {
+      recordWatchProgress(courseKey, topicId, ratio);
+      setProgressTick((n) => n + 1);
+      if (ratio >= 0.55) {
+        setCompleted((prev) => {
+          if (prev[topicId]) return prev;
+          setTopicCompleted(courseKey, topicId, true);
+          return { ...prev, [topicId]: true };
+        });
+      }
+    },
+    [courseKey],
+  );
+
+  const skillsFromTitle = useMemo(() => {
+    const parts = data.title.replace(/Path|Developer|Engineer/gi, '').split(/[,&\/–-]/).map((s) => s.trim()).filter(Boolean);
+    return parts.slice(0, 6);
+  }, [data.title]);
+
   const listVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: reduceMotion ? 0 : 0.045,
-        delayChildren: reduceMotion ? 0 : 0.06,
-      },
-    },
+    hidden: {},
+    show: { transition: { staggerChildren: reduceMotion ? 0 : 0.04 } },
   };
-
   const rowVariants = {
-    hidden: { opacity: 0, y: reduceMotion ? 0 : 10 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: { type: 'spring' as const, stiffness: 380, damping: 28 },
-    },
+    hidden: reduceMotion ? { opacity: 1 } : { opacity: 0, y: 8 },
+    show: { opacity: 1, y: 0 },
   };
-
-  const skillsFromTitle = data.title
-    .replace(/Path|Developer|Complete|Full Stack/gi, '')
-    .split(/[&,]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 5);
 
   return (
     <div className="relative flex-1 overflow-x-hidden pb-16">
@@ -170,7 +202,7 @@ export const RoadmapDetail = () => {
             <motion.header
               initial={reduceMotion ? false : { opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
+              transition={{ duration: 0.35 }}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -186,44 +218,33 @@ export const RoadmapDetail = () => {
                   disabled={!allDone}
                   onClick={() => setCertOpen(true)}
                   className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white ${
-                    allDone
-                      ? 'bg-emerald-600 hover:bg-emerald-500'
-                      : 'cursor-not-allowed bg-slate-400 opacity-70'
+                    allDone ? 'bg-emerald-600 hover:bg-emerald-500' : 'cursor-not-allowed bg-slate-400 opacity-70'
                   }`}
                   title={allDone ? 'Download certificate' : 'Complete all topics to unlock'}
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Download certificate
+                  Certificate
                 </button>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
-                  <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
-                  {data.topics.length} topics
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                  {data.level}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                  ★ {data.level}
-                </span>
-                <span
-                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
-                  title="Sum of unique lesson video lengths — minimum time to finish"
-                >
-                  ⏱ Min watch {minWatchLabel}
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                  {data.totalHours}
                 </span>
               </div>
 
-              <div className="mt-6">
-                <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <div className="mt-5">
+                <div className="mb-1 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   <span>Progress</span>
-                  <span className="tabular-nums text-violet-600 dark:text-violet-300">{progress}%</span>
+                  <span className="text-violet-600 dark:text-violet-300">{progress}%</span>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                  <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-violet-600 to-indigo-500"
-                    initial={false}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all"
+                    style={{ width: `${progress}%` }}
                   />
                 </div>
                 <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">
@@ -303,6 +324,52 @@ export const RoadmapDetail = () => {
                 </Link>
               </div>
             </motion.div>
+
+            <motion.div
+              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.15 }}
+              className="mt-4 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
+            >
+              <h2 className="text-sm font-black text-slate-900 dark:text-white">Placed from this path</h2>
+              <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                Sample outcomes for inspiration · placement % uses your skill match.
+              </p>
+              <ul className="mt-3 space-y-3">
+                {(PLACED_FROM_PATH[role] || PLACED_FROM_PATH.frontend).map((p) => (
+                  <li
+                    key={p.name + p.company}
+                    className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-black text-violet-700 ring-2 ring-violet-200 dark:bg-violet-500/20 dark:text-violet-200 dark:ring-violet-500/30"
+                        aria-hidden
+                      >
+                        {p.initials}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">{p.name}</p>
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/80 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-300">
+                            <CheckCircle2 className="h-3 w-3" /> Placed
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                          {p.role} @ {p.company}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                          Completed path · {p.months} months
+                        </p>
+                        <p className="mt-1.5 text-[11px] italic leading-snug text-slate-500 dark:text-slate-400">
+                          “{p.quote}”
+                        </p>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
           </aside>
         </div>
       </div>
@@ -361,38 +428,35 @@ function TopicRow({
         <button
           type="button"
           onClick={onToggle}
-          className="flex min-w-0 flex-1 items-center gap-3 text-left"
-          aria-label={done ? `Mark ${topic.title} incomplete` : `Mark ${topic.title} complete`}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+            done
+              ? 'bg-emerald-500 text-white'
+              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+          }`}
+          aria-label={done ? 'Mark incomplete' : 'Mark complete'}
         >
-          <span
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black transition ${
-              done
-                ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                : 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
-            }`}
-          >
-            {done ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
-          </span>
-          <span className="min-w-0">
-            <span
-              className={`block truncate text-sm font-bold sm:text-[15px] ${
-                done ? 'text-slate-500 line-through dark:text-slate-400' : 'text-slate-900 dark:text-white'
-              }`}
-            >
-              {topic.title}
-            </span>
-            <span className="block text-xs text-slate-500 dark:text-slate-400">
-              {topic.duration}
-              {watchPct > 0 ? ` · watched ${watchPct}%` : ''}
-            </span>
-          </span>
+          {done ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
         </button>
 
-        <div className="flex shrink-0 items-center gap-2 pl-12 sm:pl-0">
+        <div className="min-w-0 flex-1">
+          <p
+            className={`text-sm font-bold ${
+              done ? 'text-slate-500 line-through dark:text-slate-400' : 'text-slate-900 dark:text-white'
+            }`}
+          >
+            {topic.title}
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {topic.duration}
+            {watchPct > 0 && !done ? ` · ${watchPct}% watched` : ''}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={onPlay}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50 dark:border-red-500/30 dark:bg-slate-950 dark:text-red-400 dark:hover:bg-red-950/40"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/30 dark:bg-slate-950 dark:text-rose-400 dark:hover:bg-rose-950/40"
           >
             <Youtube className="h-3.5 w-3.5" />
             {playing ? 'Hide' : 'Watch'}

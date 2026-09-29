@@ -1,5 +1,6 @@
 /**
  * AI prompts + demand aggregation grounded on ALL collected jobs + gov indicators
+ * (PR12: fixed PLACEHOLDER crash — REDEPLOY_STAMP 2026-09-28T17:30IST)
  */
 const shared = require('./marketShared');
 const normalizeRegion = shared.normalizeRegion;
@@ -33,21 +34,36 @@ function marketTemplate(region) {
 function studentTemplate(p) {
   const region = normalizeRegion(p.region);
   const demandHint = p.demandHint || '';
+  const jobCount = p.jobCount != null ? p.jobCount : 0;
+  const src = p.sources
+    ? Object.keys(p.sources)
+        .map(function (k) {
+          return k + '=' + p.sources[k];
+        })
+        .join(',')
+    : '';
   return (
-    'Student vs ' +
+    'Student skill-gap analysis for region: ' +
     region +
-    ' tech market. Use LIVE demand if provided. JSON: {"generatedAt":"ISO","summary":"2 sentences","matchScore":0,' +
+    '. Ground matchScore, skillGaps, recommendations, and comparisonBars in LIVE job demand below (Adzuna + data.gov.in + curated). ' +
+    'Jobs in scope: ' +
+    jobCount +
+    (src ? ' sources[' + src + ']' : '') +
+    '. ' +
+    'Return JSON only: {"generatedAt":"ISO","summary":"3-4 sentences citing region, live job demand, and what the student should do next",' +
+    '"matchScore":0,' +
     '"marketSkills":[{"skill":"","marketDemand":0,"studentLevel":0,"status":"strong|gap|missing"}],' +
-    '"skillGaps":[{"skill":"","priority":"high|medium|low","why":"","action":""}],' +
-    '"strengths":[""],"recommendations":[""],' +
-    '"comparisonBars":[{"skill":"","market":0,"student":0}]}. Field:' +
+    '"skillGaps":[{"skill":"","priority":"high|medium|low","why":"cite demand % or job count","action":"concrete 1-week action"}],' +
+    '"strengths":[""],"recommendations":["3-5 specific next steps"],' +
+    '"comparisonBars":[{"skill":"","market":0,"student":0}]}. ' +
+    'Field:' +
     (p.field || 'SE') +
-    ' Strengths:' +
-    (p.strengths || p.skills || []).slice(0, 8).join(',') +
-    ' Gaps:' +
-    (p.gaps || []).slice(0, 6).join(',') +
+    ' OwnedSkills:' +
+    (p.strengths || p.skills || []).slice(0, 12).join(',') +
+    ' QuizGaps:' +
+    (p.gaps || []).slice(0, 8).join(',') +
     (demandHint ? ' LiveDemand:' + demandHint : '') +
-    '.'
+    '. matchScore 0-100 from how well owned skills cover top live demand. Include 5-8 marketSkills and 4-6 skillGaps from LiveDemand.'
   );
 }
 
@@ -191,7 +207,6 @@ function sourceCounts(jobs) {
   return c;
 }
 
-/** Aggregate top roles from job titles (all sources). */
 function rolesFromJobs(jobs) {
   const counts = {};
   (jobs || []).forEach(function (j) {
@@ -199,7 +214,6 @@ function rolesFromJobs(jobs) {
       .trim()
       .slice(0, 80);
     if (!t) return;
-    // Normalize common patterns
     let role = t;
     if (/full\s*stack/i.test(t)) role = 'Full Stack Developer';
     else if (/front\s*end|frontend/i.test(t)) role = 'Frontend Engineer';
@@ -231,7 +245,6 @@ function rolesFromJobs(jobs) {
     .slice(0, 6);
 }
 
-/** Aggregate sectors/industries from all jobs. */
 function sectorsFromJobs(jobs) {
   const counts = {};
   (jobs || []).forEach(function (j) {
@@ -253,7 +266,6 @@ function sectorsFromJobs(jobs) {
     .slice(0, 6);
 }
 
-/** Build AI prompt grounded in real collected job + gov data — uses ALL fields. */
 function marketTemplateFromJobs(region, jobs, govIndicators) {
   const scope = normalizeRegion(region);
   const r = regionField(scope);

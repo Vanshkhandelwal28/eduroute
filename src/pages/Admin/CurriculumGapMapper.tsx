@@ -22,6 +22,7 @@ import {
   type CourseCurriculum,
   type CourseFlag,
 } from './curriculumGapData';
+import { nsqfNosBadgeText } from '../../utils/nsqfNosMap';
 
 const FLAG_FILTERS: { id: CourseFlag | 'all'; label: string }[] = [
   { id: 'all', label: 'All courses' },
@@ -225,9 +226,14 @@ export function CurriculumGapMapper() {
                     return (
                       <li key={s.skill}>
                         <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
-                          <span>
+                          <span className="inline-flex flex-wrap items-center gap-1.5">
                             {s.skill}{' '}
                             <span className="font-semibold text-[var(--text-muted)]">({s.level})</span>
+                            {nsqfNosBadgeText(s.skill) && (
+                              <span className="rounded-full border border-indigo-400/30 bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-indigo-300">
+                                {nsqfNosBadgeText(s.skill)}
+                              </span>
+                            )}
                           </span>
                           <span className="text-[var(--text-muted)]">
                             taught {s.taughtPct}% · demand {s.demandPct}%

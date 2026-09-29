@@ -83,7 +83,7 @@ const MyCourses = lazy(() => import('./pages/MyCourses').then((module) => ({ def
 const BrowseCourses = lazy(() => import('./pages/BrowseCourses').then((module) => ({ default: module.BrowseCourses })));
 const CourseDetails = lazy(() => import('./pages/CourseDetails').then((module) => ({ default: module.CourseDetails })));
 const Pathways = lazy(() => import('./pages/Pathways').then((module) => ({ default: module.Pathways })));
-const MainLayout = lazy(() => import('./layouts/MainLayout').then((module) => ({ default: module.MainLayout })));
+const MainLayout = lazy(() => import('./layouts/MainLayout').then((module) => ({ default: module.MainLayout ?? module.default })));
 const AdminLayout = lazy(() => import('./layouts/AdminLayout').then((module) => ({ default: module.AdminLayout })));
 const AuthCallback = lazy(() =>
   import('./pages/Auth/AuthCallback').then((module) => ({ default: module.AuthCallback ?? module.default })),

@@ -2,10 +2,33 @@
  * Market trends + Skill Market Trend Engine
  * Actions: refresh_market | analyze_student | collect_jobs | list_jobs
  * Region-aware: rising / top roles / declining from jobs in selected state or India (All)
+ *
+ * REDEPLOY_STAMP: 2026-09-28T17:15IST — force Netlify function rebuild (no PLACEHOLDER).
  */
-const shared = require('./_lib/marketShared');
-const collect = require('./_lib/marketCollect');
-const demand = require('./_lib/marketDemand');
+let shared, collect, demand, loadError;
+
+try {
+  shared = require('./_lib/marketShared');
+  collect = require('./_lib/marketCollect');
+  demand = require('./_lib/marketDemand');
+} catch (e) {
+  loadError = e;
+  console.error('market-trends require failed:', e && e.message, e && e.stack);
+}
+
+function safeJson(statusCode, body) {
+  if (shared && typeof shared.json === 'function') return shared.json(statusCode, body);
+  return {
+    statusCode: statusCode,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    },
+    body: JSON.stringify(body),
+  };
+}
 
 /** Ground rising + roles + sectors + declining on REGION-FILTERED jobs. */
 function groundOnJobs(market, demandRows, jobs, govIndicators, region) {
@@ -36,7 +59,6 @@ function groundOnJobs(market, demandRows, jobs, govIndicators, region) {
   const sectors = demand.sectorsFromJobs(jobs || []);
   if (sectors.length) market.sectors = sectors.slice(0, 5);
 
-  // Declining: keep AI list if present, else soft legacy defaults tagged with region
   if (!market.decliningSkills || !market.decliningSkills.length) {
     market.decliningSkills = [
       { skill: 'jQuery-only stacks', demandScore: 28, trend: 'declining', note: 'Legacy · ' + scope },
@@ -72,6 +94,14 @@ function groundOnJobs(market, demandRows, jobs, govIndicators, region) {
 }
 
 exports.handler = async (event) => {
+  if (loadError) {
+    return safeJson(200, {
+      ok: false,
+      error: 'Function load failed: ' + String(loadError.message || loadError).slice(0, 200),
+      redeployStamp: '2026-09-28T17:15IST',
+    });
+  }
+
   if (event.httpMethod === 'OPTIONS') return shared.json(200, { ok: true });
 
   if (event.httpMethod === 'GET') {
@@ -83,6 +113,7 @@ exports.handler = async (event) => {
       hasGroq: Boolean(shared.env('GROQ_API_KEY')),
       hasAdzuna: shared.hasAdzuna(),
       hasDataGov: shared.hasDataGov(),
+      redeployStamp: '2026-09-28T17:15IST',
       sources: [
         { code: 'curated-public', name: 'Curated public demo postings', permitted: true },
         { code: 'adzuna', name: 'Adzuna Jobs API (India)', permitted: true, configured: shared.hasAdzuna() },
@@ -146,7 +177,6 @@ exports.handler = async (event) => {
         Array.isArray(body.existingJobs) && body.existingJobs.length
           ? body.existingJobs
           : collect.getMemoryJobs() || [];
-      // CRITICAL: only jobs in selected state (or all for India)
       const jobsForAi = shared.jobsForRegion(allJobs, region);
       const govAll = Array.isArray(body.govIndicators) ? body.govIndicators : [];
       const govInd = shared.govForRegion(govAll, region);
@@ -198,7 +228,6 @@ exports.handler = async (event) => {
         }
         out.parsed.updatedAt = out.parsed.updatedAt || new Date().toISOString();
         out.parsed.provider = out.provider;
-        // Always re-ground rising/roles/sectors on region-filtered jobs
         groundOnJobs(out.parsed, demandRows, jobsForAi, govInd, region);
         demand.setMemoryMarket(out.parsed);
         return shared.json(200, {
@@ -228,17 +257,37 @@ exports.handler = async (event) => {
     }
 
     if (action === 'analyze_student') {
-      const allJobs =
+      let allJobs =
         Array.isArray(body.existingJobs) && body.existingJobs.length
           ? body.existingJobs
           : collect.getMemoryJobs() || [];
+      let collectNote = '';
+      let collectSources = [];
+      const needLive =
+        body.liveCollect === true ||
+        !allJobs.length ||
+        !allJobs.some(function (j) {
+          return j && j.source === 'adzuna';
+        });
+      if (needLive) {
+        try {
+          const collected = await collect.collectJobsPayload(allJobs, region);
+          allJobs = collected.jobs || allJobs;
+          collectNote = collected.note || '';
+          collectSources = collected.sources || [];
+          collect.setMemoryJobs(allJobs);
+        } catch (ce) {
+          collectNote = 'Collect skipped: ' + String(ce.message || ce).slice(0, 100);
+        }
+      }
       const jobsForStudent = shared.jobsForRegion(allJobs, region);
       const demandRows = demand.demandFromJobs(jobsForStudent).slice(0, 12);
       const demandHint = demandRows
         .map(function (d) {
-          return d.skill + ':' + d.demandPct + '%';
+          return d.skill + ':' + d.demandPct + '%(' + d.jobCount + ')';
         })
         .join(',');
+      const srcCounts = demand.sourceCounts(jobsForStudent);
       const payload = {
         skills: Array.isArray(body.skills) ? body.skills : [],
         strengths: Array.isArray(body.strengths) ? body.strengths : [],
@@ -247,6 +296,8 @@ exports.handler = async (event) => {
         interests: Array.isArray(body.interests) ? body.interests : [],
         region: region,
         demandHint: demandHint,
+        jobCount: jobsForStudent.length,
+        sources: srcCounts,
       };
       if (!shared.env('GEMINI_API_KEY') && !shared.env('GROQ_API_KEY')) {
         return shared.json(200, {
@@ -255,12 +306,20 @@ exports.handler = async (event) => {
           market: demand.getMemoryMarket() || demand.localMarketFallback(region),
           provider: 'local-fallback',
           demandFromJobs: demandRows,
+          jobs: allJobs,
+          collectNote: collectNote,
+          sourcesUsed: srcCounts,
+          regionJobCount: jobsForStudent.length,
         });
       }
       try {
         const out = await demand.aiJson(
           [
-            { role: 'system', content: 'You output only one JSON object. No markdown.' },
+            {
+              role: 'system',
+              content:
+                'You are a career market analyst for Indian students. Output only one JSON object. No markdown. Ground every skill gap and recommendation in the LiveDemand and job counts provided.',
+            },
             { role: 'user', content: demand.studentTemplate(payload) },
           ],
           0.4,
@@ -272,6 +331,11 @@ exports.handler = async (event) => {
             market: demand.getMemoryMarket(),
             provider: 'local-fallback',
             demandFromJobs: demandRows,
+            jobs: allJobs,
+            collectNote: collectNote,
+            sourcesUsed: srcCounts,
+            regionJobCount: jobsForStudent.length,
+            warning: 'AI non-JSON',
           });
         }
         out.parsed.generatedAt = out.parsed.generatedAt || new Date().toISOString();
@@ -282,6 +346,10 @@ exports.handler = async (event) => {
           market: demand.getMemoryMarket(),
           provider: out.provider,
           demandFromJobs: demandRows,
+          jobs: allJobs,
+          collectNote: collectNote,
+          sourcesUsed: srcCounts,
+          regionJobCount: jobsForStudent.length,
         });
       } catch (e) {
         return shared.json(200, {
@@ -291,6 +359,10 @@ exports.handler = async (event) => {
           provider: 'local-fallback',
           warning: String(e.message || e).slice(0, 200),
           demandFromJobs: demandRows,
+          jobs: allJobs,
+          collectNote: collectNote,
+          sourcesUsed: srcCounts,
+          regionJobCount: jobsForStudent.length,
         });
       }
     }

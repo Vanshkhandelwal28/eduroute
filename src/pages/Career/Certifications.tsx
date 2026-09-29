@@ -100,6 +100,8 @@ export const Certifications = () => {
         <CosmicParticleBackground />
         <div className="absolute inset-0 bg-gradient-to-b from-white/85 via-white/70 to-white/80 dark:from-slate-950/80 dark:via-slate-950/55 dark:to-slate-950/75" />
         <div className="absolute inset-0 bg-violet-50/20 dark:bg-indigo-950/20" />
+        <div className="absolute -left-16 top-24 h-64 w-64 rounded-full bg-violet-500/15 blur-3xl" />
+        <div className="absolute right-0 top-40 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
       </div>
 
       <CertBadgeSuccess show={badgeShow} />
@@ -178,7 +180,7 @@ export const Certifications = () => {
               {suggestions.map(({ course, reason }) => (
                 <div
                   key={course.id}
-                  className="rounded-2xl border border-violet-200 dark:border-violet-500/30 bg-white dark:bg-slate-900 p-5 shadow-sm"
+                  className="rounded-2xl border border-violet-200 dark:border-violet-500/30 bg-white/80 dark:bg-slate-900/80 p-5 shadow-sm backdrop-blur-md"
                 >
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-violet-600 dark:text-violet-300 mb-2">
                     <Target className="h-3.5 w-3.5" /> AI pick · {course.provider}
@@ -230,22 +232,24 @@ export const Certifications = () => {
           </div>
         </div>
 
-        <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" style={{ perspective: 1200 }}>
           {filtered.map((course) => {
             const isAiPick = suggestedIds.has(course.id);
             return (
               <motion.article
                 key={course.id}
                 variants={cardAnim}
-                whileHover={{ y: -8, scale: 1.015 }}
+                whileHover={{ y: -10, scale: 1.02, rotateX: 5, rotateY: -4 }}
                 whileTap={{ scale: 0.99 }}
-                className={`flex flex-col rounded-[28px] border p-6 shadow-sm hover:shadow-xl dark:hover:shadow-violet-950/30 transition-shadow duration-300 ${
+                style={{ transformPerspective: 900 }}
+                className={`group relative flex flex-col overflow-hidden rounded-[28px] border p-6 shadow-[0_8px_32px_rgba(15,23,42,0.06)] hover:shadow-[0_24px_50px_rgba(139,92,246,0.2)] dark:hover:shadow-violet-950/40 transition-shadow duration-300 ${
                   isAiPick
-                    ? 'border-violet-400 dark:border-violet-500/50 bg-violet-50/80 dark:bg-violet-950/50 backdrop-blur-md ring-2 ring-violet-400/30'
-                    : 'border-slate-200/80 dark:border-slate-700/80 bg-white/88 dark:bg-slate-900/80 backdrop-blur-md'
+                    ? 'border-violet-400/70 dark:border-violet-500/50 bg-violet-50/70 dark:bg-violet-950/45 backdrop-blur-xl ring-2 ring-violet-400/25'
+                    : 'border-white/20 dark:border-white/10 bg-white/75 dark:bg-slate-900/60 backdrop-blur-xl'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="pointer-events-none absolute -inset-[1px] rounded-[28px] bg-gradient-to-br from-violet-500/35 via-indigo-500/15 to-transparent opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100" />
+                <div className="relative flex items-start justify-between gap-3 mb-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg">
                     <GraduationCap className="h-6 w-6" />
                   </div>
@@ -260,12 +264,12 @@ export const Certifications = () => {
                     )}
                   </div>
                 </div>
-                <div className="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 mb-1">
+                <div className="relative text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 mb-1">
                   {course.category} · {course.level}
                 </div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white leading-snug mb-2">{course.title}</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed flex-1 mb-4">{course.description}</p>
-                <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-400 dark:text-slate-500 mb-5">
+                <h3 className="relative text-lg font-black text-slate-900 dark:text-white leading-snug mb-2">{course.title}</h3>
+                <p className="relative text-sm text-slate-500 dark:text-slate-400 leading-relaxed flex-1 mb-4">{course.description}</p>
+                <div className="relative flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-400 dark:text-slate-500 mb-5">
                   <span className="inline-flex items-center gap-1">
                     <Building2 className="h-3.5 w-3.5" /> {course.provider}
                   </span>
@@ -278,7 +282,7 @@ export const Certifications = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setBadgeShow(true)}
-                  className="mt-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition-colors"
+                  className="relative mt-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition-colors"
                 >
                   <Sparkles className="h-4 w-4" />
                   Start free course

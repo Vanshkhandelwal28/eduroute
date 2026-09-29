@@ -24,24 +24,11 @@ import {
 } from '../utils/internshipApplications';
 import { courseCompletionStats } from '../utils/courseProgressStore';
 import { getAllEarnedCourseSkills } from '../utils/courseAchievementsStore';
-
-function placementBoostPercent(
-  course: { id: string; title: string; category: string; level?: string },
-  skills: string[],
-): number {
-  const hay = `${course.title} ${course.category} ${course.level || ''}`.toLowerCase();
-  const tokens = skills.map((s) => s.toLowerCase().trim()).filter((s) => s.length > 1);
-  let hits = 0;
-  for (const t of tokens) {
-    if (hay.includes(t) || t.split(/\s+/).some((w) => w.length > 2 && hay.includes(w))) hits += 1;
-  }
-  const matchRatio = tokens.length ? hits / tokens.length : 0.25;
-  let seed = 0;
-  for (let i = 0; i < course.id.length; i++) seed += course.id.charCodeAt(i) * (i + 3);
-  const base = 50 + (seed % 18);
-  const skillLift = Math.round(matchRatio * 21);
-  return Math.min(88, Math.max(50, base + skillLift));
-}
+import {
+  computePlacementChance,
+  runDashboardSkillAnalyze,
+  readDashboardSkillAnalyze,
+} from '../utils/placementChance';
 
 function courseTopicIds(course: (typeof COURSES)[0]): string[] {
   const ids: string[] = [];
@@ -70,6 +57,11 @@ export const Dashboard = () => {
   const hasSkillProfile = Boolean(onboarding.completedAt);
   const [applications, setApplications] = useState<InternshipApplication[]>(() => readApplications());
   const earnedSkills = useMemo(() => getAllEarnedCourseSkills(), []);
+  const [skillAnalyze, setSkillAnalyze] = useState(() => readDashboardSkillAnalyze());
+
+  useEffect(() => {
+    setSkillAnalyze(runDashboardSkillAnalyze());
+  }, []);
 
   const userSkills = useMemo(() => {
     const strengths = (onboarding.gapAnswers || [])
@@ -95,7 +87,7 @@ export const Dashboard = () => {
     const enrolled = new Set(currentUser.enrolledCourses || []);
     const scored = COURSES.filter((c) => !enrolled.has(c.id)).map((c) => ({
       course: c,
-      boost: placementBoostPercent(c, userSkills),
+      boost: computePlacementChance(c, userSkills).boostPercent,
     }));
     scored.sort((a, b) => b.boost - a.boost);
     return scored.slice(0, 4);
@@ -106,10 +98,7 @@ export const Dashboard = () => {
     let sum = 0;
     for (const c of enrolledCourses) {
       const topics = courseTopicIds(c);
-      if (!topics.length) {
-        sum += 0;
-        continue;
-      }
+      if (!topics.length) continue;
       sum += courseCompletionStats(c.id, topics).percent;
     }
     return Math.round(sum / enrolledCourses.length);
@@ -184,7 +173,7 @@ export const Dashboard = () => {
             </h1>
             <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               {isNewLearner
-                ? 'Start a course or design your own path — placement readiness climbs as you complete modules.'
+                ? 'Start a course or design your own path — placement chance rises as your skills match courses.'
                 : enrolledCourses.length
                   ? `You're about ${pathPercent}% through your current path. Finish modules to unlock the final assessment & certificate.`
                   : 'Enroll in a course or design a mixed path matched to market demand.'}
@@ -209,6 +198,33 @@ export const Dashboard = () => {
           </div>
         </div>
       </section>
+
+      {skillAnalyze && (
+        <section className="er-card flex flex-col gap-3 border border-indigo-500/20 bg-gradient-to-r from-indigo-500/10 to-violet-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Skill analysis</p>
+            <h2 className="text-base font-bold text-[var(--text-primary)]">
+              {skillAnalyze.hasProfile
+                ? `Analyzed ${skillAnalyze.skillCount} skills · high placement chance paths`
+                : 'Run skill quiz for real placement-chance scores'}
+            </h2>
+            {skillAnalyze.top?.[0] && skillAnalyze.hasProfile && (
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                Top lift:{' '}
+                <span className="font-semibold text-[var(--text-primary)]">{skillAnalyze.top[0].title}</span>
+                {' · '}high placement chance by +{skillAnalyze.top[0].boostPercent}%
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setSkillAnalyze(runDashboardSkillAnalyze())}
+            className="inline-flex shrink-0 items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white"
+          >
+            AI Analyze
+          </button>
+        </section>
+      )}
 
       <section className="er-stat-grid">
         {stats.map((s) => {
@@ -241,7 +257,7 @@ export const Dashboard = () => {
               <p className="text-[10px] font-bold uppercase tracking-widest text-fuchsia-600 dark:text-fuchsia-300">New · AI-powered</p>
               <h2 className="text-base font-bold text-[var(--text-primary)]">Design your own mixed course</h2>
               <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
-                Pick duration + interests. AI builds a roadmap with real YouTube + docs you can edit.
+                Pick duration + interests. AI builds a roadmap with real YouTube + docs.
               </p>
             </div>
           </div>
@@ -293,21 +309,41 @@ export const Dashboard = () => {
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
                 <Link
                   to={nextPlan.primary.to}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600"
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-400"
                 >
-                  Start: {nextPlan.primary.courseTitle}
-                  <ArrowRight className="h-4 w-4" />
+                  Start: {nextPlan.primary.courseTitle} <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link to="/skill-profile" className="text-center text-xs font-semibold text-amber-800 hover:underline dark:text-amber-300">
+                <Link to="/skill-profile" className="text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400">
                   View full gap analysis
                 </Link>
               </div>
             </div>
           </div>
-        ) : (
+        ) : nextPlan.kind === 'quiz' ? (
+          <Link
+            to="/onboarding"
+            className="er-card er-card-hover group flex flex-col gap-4 border-indigo-200/80 bg-gradient-to-r from-indigo-50 to-violet-50 p-5 transition-all dark:border-indigo-500/30 dark:from-indigo-950/30 dark:to-violet-950/20 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Next step</p>
+                <h2 className="text-base font-bold text-[var(--text-primary)]">Complete your skill quiz</h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  Map strengths and gaps to unlock a personal learning path and better internship matches.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white">
+              Start quiz <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
+        ) : nextPlan.kind === 'internships' ? (
           <Link
             to="/internships"
             className="er-card er-card-hover group flex flex-col gap-4 border-emerald-200/80 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 transition-all dark:border-emerald-500/30 dark:from-emerald-950/30 dark:to-teal-950/20 sm:flex-row sm:items-center sm:justify-between"
@@ -328,96 +364,84 @@ export const Dashboard = () => {
               View internships <ArrowRight className="h-4 w-4" />
             </span>
           </Link>
-        )}
+        ) : null}
       </section>
 
-      <section>
-        <Link
-          to="/skill-profile"
-          className="er-card er-card-hover group flex flex-col gap-4 p-5 transition-all sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
-              <Target className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)]">Student Skill Profile</h2>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                {hasSkillProfile
-                  ? gapCount > 0
-                    ? `You have ${gapCount} skill gap${gapCount === 1 ? '' : 's'} marked — view strengths and next steps.`
-                    : 'View your strengths, target tracks, and recommended next steps.'
-                  : 'Complete onboarding to unlock strengths, gaps, and a personal path.'}
-              </p>
-            </div>
+      {enrolledCourses.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">Continue Learning</h2>
+            <Link to="/courses" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
+              View all
+            </Link>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
-            Open profile <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-          </span>
-        </Link>
-      </section>
-
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">Continue Learning</h2>
-          <Link to="/my-courses" className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--accent)] hover:underline">
-            View all <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {enrolledCourses.length > 0 ? (
-            enrolledCourses.map((course) => {
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {enrolledCourses.map((course) => {
               const topics = courseTopicIds(course);
-              const prog = topics.length ? courseCompletionStats(course.id, topics).percent : 0;
+              const pct = topics.length ? courseCompletionStats(course.id, topics).percent : 0;
+              const boost = computePlacementChance(course, userSkills).boostPercent;
               return (
-                <Link key={course.id} to={courseHref(course)} className="er-card er-card-hover group overflow-hidden p-0">
-                  <div className="relative h-28 w-full overflow-hidden bg-[var(--bg-elevated)] sm:h-32">
+                <Link
+                  key={course.id}
+                  to={courseHref(course)}
+                  className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition hover:shadow-md"
+                >
+                  <div className="relative h-28 overflow-hidden bg-slate-200 dark:bg-slate-800">
                     <img src={course.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
-                    <span className="absolute left-2.5 top-2.5 rounded-full bg-indigo-600/95 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">In progress</span>
-                    <span className="absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur">{prog}%</span>
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
+                    {boost > 0 && (
+                      <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
+                        High chance +{boost}%
+                      </span>
+                    )}
                   </div>
-                  <div className="p-3.5">
-                    <p className="truncate text-sm font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)]">{course.title}</p>
-                    <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{course.category} · {course.level}</p>
-                    <div className="mt-2.5 er-progress h-1.5">
-                      <div className="er-progress-bar" style={{ width: `${Math.max(4, prog)}%` }} />
+                  <div className="flex flex-1 flex-col gap-1 p-3">
+                    <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">{course.title}</p>
+                    <div className="mt-auto">
+                      <div className="er-progress h-1.5">
+                        <div className="er-progress-bar" style={{ width: `${Math.max(4, pct)}%` }} />
+                      </div>
+                      <p className="mt-1 text-[11px] text-[var(--text-muted)]">{pct}% complete</p>
                     </div>
                   </div>
                 </Link>
               );
-            })
-          ) : (
-            <div className="er-card p-5 text-sm text-[var(--text-secondary)] md:col-span-2">
-              No enrolled courses yet.{' '}
-              <Link to="/ai-course-designer" className="font-semibold text-[var(--accent)] hover:underline">Design a course</Link>
-              {' '}or browse recommendations below.
-            </div>
-          )}
-        </div>
-      </section>
+            })}
+          </div>
+        </section>
+      )}
 
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">Recommended for placement</h2>
-          <Link to="/my-courses" className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--accent)] hover:underline">
-            Explore <ArrowRight className="h-3.5 w-3.5" />
+          <Link to="/browse" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
+            Browse all
           </Link>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {recommendedCourses.map(({ course, boost }) => (
-            <Link key={course.id} to={courseHref(course)} className="er-card er-card-hover group flex flex-col overflow-hidden p-0">
-              <div className="relative h-24 w-full overflow-hidden bg-[var(--bg-elevated)] sm:h-28">
+            <Link
+              key={course.id}
+              to={courseHref(course)}
+              className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition hover:shadow-md"
+            >
+              <div className="relative h-28 overflow-hidden bg-slate-200 dark:bg-slate-800">
                 <img src={course.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
-                <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">~{boost}% readiness</span>
+                <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
+                  High chance +{boost}%
+                </span>
               </div>
               <div className="flex flex-1 flex-col gap-1 p-3">
                 <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">{course.title}</p>
                 <p className="text-xs text-[var(--text-secondary)]">{course.category}</p>
                 <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-[var(--text-muted)]">
-                  <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3 shrink-0" /> {course.duration}</span>
-                  <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600 dark:text-amber-400"><Star className="h-3 w-3 fill-current" /> {course.rating}</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3 w-3 shrink-0" /> {course.duration}
+                  </span>
+                  <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600 dark:text-amber-400">
+                    <Star className="h-3 w-3 fill-current" /> {course.rating}
+                  </span>
                 </div>
               </div>
             </Link>
