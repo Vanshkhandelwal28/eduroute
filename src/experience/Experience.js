@@ -8,8 +8,7 @@ import TimelineController from './animation/Timeline.js';
 
 /**
  * Experience — orchestrator.
- * Phase 2–6: scene, particles, GPU, mouse, morph.
- * Phase 7: TimelineController (GSAP ScrollTrigger).
+ * Phase 8: Camera owns damped state interpolation; Timeline sets targets.
  */
 export default class Experience {
   constructor({ canvas }) {
@@ -42,8 +41,6 @@ export default class Experience {
       sizes: this.sizes,
     });
 
-    // Phase 7 — central scroll timeline (after DOM sections exist)
-    // Delay one frame so React has committed section elements
     this.timeline = null;
     requestAnimationFrame(() => {
       this.timeline = new TimelineController({ experience: this });
@@ -66,7 +63,6 @@ export default class Experience {
     this.camera.resize();
     this.renderer.resize();
 
-    // Refresh ScrollTrigger after resize
     if (this.timeline) {
       import('gsap/ScrollTrigger').then(({ ScrollTrigger }) => {
         ScrollTrigger.refresh();
@@ -90,12 +86,13 @@ export default class Experience {
     const delta = Math.min(elapsed - this._prevTime, 0.05);
     this._prevTime = elapsed;
 
-    // Timeline drives camera + morph params
+    // Timeline sets camera targets + morph params
     if (this.timeline) {
       this.timeline.update();
     }
 
-    this.camera.update();
+    // Camera damps toward targets (cinematic lag)
+    this.camera.update(delta);
     this.scene.update();
 
     if (this.mouse) {
