@@ -108,11 +108,16 @@ export type PlacementChanceResult = {
 export function getUserSkills(): { skills: string[]; hasProfile: boolean } {
   const onboarding = readOnboarding();
   const strengths = (onboarding.gapAnswers || [])
-    .filter((a) => a.answer === 'yes')
+    .filter((a) => a && a.answer === 'yes')
     .map((a) => a.skill);
   const interests = (onboarding.interests || []).map(interestLabel);
   const custom = onboarding.customSkills || [];
-  const earned = getAllEarnedCourseSkills();
+  let earned: string[] = [];
+  try {
+    earned = getAllEarnedCourseSkills() || [];
+  } catch {
+    earned = [];
+  }
   const missing = onboarding.missingSkills || [];
   const skills = Array.from(
     new Set(
@@ -155,7 +160,7 @@ export function extractCourseSkillKeys(course: {
 
 function skillMatchesUser(userSkills: string[], key: string): boolean {
   const aliases = SKILL_ALIASES[key] || [key];
-  const userLow = userSkills.map((s) => s.toLowerCase());
+  const userLow = (userSkills || []).map((s) => s.toLowerCase());
   return userLow.some((u) => {
     if (aliases.some((a) => u.includes(a) || a.includes(u))) return true;
     if (u.includes(key) || key.includes(u)) return true;
@@ -170,7 +175,7 @@ export function computePlacementChance(
 ): PlacementChanceResult {
   const { skills: profileSkills, hasProfile } = getUserSkills();
   const skills = userSkills && userSkills.length ? userSkills : profileSkills;
-  const courseSkills = extractCourseSkillKeys(course);
+  const courseSkills = extractCourseSkillKeys(course || {});
   const matchedSkills = courseSkills.filter((k) => skillMatchesUser(skills, k));
 
   const baseline = 40;
@@ -228,11 +233,13 @@ export function courseTypeImage(course: {
 
 const ANALYZE_KEY = 'eduroute-skill-analyze-v1';
 
-export function runDashboardSkillAnalyze(): {
+export type DashboardSkillAnalyze = {
   top: { title: string; boostPercent: number; chancePercent: number }[];
   skillCount: number;
   hasProfile: boolean;
-} {
+};
+
+export function runDashboardSkillAnalyze(): DashboardSkillAnalyze {
   const { skills, hasProfile } = getUserSkills();
   const samples = [
     { title: 'Master React & TypeScript', category: 'Development', description: 'React TypeScript frontend' },
@@ -248,20 +255,31 @@ export function runDashboardSkillAnalyze(): {
     .sort((a, b) => b.boostPercent - a.boostPercent)
     .slice(0, 3);
 
-  const payload = { top: ranked, skillCount: skills.length, hasProfile, at: Date.now() };
+  const payload: DashboardSkillAnalyze & { at?: number } = {
+    top: ranked,
+    skillCount: skills.length,
+    hasProfile,
+    at: Date.now(),
+  };
   try {
     sessionStorage.setItem(ANALYZE_KEY, JSON.stringify(payload));
   } catch {
     /* ignore */
   }
-  return payload;
+  return { top: ranked, skillCount: skills.length, hasProfile };
 }
 
-export function readDashboardSkillAnalyze(): ReturnType<typeof runDashboardSkillAnalyze> | null {
+export function readDashboardSkillAnalyze(): DashboardSkillAnalyze | null {
   try {
     const raw = sessionStorage.getItem(ANALYZE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      top: Array.isArray(parsed.top) ? parsed.top : [],
+      skillCount: typeof parsed.skillCount === 'number' ? parsed.skillCount : 0,
+      hasProfile: Boolean(parsed.hasProfile),
+    };
   } catch {
     return null;
   }
