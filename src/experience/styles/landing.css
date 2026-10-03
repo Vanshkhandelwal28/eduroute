@@ -1,6 +1,5 @@
 /* ============================================================
-   EduRoute Redesign — Phase 1
-   Cinematic, minimal, dark, large type, negative space
+   EduRoute Redesign — cinematic landing styles
    ============================================================ */
 
 :root {
@@ -14,7 +13,6 @@
   --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
 }
 
-/* Reset / base */
 .er-landing {
   background: var(--bg);
   color: var(--text);
@@ -30,22 +28,30 @@
   box-sizing: border-box;
 }
 
-/* Fixed WebGL canvas behind everything */
+/* WebGL fallback — elegant static dark page */
+.er-landing.er-no-webgl {
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 30%, #1a1028 0%, #000000 70%);
+}
+
+.er-landing.er-no-webgl #webgl-canvas {
+  display: none !important;
+}
+
 #webgl-canvas {
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
   z-index: 0;
-  pointer-events: none; /* enable later for mouse interaction */
+  pointer-events: none;
   display: block;
 }
 
-/* Main content scrolls over the canvas */
 .er-main {
   position: relative;
   z-index: 1;
-  pointer-events: none; /* sections re-enable pointer-events where needed */
+  pointer-events: none;
 }
 
 .er-main a,
@@ -55,7 +61,6 @@
   pointer-events: auto;
 }
 
-/* ---------- Navigation ---------- */
 .er-nav {
   position: fixed;
   top: 0;
@@ -119,7 +124,6 @@
   color: var(--bg);
 }
 
-/* ---------- Shared section utilities ---------- */
 .er-section {
   position: relative;
   min-height: 100svh;
@@ -170,7 +174,6 @@
   margin-top: 1.75rem;
 }
 
-/* Text reveal (clip mask) — used by GSAP later */
 .er-reveal {
   overflow: hidden;
 }
@@ -180,7 +183,6 @@
   transform: translateY(110%);
 }
 
-/* ---------- Hero ---------- */
 .er-hero {
   justify-content: flex-end;
   padding-bottom: 5rem;
@@ -237,7 +239,6 @@
   color: rgba(255, 255, 255, 0.3);
 }
 
-/* ---------- Manifesto ---------- */
 .er-manifesto {
   max-width: 60rem;
 }
@@ -247,7 +248,6 @@
   max-width: 18ch;
 }
 
-/* ---------- Features ---------- */
 .er-feature {
   max-width: 48rem;
 }
@@ -261,7 +261,6 @@
   margin-left: auto;
 }
 
-/* ---------- Team ---------- */
 .er-team__grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -294,7 +293,6 @@
   color: var(--text-secondary);
 }
 
-/* ---------- CTA ---------- */
 .er-cta {
   text-align: center;
   align-items: center;
@@ -319,7 +317,6 @@
   margin-top: 2.5rem;
 }
 
-/* ---------- Footer ---------- */
 .er-footer {
   min-height: auto;
   padding: 3rem 1.5rem 4rem;
@@ -373,5 +370,12 @@
     width: 100%;
     text-align: center;
     order: 3;
+  }
+}
+
+/* Reduced motion: keep text readable without aggressive transforms */
+@media (prefers-reduced-motion: reduce) {
+  .er-reveal > span {
+    transform: none;
   }
 }

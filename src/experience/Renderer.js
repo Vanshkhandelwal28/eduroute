@@ -1,7 +1,8 @@
 import * as THREE from 'three';
+import { getCappedDPR } from './utils/device.js';
 
 /**
- * Renderer — WebGL renderer configured for post-processing (tone mapping required by UnrealBloomPass).
+ * Renderer — DPR-capped WebGL renderer for post-processing compatibility.
  */
 export default class Renderer {
   constructor({ canvas, sizes }) {
@@ -11,17 +12,16 @@ export default class Renderer {
     this.instance = new THREE.WebGLRenderer({
       canvas: this.canvas,
       antialias: true,
-      alpha: false, // opaque black — better for bloom pipeline
+      alpha: false,
       powerPreference: 'high-performance',
       stencil: false,
       depth: true,
     });
 
     this.instance.setClearColor(0x000000, 1);
-    this.instance.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.instance.setPixelRatio(getCappedDPR());
     this.instance.setSize(this.sizes.width, this.sizes.height);
 
-    // Required for UnrealBloomPass
     this.instance.outputColorSpace = THREE.SRGBColorSpace;
     this.instance.toneMapping = THREE.ACESFilmicToneMapping;
     this.instance.toneMappingExposure = 0.95;
@@ -29,10 +29,9 @@ export default class Renderer {
 
   resize() {
     this.instance.setSize(this.sizes.width, this.sizes.height);
-    this.instance.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.instance.setPixelRatio(getCappedDPR());
   }
 
-  /** Direct render fallback when post-processing is unavailable. */
   update(scene, camera) {
     this.instance.render(scene, camera);
   }

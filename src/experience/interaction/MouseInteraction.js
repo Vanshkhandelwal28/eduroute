@@ -1,46 +1,35 @@
 import * as THREE from 'three';
+import { isTouchDevice } from '../utils/device.js';
 
 /**
- * Phase 5 — Smooth mouse / pointer tracking.
- * Converts screen coords → world position on a plane through the brain center.
- * Disabled / reduced on touch devices.
+ * Mouse / pointer tracking — allocation-free update loop.
+ * Disabled on touch-primary devices.
  */
 export default class MouseInteraction {
-  /**
-   * @param {{ camera: THREE.Camera, sizes: { width: number, height: number } }}
-   */
   constructor({ camera, sizes }) {
     this.camera = camera;
     this.sizes = sizes;
 
-    // Raw NDC
     this._raw = new THREE.Vector2(0, 0);
-    // Smoothed NDC
     this.smooth = new THREE.Vector2(0, 0);
-    // World position on interaction plane
     this.world = new THREE.Vector3(0, 0, 0);
     this._targetWorld = new THREE.Vector3(0, 0, 0);
+    this._camDir = new THREE.Vector3();
+    this._rotOffset = { x: 0, y: 0 };
+    this._currentStrength = 0;
 
     this.active = false;
     this.enabled = true;
-
-    // Soft falloff radius in world units
     this.radius = 1.1;
-    // Repulsion strength (GPU uniform)
     this.strength = 1.6;
 
-    // Detect touch-primary devices — disable cursor force
-    this.isTouch =
-      typeof window !== 'undefined' &&
-      ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-
+    this.isTouch = isTouchDevice();
     if (this.isTouch) {
       this.enabled = false;
       this.strength = 0;
     }
 
     this.raycaster = new THREE.Raycaster();
-    // Plane through origin, facing camera roughly (z-up for brain at origin)
     this.plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     this._hit = new THREE.Vector3();
 
@@ -56,7 +45,6 @@ export default class MouseInteraction {
 
   _onMove(e) {
     if (!this.enabled) return;
-    // Ignore pure touch events if somehow enabled
     if (e.pointerType === 'touch') return;
 
     const x = (e.clientX / this.sizes.width) * 2 - 1;
@@ -69,59 +57,48 @@ export default class MouseInteraction {
     this.active = false;
   }
 
-  /**
-   * Call every frame. Smooths coords and projects to world space.
-   * @param {number} delta
-   */
   update(delta) {
-    const lerp = 1 - Math.exp(-8 * Math.min(delta, 0.05)); // smooth ~stable
+    if (!this.enabled) {
+      this._currentStrength = 0;
+      return;
+    }
 
-    // Ease toward raw (or toward center when inactive)
+    const lerp = 1 - Math.exp(-8 * Math.min(delta, 0.05));
+
     const targetX = this.active ? this._raw.x : 0;
     const targetY = this.active ? this._raw.y : 0;
     this.smooth.x += (targetX - this.smooth.x) * lerp;
     this.smooth.y += (targetY - this.smooth.y) * lerp;
 
-    // Project smoothed NDC onto plane z ≈ 0 through scene center
     this.raycaster.setFromCamera(this.smooth, this.camera);
 
-    // Update plane to face camera so projection stays meaningful as camera moves
-    const camDir = new THREE.Vector3();
-    this.camera.getWorldDirection(camDir);
-    this.plane.normal.copy(camDir).negate();
-    this.plane.constant = 0; // through origin
+    // Reuse _camDir — no per-frame allocation
+    this.camera.getWorldDirection(this._camDir);
+    this.plane.normal.copy(this._camDir).negate();
+    this.plane.constant = 0;
 
     if (this.raycaster.ray.intersectPlane(this.plane, this._hit)) {
       this._targetWorld.copy(this._hit);
     } else {
-      // Fallback: approximate with scaled NDC
-      this._targetWorld.set(
-        this.smooth.x * 2.2,
-        this.smooth.y * 1.6,
-        0
-      );
+      this._targetWorld.set(this.smooth.x * 2.2, this.smooth.y * 1.6, 0);
     }
 
-    // Smooth world position as well
     this.world.lerp(this._targetWorld, lerp);
 
-    // Strength fades when inactive
-    const strengthTarget = this.active && this.enabled ? this.strength : 0;
-    this._currentStrength =
-      (this._currentStrength ?? 0) +
-      (strengthTarget - (this._currentStrength ?? 0)) * lerp;
+    const strengthTarget = this.active ? this.strength : 0;
+    this._currentStrength += (strengthTarget - this._currentStrength) * lerp;
+
+    // Reuse rotation offset object
+    this._rotOffset.x = this.smooth.y * 0.12;
+    this._rotOffset.y = this.smooth.x * 0.18;
   }
 
   get strengthValue() {
-    return this._currentStrength ?? 0;
+    return this._currentStrength;
   }
 
-  /** Normalized mouse offset for gentle mesh rotation (−1..1). */
   get rotationOffset() {
-    return {
-      x: this.smooth.y * 0.12, // pitch
-      y: this.smooth.x * 0.18, // yaw
-    };
+    return this._rotOffset;
   }
 
   dispose() {

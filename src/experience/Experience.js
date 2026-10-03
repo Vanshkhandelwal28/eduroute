@@ -6,10 +6,13 @@ import Particles from './particles/Particles.js';
 import MouseInteraction from './interaction/MouseInteraction.js';
 import TimelineController from './animation/Timeline.js';
 import PostProcessing from './postprocessing/PostProcessing.js';
+import {
+  isWebGLAvailable,
+  prefersReducedMotion,
+} from './utils/device.js';
 
 /**
- * Experience — orchestrator.
- * Phase 9: PostProcessing pipeline.
+ * Experience — orchestrator with WebGL fallback + performance guards.
  */
 export default class Experience {
   constructor({ canvas }) {
@@ -19,14 +22,22 @@ export default class Experience {
     }
 
     this.canvas = canvas;
+    this.webglOk = isWebGLAvailable();
     this.sizes = {
       width: window.innerWidth,
       height: window.innerHeight,
     };
 
+    // Static fallback when WebGL is unavailable
+    if (!this.webglOk) {
+      this._showFallback();
+      return;
+    }
+
     this.clock = new THREE.Clock();
     this.isVisible = true;
     this._prevTime = 0;
+    this.reducedMotion = prefersReducedMotion();
 
     this.scene = new Scene();
     this.camera = new Camera({ sizes: this.sizes });
@@ -37,12 +48,19 @@ export default class Experience {
       renderer: this.renderer.instance,
     });
 
+    // Soften particle motion under reduced-motion
+    if (this.reducedMotion && this.particles.morph) {
+      this.particles.morph.params.noiseStrength = 0.03;
+      this.particles.morph.params.scatter = 0;
+      this.particles.morph.params.turbulence = 0.05;
+      this.particles.morph.params.springStrength = 6;
+    }
+
     this.mouse = new MouseInteraction({
       camera: this.camera.instance,
       sizes: this.sizes,
     });
 
-    // Phase 9 — post-processing
     this.post = new PostProcessing({
       renderer: this.renderer.instance,
       scene: this.scene.instance,
@@ -65,7 +83,20 @@ export default class Experience {
     this.tick();
   }
 
+  _showFallback() {
+    // Hide broken canvas, rely on CSS dark background + DOM content
+    if (this.canvas) {
+      this.canvas.style.display = 'none';
+    }
+    const landing = document.querySelector('.er-landing');
+    if (landing) {
+      landing.classList.add('er-no-webgl');
+    }
+  }
+
   onResize() {
+    if (!this.webglOk) return;
+
     this.sizes.width = window.innerWidth;
     this.sizes.height = window.innerHeight;
 
@@ -81,16 +112,21 @@ export default class Experience {
   }
 
   onVisibilityChange() {
+    if (!this.webglOk) return;
+
     this.isVisible = document.visibilityState === 'visible';
     if (this.isVisible) {
       this.clock.start();
       this._prevTime = this.clock.getElapsedTime();
       this.tick();
+    } else if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
     }
   }
 
   tick() {
-    if (!this.isVisible) return;
+    if (!this.webglOk || !this.isVisible) return;
 
     const elapsed = this.clock.getElapsedTime();
     const delta = Math.min(elapsed - this._prevTime, 0.05);
@@ -111,13 +147,10 @@ export default class Experience {
       this.particles.update(elapsed, delta, this.mouse);
     }
 
-    // Keep DOF focus near camera distance to particle origin
     if (this.post && this.camera?.instance) {
-      const dist = this.camera.instance.position.length();
-      this.post.setFocus(dist);
+      this.post.setFocus(this.camera.instance.position.length());
     }
 
-    // Post-processing render (falls back to direct if disabled)
     const rendered = this.post?.render(elapsed);
     if (!rendered) {
       this.renderer.update(this.scene.instance, this.camera.instance);
@@ -132,6 +165,7 @@ export default class Experience {
 
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
+      this.animationId = null;
     }
 
     if (this.timeline) {
@@ -154,17 +188,21 @@ export default class Experience {
       this.particles = null;
     }
 
-    this.renderer.dispose();
+    if (this.renderer) {
+      this.renderer.dispose();
+    }
 
-    this.scene.instance.traverse((obj) => {
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach((m) => m.dispose());
-        } else {
-          obj.material.dispose();
+    if (this.scene?.instance) {
+      this.scene.instance.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((m) => m.dispose());
+          } else {
+            obj.material.dispose();
+          }
         }
-      }
-    });
+      });
+    }
   }
 }
