@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -22,9 +21,6 @@ type Server struct {
 	db        *DB
 	jwtSecret []byte
 }
-type contextKey string
-
-const userKey contextKey = "user"
 
 type UserClaims struct {
 	ID                 string `json:"id"`
@@ -96,15 +92,25 @@ func decodeBody(r *http.Request, target any) error {
 
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", s.health)
-	mux.HandleFunc("/api/auth/register", s.register)
-	mux.HandleFunc("/api/auth/login/student", s.loginStudent)
-	mux.HandleFunc("/api/auth/login/staff", s.loginStaff)
-	mux.HandleFunc("/api/auth/otp/send", s.sendOTP)
-	mux.HandleFunc("/api/auth/otp/verify", s.verifyOTP)
+	mux.HandleFunc("GET /health", s.health)
+	mux.HandleFunc("POST /api/auth/register", s.register)
+	mux.HandleFunc("POST /api/auth/login/student", s.loginStudent)
+	mux.HandleFunc("POST /api/auth/login/staff", s.loginStaff)
+	mux.HandleFunc("POST /api/auth/otp/send", s.sendOTP)
+	mux.HandleFunc("POST /api/auth/otp/verify", s.verifyOTP)
 	mux.HandleFunc("/api/profile/dashboard", s.profileDashboard)
 	mux.HandleFunc("/api/", s.api)
+	mux.HandleFunc("/", s.apiRoot)
 	return cors(mux)
+}
+
+func (s *Server) apiRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" || r.URL.Path == "" {
+		writeJSON(w, 200, map[string]any{"service": "eduroute-api", "health": "/health"})
+		return
+	}
+	// fallback: treat as api path without /api prefix
+	s.api(w, r)
 }
 
 func cors(next http.Handler) http.Handler {
@@ -315,8 +321,9 @@ func (s *Server) verifyOTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/")
+	path = strings.Trim(path, "/")
 	switch {
-	case path == "me" && r.Method == "GET":
+	case path == "me" && (r.Method == "GET" || r.Method == ""):
 		s.me(w, r)
 	case path == "problems/submissions" && r.Method == "GET":
 		s.problemSubmissions(w, r)
@@ -372,7 +379,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	case path == "send-email" && r.Method == "POST":
 		s.sendEmail(w, r)
 	default:
-		failure(w, 404, "Not found")
+		failure(w, 404, "Not found: "+r.Method+" "+r.URL.Path+" (path="+path+")")
 	}
 }
 
@@ -422,8 +429,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		failure(w, 404, "User not found")
 		return
 	}
-	data := rows[0]
-	success(w, 200, data)
+	success(w, 200, rows[0])
 }
 
 func (s *Server) courses(w http.ResponseWriter, r *http.Request) {
@@ -438,7 +444,7 @@ func (s *Server) courses(w http.ResponseWriter, r *http.Request) {
 			FROM courses c LEFT JOIN user_course_progress ucp ON ucp.course_id = c.id AND ucp.user_id = ?
 			ORDER BY c.created_at DESC`, claims.ID)
 		if err != nil {
-			failure(w, 500, "Unable to load courses")
+			failure(w, 500, "Unable to load courses: "+err.Error())
 			return
 		}
 		success(w, 200, rows)
@@ -476,10 +482,7 @@ func (s *Server) ensureDefaultAdmin() error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(
-		"INSERT INTO users (name,email,password,role,is_verified,college_verified) VALUES (?,?,?,?,?,?)",
-		"Admin", "admin@eduroute.app", password, "admin", true, "verified",
-	)
+	_, err = s.db.Exec("INSERT INTO users (name,email,password,role,is_verified,college_verified) VALUES (?,?,?,?,?,?)", "Admin", "admin@eduroute.app", password, "admin", true, "verified")
 	return err
 }
 
@@ -491,18 +494,7 @@ func (s *Server) ensureStarterCourse() error {
 	if count > 0 {
 		return nil
 	}
-	_, err := s.db.Exec(
-		`INSERT INTO courses (title, description, category, level, duration, instructor, thumbnail, published)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"Getting Started with EDUROUTE",
-		"Learn how to use EDUROUTE: skill mapping, roadmaps, internships, and Buddy AI.",
-		"General",
-		"Beginner",
-		"1 hour",
-		"EDUROUTE",
-		"",
-		true,
-	)
+	_, err := s.db.Exec(`INSERT INTO courses (title, description, category, level, duration, instructor, thumbnail, published) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, "Getting Started with EDUROUTE", "Learn how to use EDUROUTE: skill mapping, roadmaps, internships, and Buddy AI.", "General", "Beginner", "1 hour", "EDUROUTE", "", true)
 	return err
 }
 
@@ -527,13 +519,6 @@ func randomCode() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%06d", n.Int64()), nil
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func stringValue(value any, fallback string) string {
