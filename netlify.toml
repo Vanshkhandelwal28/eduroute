@@ -1,4 +1,4 @@
-# EDUROUTE Netlify — hybrid DB sync (Neon via Go on Render)
+# EDUROUTE Netlify — Render (Neon) + Supabase only. No MongoDB required.
 [build]
   command = "npm run build"
   publish = "dist"
@@ -10,9 +10,9 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["mongoose", "mysql2", "bcryptjs", "nodemailer"]
+  external_node_modules = ["mysql2", "bcryptjs", "nodemailer"]
 
-# Auth → dedicated proxies
+# Auth
 [[redirects]]
   from = "/api/auth/register"
   to = "/.netlify/functions/auth-register"
@@ -43,7 +43,7 @@
   status = 200
   force = true
 
-# Neon-backed routes → Go proxy (GO_API_URL / BACKEND_URL on Netlify)
+# Neon via Go (Render) — set GO_API_URL=https://eduroute-api-nho4.onrender.com
 [[redirects]]
   from = "/api/ai-courses"
   to = "/.netlify/functions/go-api?path=/api/ai-courses"
@@ -74,6 +74,18 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/api/buddy-progress"
+  to = "/.netlify/functions/buddy-progress"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/buddy-chat"
+  to = "/.netlify/functions/buddy-chat"
+  status = 200
+  force = true
+
 # Other API → Netlify functions
 [[redirects]]
   from = "/api/*"
@@ -81,7 +93,7 @@
   status = 200
   force = true
 
-# SPA fallback
+# SPA
 [[redirects]]
   from = "/*"
   to = "/index.html"
