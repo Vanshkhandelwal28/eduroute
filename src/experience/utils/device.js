@@ -1,6 +1,5 @@
 /**
- * Phase 10 — Device capability helpers.
- * Single source of truth for particle counts, DPR caps, quality tiers.
+ * Device capability helpers.
  */
 
 export function isTouchDevice() {
@@ -23,14 +22,13 @@ export function isWebGLAvailable() {
 }
 
 /**
- * Particle counts:
- * Desktop 10k–16k · Tablet 4k–8k · Mobile 2k–4k
+ * Particle counts — denser on capable desktop for volumetric feel.
+ * Desktop 12k–20k · Tablet 5k–8k · Mobile 2k–4k
  */
 export function getParticleCount() {
-  if (typeof window === 'undefined') return 12000;
+  if (typeof window === 'undefined') return 14000;
 
   if (prefersReducedMotion()) {
-    // Still show structure, fewer particles
     const w = window.innerWidth;
     if (w < 768) return 2048;
     if (w < 1024) return 4096;
@@ -42,40 +40,29 @@ export function getParticleCount() {
   const dpr = window.devicePixelRatio || 1;
 
   if (w < 640 || (isTouchDevice() && w < 768)) {
-    // Mobile: 2k–4k
-    return cores <= 4 ? 2048 : 3072;
+    return cores <= 4 ? 2048 : 4096;
   }
 
   if (w < 1024) {
-    // Tablet: 4k–8k
-    return cores <= 4 || dpr > 2 ? 4096 : 6144;
+    return cores <= 4 || dpr > 2 ? 5120 : 8192;
   }
 
-  // Desktop: 10k–16k
-  if (cores <= 4 || dpr > 2) return 10240;
-  if (cores >= 8 && w >= 1440) return 15360;
-  return 12288;
+  // Desktop denser for volumetric structure
+  if (cores <= 4 || dpr > 2) return 12288;
+  if (cores >= 8 && w >= 1440) return 20480;
+  return 16384;
 }
 
-/**
- * Capped device pixel ratio.
- * Desktop max ~1.75 · Mobile max ~1.25
- */
 export function getCappedDPR() {
   if (typeof window === 'undefined') return 1;
   const raw = window.devicePixelRatio || 1;
   const w = window.innerWidth;
 
-  if (w < 768 || isTouchDevice()) {
-    return Math.min(raw, 1.25);
-  }
-  if (w < 1200) {
-    return Math.min(raw, 1.5);
-  }
+  if (w < 768 || isTouchDevice()) return Math.min(raw, 1.25);
+  if (w < 1200) return Math.min(raw, 1.5);
   return Math.min(raw, 1.75);
 }
 
-/** Post-processing quality tier. */
 export function getPostQuality() {
   if (typeof window === 'undefined') return 'HIGH';
   if (prefersReducedMotion()) return 'LOW';

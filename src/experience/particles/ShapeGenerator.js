@@ -1,5 +1,5 @@
 /**
- * Procedural shape generator — all shapes share identical particle count.
+ * Procedural volumetric shapes — denser interior + organic surface.
  */
 
 import { getParticleCount as deviceParticleCount } from '../utils/device.js';
@@ -28,22 +28,29 @@ function fibDirection(i, count) {
   };
 }
 
+/**
+ * Volumetric brain — surface shell + interior fill for density.
+ * ~60% surface, ~40% volume sample.
+ */
 export function createBrain(count) {
   const positions = new Float32Array(count * 3);
-  const scaleX = 1.15;
+  const scaleX = 1.2;
   const scaleY = 0.95;
-  const scaleZ = 1.35;
+  const scaleZ = 1.4;
 
-  for (let i = 0; i < count; i++) {
-    let { x, y, z } = fibDirection(i, count);
+  const nSurface = Math.floor(count * 0.58);
+  const nVolume = count - nSurface;
+
+  for (let i = 0; i < nSurface; i++) {
+    let { x, y, z } = fibDirection(i, nSurface);
 
     const n1 = noise3(x * 2.2, y * 2.2, z * 2.2);
     const n2 = noise3(x * 5.5 + 1.3, y * 5.5, z * 5.5 - 0.7);
     const n3 = noise3(x * 11.0, y * 11.0 + 2.1, z * 11.0);
-    const fold = 0.18 * n1 + 0.09 * n2 + 0.04 * n3;
+    const fold = 0.2 * n1 + 0.1 * n2 + 0.045 * n3;
 
-    const hemisphere = Math.sign(x || 0.001) * 0.06 * Math.abs(x);
-    const sulcus = -0.04 * Math.exp(-x * x * 8.0);
+    const hemisphere = Math.sign(x || 0.001) * 0.07 * Math.abs(x);
+    const sulcus = -0.05 * Math.exp(-x * x * 8.0);
     const radius = 1.0 + fold + hemisphere + sulcus;
 
     x *= radius * scaleX;
@@ -51,32 +58,65 @@ export function createBrain(count) {
     z *= radius * scaleZ;
     y += 0.08;
 
-    x += (hash(i * 0.137 + 19.7) - 0.5) * 0.04;
-    y += (hash(i * 0.271 + 3.1) - 0.5) * 0.03;
-    z += (hash(i * 0.419 + 7.9) - 0.5) * 0.04;
+    x += (hash(i * 0.137 + 19.7) - 0.5) * 0.035;
+    y += (hash(i * 0.271 + 3.1) - 0.5) * 0.025;
+    z += (hash(i * 0.419 + 7.9) - 0.5) * 0.035;
 
     positions[i * 3] = x;
     positions[i * 3 + 1] = y;
     positions[i * 3 + 2] = z;
   }
+
+  // Interior volume — cube-root radius for uniform density
+  for (let j = 0; j < nVolume; j++) {
+    const i = nSurface + j;
+    let { x, y, z } = fibDirection(j * 3 + 7, nVolume * 3);
+
+    const u = hash(j * 0.91 + 2.3);
+    const r = Math.cbrt(u) * 0.72;
+
+    const n1 = noise3(x * 3.1, y * 3.1, z * 3.1) * 0.08;
+    const hemisphere = Math.sign(x || 0.001) * 0.04 * Math.abs(x);
+
+    x *= (r + n1 + hemisphere) * scaleX;
+    y *= (r + n1) * scaleY;
+    z *= (r + n1) * scaleZ;
+    y += 0.06;
+
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+  }
+
   return positions;
 }
 
 export function createBulb(count) {
   const positions = new Float32Array(count * 3);
-  const nGlobe = Math.floor(count * 0.7);
-  const nNeck = Math.floor(count * 0.2);
-  const nBase = count - nGlobe - nNeck;
+  const nGlobe = Math.floor(count * 0.55);
+  const nInterior = Math.floor(count * 0.15);
+  const nNeck = Math.floor(count * 0.18);
+  const nBase = count - nGlobe - nInterior - nNeck;
   let idx = 0;
 
   for (let i = 0; i < nGlobe; i++) {
     let { x, y, z } = fibDirection(i, nGlobe);
-    const r = 0.85 + noise3(x * 3, y * 3, z * 3) * 0.06;
+    const r = 0.88 + noise3(x * 3, y * 3, z * 3) * 0.06;
     x *= r;
     y = y * r * 0.95 + 0.55;
     z *= r;
-    x += (hash(i * 0.2) - 0.5) * 0.03;
-    z += (hash(i * 0.31) - 0.5) * 0.03;
+    positions[idx * 3] = x;
+    positions[idx * 3 + 1] = y;
+    positions[idx * 3 + 2] = z;
+    idx++;
+  }
+
+  for (let i = 0; i < nInterior; i++) {
+    let { x, y, z } = fibDirection(i + 11, nInterior);
+    const r = Math.cbrt(hash(i * 0.7)) * 0.55;
+    x *= r;
+    y = y * r + 0.55;
+    z *= r;
     positions[idx * 3] = x;
     positions[idx * 3 + 1] = y;
     positions[idx * 3 + 2] = z;
@@ -109,26 +149,32 @@ export function createBulb(count) {
 
 export function createGlobe(count) {
   const positions = new Float32Array(count * 3);
-  const R = 1.05;
+  const nSurface = Math.floor(count * 0.7);
+  const nVolume = count - nSurface;
+  const R = 1.08;
 
-  for (let i = 0; i < count; i++) {
-    let { x, y, z } = fibDirection(i, count);
+  for (let i = 0; i < nSurface; i++) {
+    let { x, y, z } = fibDirection(i, nSurface);
     const lat = Math.asin(Math.max(-1, Math.min(1, y)));
     const band = Math.sin(lat * 6.0) * 0.025;
     const lon = Math.atan2(z, x);
     const ridge = Math.sin(lon * 8.0) * 0.02;
     const n = noise3(x * 4, y * 4, z * 4) * 0.035;
     const radius = R + band + ridge + n;
-    x *= radius;
-    y *= radius;
-    z *= radius;
-    x += (hash(i * 0.41) - 0.5) * 0.025;
-    y += (hash(i * 0.53) - 0.5) * 0.025;
-    z += (hash(i * 0.67) - 0.5) * 0.025;
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
+    positions[i * 3] = x * radius;
+    positions[i * 3 + 1] = y * radius;
+    positions[i * 3 + 2] = z * radius;
   }
+
+  for (let j = 0; j < nVolume; j++) {
+    const i = nSurface + j;
+    let { x, y, z } = fibDirection(j + 5, nVolume);
+    const r = Math.cbrt(hash(j * 1.1)) * 0.85;
+    positions[i * 3] = x * r;
+    positions[i * 3 + 1] = y * r;
+    positions[i * 3 + 2] = z * r;
+  }
+
   return positions;
 }
 
@@ -149,8 +195,8 @@ export function createNetwork(count) {
   nodes.push({ x: 0, y: 0, z: 0 });
 
   const nNodes = nodes.length;
-  const perNode = Math.floor((count * 0.25) / nNodes);
-  const centerCloud = Math.floor(count * 0.12);
+  const perNode = Math.floor((count * 0.28) / nNodes);
+  const centerCloud = Math.floor(count * 0.14);
   let idx = 0;
 
   for (let n = 0; n < nNodes; n++) {
@@ -160,7 +206,7 @@ export function createNetwork(count) {
       const u = hash(idx * 0.17 + n);
       const v = hash(idx * 0.31 + n * 2);
       const w = hash(idx * 0.47 + n * 3);
-      const rad = 0.12 * Math.cbrt(u);
+      const rad = 0.14 * Math.cbrt(u);
       const theta = v * Math.PI * 2;
       const phi = Math.acos(2 * w - 1);
       positions[idx * 3] = node.x + rad * Math.sin(phi) * Math.cos(theta);
@@ -178,7 +224,7 @@ export function createNetwork(count) {
   }
 
   const remaining = count - idx;
-  const perEdge = Math.floor(remaining / edges.length);
+  const perEdge = Math.floor(remaining / Math.max(edges.length, 1));
 
   for (let e = 0; e < edges.length; e++) {
     const [a, b] = edges[e];
