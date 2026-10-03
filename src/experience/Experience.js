@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import Scene from './Scene.js';
 import Camera from './Camera.js';
 import Renderer from './Renderer.js';
+import Particles from './particles/Particles.js';
 
 /**
  * Experience — top-level orchestrator for the WebGL layer.
  * Phase 2: canvas, scene, camera, renderer + animation loop.
- * Later phases will add particles, GPU compute, mouse, scroll, post-processing.
+ * Phase 3: basic particle object (brain-like InstancedMesh).
  */
 export default class Experience {
   constructor({ canvas }) {
@@ -28,6 +29,9 @@ export default class Experience {
     this.scene = new Scene();
     this.camera = new Camera({ sizes: this.sizes });
     this.renderer = new Renderer({ canvas: this.canvas, sizes: this.sizes });
+
+    // Phase 3 — particle system
+    this.particles = new Particles({ scene: this.scene });
 
     // Bind methods
     this.onResize = this.onResize.bind(this);
@@ -62,10 +66,14 @@ export default class Experience {
     if (!this.isVisible) return;
 
     const elapsed = this.clock.getElapsedTime();
-    const delta = this.clock.getDelta();
 
     this.camera.update();
     this.scene.update();
+
+    if (this.particles) {
+      this.particles.update(elapsed);
+    }
+
     this.renderer.update(this.scene.instance, this.camera.instance);
 
     this.animationId = requestAnimationFrame(this.tick);
@@ -79,9 +87,13 @@ export default class Experience {
       cancelAnimationFrame(this.animationId);
     }
 
+    if (this.particles) {
+      this.particles.dispose();
+      this.particles = null;
+    }
+
     this.renderer.dispose();
 
-    // Dispose scene resources in later phases
     this.scene.instance.traverse((obj) => {
       if (obj.geometry) obj.geometry.dispose();
       if (obj.material) {

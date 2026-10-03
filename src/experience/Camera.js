@@ -1,23 +1,23 @@
 import * as THREE from 'three';
 
 /**
- * Camera — cinematic perspective camera with basic resize support.
- * Choreography (dolly / FOV / rotation) will be added in later phases.
+ * Camera — cinematic perspective camera.
+ * Positioned to frame the brain particle structure.
  */
 export default class Camera {
   constructor({ sizes }) {
     this.sizes = sizes;
 
     this.instance = new THREE.PerspectiveCamera(
-      45,
+      42,
       this.sizes.width / this.sizes.height,
       0.1,
-      100
+      50
     );
 
-    // Starting position — will be driven by scroll later
-    this.instance.position.set(0, 0, 6);
-    this.instance.lookAt(0, 0, 0);
+    // Frame the brain shape (roughly unit-sized, slightly elongated)
+    this.instance.position.set(0, 0.15, 4.2);
+    this.instance.lookAt(0, 0.08, 0);
   }
 
   resize() {
