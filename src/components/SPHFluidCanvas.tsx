@@ -1,6 +1,6 @@
 /**
  * React wrapper — GPU SPH fluid for EduRoute landing.
- * Mouse + morph via GPU uniforms only (no lil-gui dependency).
+ * Applies rendering fixes: layout-safe resize, stable counts, cleanup.
  */
 import { useEffect, useRef, useState } from 'react';
 import { SPHSimulation } from '../webgl/sph/SPHSimulation';
@@ -9,7 +9,6 @@ export function SPHFluidCanvas({
   progressRef,
 }: {
   progressRef: React.MutableRefObject<number>;
-  /** @deprecated GUI removed to avoid lil-gui package requirement */
   showGui?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -20,10 +19,29 @@ export function SPHFluidCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const sph = new SPHSimulation(canvas, {
-      particleCount: window.innerWidth < 768 ? 1024 : 2048,
-      neighborStride: window.innerWidth < 768 ? 3 : 2,
-    });
+    // Ensure canvas has layout size before WebGL init
+    const parent = canvas.parentElement;
+    if (parent) {
+      const w = parent.clientWidth || window.innerWidth;
+      const h = parent.clientHeight || window.innerHeight;
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.width = Math.max(1, Math.floor(w * Math.min(window.devicePixelRatio, 1.5)));
+      canvas.height = Math.max(1, Math.floor(h * Math.min(window.devicePixelRatio, 1.5)));
+    }
+
+    const isMobile = window.innerWidth < 768;
+    let sph: SPHSimulation;
+    try {
+      sph = new SPHSimulation(canvas, {
+        particleCount: isMobile ? 900 : 1600,
+        neighborStride: isMobile ? 3 : 2,
+        particleSize: isMobile ? 14 : 11,
+      });
+    } catch (err) {
+      setFallback(err instanceof Error ? err.message : 'Failed to init WebGL');
+      return;
+    }
     sphRef.current = sph;
 
     if (!sph.supported) {
@@ -31,18 +49,23 @@ export function SPHFluidCanvas({
       return;
     }
 
+    // Resize after paint so parent absolute inset-0 has real dimensions
+    const resize = () => sph.onResize();
+    resize();
+    const t1 = window.setTimeout(resize, 50);
+    const t2 = window.setTimeout(resize, 200);
+
     const onMove = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return;
       const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       const ny = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-      sph.setMouse(nx * 1.1, ny * 0.9, 0);
+      sph.setMouse(nx * 1.15, ny * 0.95, 0);
     };
     const onLeave = () => sph.setMouse(0, -10, 0);
     window.addEventListener('mousemove', onMove, { passive: true });
     canvas.addEventListener('mouseleave', onLeave);
-
-    const onResize = () => sph.onResize();
-    window.addEventListener('resize', onResize);
+    window.addEventListener('resize', resize);
 
     let raf = 0;
     let last = performance.now();
@@ -57,8 +80,10 @@ export function SPHFluidCanvas({
 
     return () => {
       cancelAnimationFrame(raf);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
       window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('resize', onResize);
+      window.removeEventListener('resize', resize);
       canvas.removeEventListener('mouseleave', onLeave);
       sph.dispose();
       sphRef.current = null;
@@ -66,8 +91,12 @@ export function SPHFluidCanvas({
   }, [progressRef]);
 
   return (
-    <div className="absolute inset-0">
-      <canvas ref={canvasRef} className="h-full w-full block" />
+    <div className="absolute inset-0" style={{ background: '#080808' }}>
+      <canvas
+        ref={canvasRef}
+        className="block h-full w-full"
+        style={{ width: '100%', height: '100%', display: 'block' }}
+      />
       {fallback && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#080808] px-6 text-center">
           <p className="max-w-md text-[13px] font-light leading-relaxed text-white/50">
