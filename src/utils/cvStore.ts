@@ -4,7 +4,9 @@ import { pushUserData, pullUserData } from './userDataStore';
  * Student CV builder — localStorage + Neon.
  */
 
-export type CvAccentId = 'indigo' | 'emerald' | 'rose' | 'amber' | 'slate';
+export type CvTemplateId = 'classic' | 'modern' | 'minimal' | 'professional';
+
+export type CvAccentId = 'indigo' | 'slate' | 'emerald' | 'rose' | 'amber';
 
 export type CvEducation = {
   id: string;
@@ -39,11 +41,13 @@ export type CvData = {
   location: string;
   summary: string;
   skills: string[];
+  certificates?: string[];
+  languages?: string[];
   education: CvEducation[];
   experience: CvExperience[];
   projects: CvProject[];
   accent: CvAccentId;
-  templateId: string;
+  templateId: CvTemplateId;
   updatedAt?: string;
 };
 
@@ -51,16 +55,21 @@ const KEY = 'eduroute:cv-builder-v3';
 
 export const ACCENT_COLORS: Record<CvAccentId, { hex: string; label: string }> = {
   indigo: { hex: '#4f46e5', label: 'Indigo' },
+  slate: { hex: '#475569', label: 'Slate' },
   emerald: { hex: '#059669', label: 'Emerald' },
   rose: { hex: '#e11d48', label: 'Rose' },
   amber: { hex: '#d97706', label: 'Amber' },
-  slate: { hex: '#475569', label: 'Slate' },
 };
 
-export const CV_TEMPLATES = [
-  { id: 'classic', label: 'Classic' },
-  { id: 'modern', label: 'Modern' },
-  { id: 'compact', label: 'Compact' },
+export const CV_TEMPLATES: {
+  id: CvTemplateId;
+  label: string;
+  description: string;
+}[] = [
+  { id: 'classic', label: 'Classic', description: 'Clean single-column layout' },
+  { id: 'modern', label: 'Modern', description: 'Bold header with accent bar' },
+  { id: 'minimal', label: 'Minimal', description: 'Sparse typography-first' },
+  { id: 'professional', label: 'Professional', description: 'Sidebar-style sections' },
 ];
 
 function rid() {
@@ -87,6 +96,8 @@ export function defaultCvData(partial?: Partial<CvData>): CvData {
     location: '',
     summary: '',
     skills: [],
+    certificates: [],
+    languages: [],
     education: [emptyEducation()],
     experience: [emptyExperience()],
     projects: [emptyProject()],
@@ -121,6 +132,44 @@ export function saveCvData(data: CvData): void {
     // ignore
   }
 }
+
+export const SAMPLE_SUMMARIES = [
+  'Project Manager with six years of experience coordinating cross-functional initiatives in technology and business operations. Skilled in stakeholder communication, project planning, risk tracking, and delivery governance across complex environments. Known for building practical workflows, improving team alignment, and keeping priorities moving under tight deadlines.',
+  'Detail-oriented engineering student seeking internship opportunities. Strong foundation in data structures, algorithms, and modern web technologies with hands-on project experience.',
+  'Results-driven learner with project experience in React, Node.js, and cloud tools. Eager to contribute to real-world products and grow with a collaborative team.',
+];
+
+export const SUGGESTED_SKILLS = [
+  'Project Planning',
+  'Risk Management',
+  'Budget Tracking',
+  'Jira',
+  'Stakeholder Management',
+  'Agile Delivery',
+  'Process Improvement',
+  'Microsoft Project',
+  'React',
+  'TypeScript',
+  'JavaScript',
+  'Node.js',
+  'Python',
+  'SQL',
+  'Git',
+  'Communication',
+  'Problem Solving',
+  'Teamwork',
+];
+
+export const SUGGESTED_CERTIFICATES = [
+  'Project Management Professional (PMP)',
+  'Certified ScrumMaster (CSM)',
+  'Google Project Management Certificate',
+  'AWS Cloud Practitioner',
+  'Google Data Analytics',
+  'Meta Front-End Developer',
+];
+
+export const SUGGESTED_LANGUAGES = ['English', 'French', 'Hindi', 'Spanish', 'Mandarin'];
 
 export async function syncCvFromServer(): Promise<void> {
   const remote = await pullUserData<CvData>('cv');
