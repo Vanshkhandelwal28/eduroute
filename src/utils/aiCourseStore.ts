@@ -1,6 +1,5 @@
 /**
  * AI-designed mixed courses — hybrid localStorage + Neon (via /api/ai-courses).
- * localStorage = instant UI; server = cross-browser sync for same login.
  */
 
 import {
@@ -44,8 +43,7 @@ const KEY_USER = (uid: string) => `eduroute:ai-designed-courses-v1:${uid}`;
 
 function storageKey(): string {
   try {
-    const uid = currentUserId();
-    return KEY_USER(uid);
+    return KEY_USER(currentUserId());
   } catch {
     return KEY;
   }
@@ -118,10 +116,10 @@ function normalizeCourse(raw: any): AiDesignedCourse | null {
   };
 }
 
-/** Merge server courses into local cache (server wins on newer updatedAt). */
 export async function syncAiCoursesFromServer(): Promise<AiDesignedCourse[]> {
   const local = readAiCourses();
-  const res = await apiFetch<any[]>('/ai-courses', { method: 'GET' });
+  const uid = currentUserId();
+  const res = await apiFetch<any[]>(`/ai-courses?userId=${encodeURIComponent(uid)}`, { method: 'GET' });
   if (!res.ok || !Array.isArray(res.data)) return local;
 
   const byId = new Map(local.map((c) => [c.id, c]));
@@ -145,11 +143,13 @@ export async function syncAiCoursesFromServer(): Promise<AiDesignedCourse[]> {
 }
 
 async function pushCourseToServer(course: AiDesignedCourse) {
-  await apiFetch('/ai-courses', {
+  const uid = currentUserId();
+  await apiFetch(`/ai-courses?userId=${encodeURIComponent(uid)}`, {
     method: 'POST',
     body: JSON.stringify({
       id: course.id,
       title: course.title,
+      userId: uid,
       ...course,
     }),
   });
@@ -193,7 +193,10 @@ export function saveAiCourse(course: AiDesignedCourse): AiDesignedCourse {
 
 export function deleteAiCourse(id: string) {
   writeJson(readAiCourses().filter((c) => c.id !== id));
-  void apiFetch(`/ai-courses/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const uid = currentUserId();
+  void apiFetch(`/ai-courses/${encodeURIComponent(id)}?userId=${encodeURIComponent(uid)}`, {
+    method: 'DELETE',
+  });
 }
 
 export function updateCourseTopics(id: string, topics: CourseTopic[]): AiDesignedCourse | null {
@@ -212,47 +215,3 @@ export function updateCourseTopics(id: string, topics: CourseTopic[]): AiDesigne
   void pushCourseToServer(next);
   return next;
 }
-
-export function updateTopicVideoDuration(
-  courseId: string,
-  topicId: string,
-  seconds: number,
-): AiDesignedCourse | null {
-  const list = readAiCourses();
-  const idx = list.findIndex((c) => c.id === courseId);
-  if (idx < 0) return null;
-  const topics = list[idx].topics.map((t) =>
-    t.id === topicId ? { ...t, videoDurationSeconds: Math.round(seconds) } : t,
-  );
-  const next: AiDesignedCourse = {
-    ...list[idx],
-    topics,
-    totalHours: computeMinWatchHours(topics),
-    updatedAt: new Date().toISOString(),
-  };
-  list[idx] = next;
-  writeJson(list);
-  void pushCourseToServer(next);
-  return next;
-}
-
-export const INTEREST_PRESETS = [
-  'DSA',
-  'React',
-  'Node.js',
-  'Golang',
-  'Backend',
-  'Frontend',
-  'Python',
-  'TypeScript',
-  'System Design',
-  'SQL / Databases',
-  'DevOps',
-  'Cybersecurity',
-  'Data Analytics',
-  'Machine Learning',
-  'Mobile (Flutter)',
-  'Cloud (AWS)',
-] as const;
-
-export const DURATION_PRESETS = [3, 15, 30, 60, 90] as const;
