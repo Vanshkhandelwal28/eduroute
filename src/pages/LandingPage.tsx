@@ -1,6 +1,6 @@
 /**
- * EduRoute Landing — cinematic redesign.
- * Hero text reveal is driven here so it never depends on WebGL/Timeline timing.
+ * EduRoute Landing — final cinematic experience.
+ * Story: IDEA → STRUCTURE → TRANSFORM → INTELLIGENCE → CONNECTION → ACTION
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -21,7 +21,6 @@ function revealHeroNow() {
     (el as HTMLElement).style.opacity = '1';
   });
 
-  // Animated polish if GSAP available
   try {
     gsap.fromTo(
       spans,
@@ -29,22 +28,22 @@ function revealHeroNow() {
       {
         yPercent: 0,
         opacity: 1,
-        duration: 1.1,
+        duration: 1.2,
         ease: 'power3.out',
-        stagger: 0.1,
+        stagger: 0.12,
         overwrite: true,
       }
     );
     const body = document.querySelector('#hero .er-body');
     const label = document.querySelector('#hero .er-label');
     if (label) {
-      gsap.fromTo(label, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.7 });
+      gsap.fromTo(label, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.8 });
     }
     if (body) {
       gsap.fromTo(
         body,
         { opacity: 0, y: 14 },
-        { opacity: 1, y: 0, duration: 0.85, delay: 0.25 }
+        { opacity: 1, y: 0, duration: 0.9, delay: 0.3 }
       );
     }
   } catch {
@@ -72,21 +71,19 @@ export const LandingPage = () => {
     try {
       experience = new Experience({ canvas: canvasRef.current });
       experienceRef.current = experience;
-    } catch (err) {
-      console.error('[Landing] Experience failed:', err);
+    } catch {
       document.querySelector('.er-landing')?.classList.add('er-no-webgl');
     }
 
-    // Reveal hero text after loader window — independent of WebGL
+    // Loader → first frame → hero type: one continuous beat
     const revealT = window.setTimeout(() => {
       revealHeroNow();
       loader.dismiss();
-    }, 1000);
+    }, 1100);
 
-    // Absolute fallback if something blocks the first timeout
     const safetyT = window.setTimeout(() => {
       revealHeroNow();
-    }, 2000);
+    }, 2200);
 
     return () => {
       document.body.classList.remove('er-on-landing');
@@ -121,8 +118,9 @@ export const LandingPage = () => {
       </nav>
 
       <main className="er-main">
+        {/* IDEA */}
         <section id="hero" className="er-section er-hero">
-          <p className="er-label">EduRoute</p>
+          <p className="er-label">Idea</p>
           <h1 className="er-title">
             <span className="er-reveal">
               <span>Intelligence</span>
@@ -154,8 +152,9 @@ export const LandingPage = () => {
           <p className="er-scroll-hint">Scroll</p>
         </section>
 
+        {/* STRUCTURE */}
         <section id="manifesto" className="er-section er-manifesto">
-          <p className="er-label">01 — Manifesto</p>
+          <p className="er-label">01 — Structure</p>
           <h2 className="er-title">
             <span className="er-reveal">
               <span>We believe</span>
@@ -175,8 +174,9 @@ export const LandingPage = () => {
           </p>
         </section>
 
+        {/* TRANSFORM */}
         <section id="feature-01" className="er-section er-feature">
-          <p className="er-label">02 — Discover</p>
+          <p className="er-label">02 — Transform</p>
           <h2 className="er-title">
             <span className="er-reveal">
               <span>Know your</span>
@@ -190,8 +190,9 @@ export const LandingPage = () => {
           </p>
         </section>
 
+        {/* INTELLIGENCE */}
         <section id="feature-02" className="er-section er-feature er-feature--right">
-          <p className="er-label">03 — Connect</p>
+          <p className="er-label">03 — Intelligence</p>
           <h2 className="er-title">
             <span className="er-reveal">
               <span>Skills to</span>
@@ -205,8 +206,9 @@ export const LandingPage = () => {
           </p>
         </section>
 
+        {/* CONNECTION */}
         <section id="feature-03" className="er-section er-feature">
-          <p className="er-label">04 — Evolve</p>
+          <p className="er-label">04 — Connection</p>
           <h2 className="er-title">
             <span className="er-reveal">
               <span>Stay ahead</span>
@@ -221,7 +223,7 @@ export const LandingPage = () => {
         </section>
 
         <section id="team" className="er-section">
-          <p className="er-label">05 — Team</p>
+          <p className="er-label">05 — Minds</p>
           <h2 className="er-title">
             <span className="er-reveal">
               <span>Built by</span>
@@ -246,8 +248,9 @@ export const LandingPage = () => {
           </div>
         </section>
 
+        {/* ACTION */}
         <section id="cta" className="er-section er-cta">
-          <p className="er-label">06 — Begin</p>
+          <p className="er-label">06 — Action</p>
           <h2 className="er-title">
             <span className="er-reveal">
               <span>Your route</span>

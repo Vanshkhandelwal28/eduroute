@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Scene from './Scene.js';
 import Camera from './Camera.js';
 import Renderer from './Renderer.js';
@@ -12,14 +13,12 @@ import {
 } from './utils/device.js';
 
 /**
- * Experience — orchestrator with WebGL fallback + performance guards.
+ * Experience — single animation loop, single source of truth.
+ * Final integration: debounced resize, no duplicate RAF, full dispose.
  */
 export default class Experience {
   constructor({ canvas }) {
-    if (!canvas) {
-      console.error('[Experience] canvas element is required');
-      return;
-    }
+    if (!canvas) return;
 
     this.canvas = canvas;
     this.webglOk = isWebGLAvailable();
@@ -28,7 +27,6 @@ export default class Experience {
       height: window.innerHeight,
     };
 
-    // Static fallback when WebGL is unavailable
     if (!this.webglOk) {
       this._showFallback();
       return;
@@ -37,6 +35,8 @@ export default class Experience {
     this.clock = new THREE.Clock();
     this.isVisible = true;
     this._prevTime = 0;
+    this._running = false;
+    this._resizeTimer = null;
     this.reducedMotion = prefersReducedMotion();
 
     this.scene = new Scene();
@@ -48,7 +48,11 @@ export default class Experience {
       renderer: this.renderer.instance,
     });
 
-    // Soften particle motion under reduced-motion
+    // Offset structure to the right so hero typography has clear left space
+    if (this.particles.mesh) {
+      this.particles.mesh.position.set(1.15, 0.05, 0);
+    }
+
     if (this.reducedMotion && this.particles.morph) {
       this.particles.morph.params.noiseStrength = 0.03;
       this.particles.morph.params.scatter = 0;
@@ -69,6 +73,7 @@ export default class Experience {
     });
 
     this.timeline = null;
+    // Build timeline after first paint so DOM sections exist
     requestAnimationFrame(() => {
       this.timeline = new TimelineController({ experience: this });
     });
@@ -77,38 +82,33 @@ export default class Experience {
     this.onVisibilityChange = this.onVisibilityChange.bind(this);
     this.tick = this.tick.bind(this);
 
-    window.addEventListener('resize', this.onResize);
+    window.addEventListener('resize', this.onResize, { passive: true });
     document.addEventListener('visibilitychange', this.onVisibilityChange);
 
+    this._running = true;
     this.tick();
   }
 
   _showFallback() {
-    // Hide broken canvas, rely on CSS dark background + DOM content
-    if (this.canvas) {
-      this.canvas.style.display = 'none';
-    }
-    const landing = document.querySelector('.er-landing');
-    if (landing) {
-      landing.classList.add('er-no-webgl');
-    }
+    if (this.canvas) this.canvas.style.display = 'none';
+    document.querySelector('.er-landing')?.classList.add('er-no-webgl');
   }
 
   onResize() {
     if (!this.webglOk) return;
 
-    this.sizes.width = window.innerWidth;
-    this.sizes.height = window.innerHeight;
+    // Debounce — avoid thrashing ScrollTrigger + composer
+    clearTimeout(this._resizeTimer);
+    this._resizeTimer = setTimeout(() => {
+      this.sizes.width = window.innerWidth;
+      this.sizes.height = window.innerHeight;
 
-    this.camera.resize();
-    this.renderer.resize();
-    this.post?.resize();
+      this.camera.resize();
+      this.renderer.resize();
+      this.post?.resize();
 
-    if (this.timeline) {
-      import('gsap/ScrollTrigger').then(({ ScrollTrigger }) => {
-        ScrollTrigger.refresh();
-      });
-    }
+      ScrollTrigger.refresh();
+    }, 120);
   }
 
   onVisibilityChange() {
@@ -118,34 +118,31 @@ export default class Experience {
     if (this.isVisible) {
       this.clock.start();
       this._prevTime = this.clock.getElapsedTime();
-      this.tick();
-    } else if (this.animationId) {
-      cancelAnimationFrame(this.animationId);
-      this.animationId = null;
+      if (!this._running) {
+        this._running = true;
+        this.tick();
+      }
+    } else {
+      this._running = false;
+      if (this.animationId) {
+        cancelAnimationFrame(this.animationId);
+        this.animationId = null;
+      }
     }
   }
 
   tick() {
-    if (!this.webglOk || !this.isVisible) return;
+    if (!this.webglOk || !this.isVisible || !this._running) return;
 
     const elapsed = this.clock.getElapsedTime();
     const delta = Math.min(elapsed - this._prevTime, 0.05);
     this._prevTime = elapsed;
 
-    if (this.timeline) {
-      this.timeline.update();
-    }
-
+    this.timeline?.update();
     this.camera.update(delta);
     this.scene.update();
-
-    if (this.mouse) {
-      this.mouse.update(delta);
-    }
-
-    if (this.particles) {
-      this.particles.update(elapsed, delta, this.mouse);
-    }
+    this.mouse?.update(delta);
+    this.particles?.update(elapsed, delta, this.mouse);
 
     if (this.post && this.camera?.instance) {
       this.post.setFocus(this.camera.instance.position.length());
@@ -160,6 +157,9 @@ export default class Experience {
   }
 
   destroy() {
+    this._running = false;
+    clearTimeout(this._resizeTimer);
+
     window.removeEventListener('resize', this.onResize);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
 
@@ -168,41 +168,29 @@ export default class Experience {
       this.animationId = null;
     }
 
-    if (this.timeline) {
-      this.timeline.destroy();
-      this.timeline = null;
-    }
+    this.timeline?.destroy();
+    this.timeline = null;
 
-    if (this.post) {
-      this.post.dispose();
-      this.post = null;
-    }
+    this.post?.dispose();
+    this.post = null;
 
-    if (this.mouse) {
-      this.mouse.dispose();
-      this.mouse = null;
-    }
+    this.mouse?.dispose();
+    this.mouse = null;
 
-    if (this.particles) {
-      this.particles.dispose();
-      this.particles = null;
-    }
+    this.particles?.dispose();
+    this.particles = null;
 
-    if (this.renderer) {
-      this.renderer.dispose();
-    }
+    this.renderer?.dispose();
 
-    if (this.scene?.instance) {
-      this.scene.instance.traverse((obj) => {
-        if (obj.geometry) obj.geometry.dispose();
-        if (obj.material) {
-          if (Array.isArray(obj.material)) {
-            obj.material.forEach((m) => m.dispose());
-          } else {
-            obj.material.dispose();
-          }
+    this.scene?.instance?.traverse((obj) => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach((m) => m.dispose());
+        } else {
+          obj.material.dispose();
         }
-      });
-    }
+      }
+    });
   }
 }
