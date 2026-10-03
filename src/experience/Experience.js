@@ -5,10 +5,11 @@ import Renderer from './Renderer.js';
 import Particles from './particles/Particles.js';
 import MouseInteraction from './interaction/MouseInteraction.js';
 import TimelineController from './animation/Timeline.js';
+import PostProcessing from './postprocessing/PostProcessing.js';
 
 /**
  * Experience — orchestrator.
- * Phase 8: Camera owns damped state interpolation; Timeline sets targets.
+ * Phase 9: PostProcessing pipeline.
  */
 export default class Experience {
   constructor({ canvas }) {
@@ -41,6 +42,14 @@ export default class Experience {
       sizes: this.sizes,
     });
 
+    // Phase 9 — post-processing
+    this.post = new PostProcessing({
+      renderer: this.renderer.instance,
+      scene: this.scene.instance,
+      camera: this.camera.instance,
+      sizes: this.sizes,
+    });
+
     this.timeline = null;
     requestAnimationFrame(() => {
       this.timeline = new TimelineController({ experience: this });
@@ -62,6 +71,7 @@ export default class Experience {
 
     this.camera.resize();
     this.renderer.resize();
+    this.post?.resize();
 
     if (this.timeline) {
       import('gsap/ScrollTrigger').then(({ ScrollTrigger }) => {
@@ -86,12 +96,10 @@ export default class Experience {
     const delta = Math.min(elapsed - this._prevTime, 0.05);
     this._prevTime = elapsed;
 
-    // Timeline sets camera targets + morph params
     if (this.timeline) {
       this.timeline.update();
     }
 
-    // Camera damps toward targets (cinematic lag)
     this.camera.update(delta);
     this.scene.update();
 
@@ -103,7 +111,17 @@ export default class Experience {
       this.particles.update(elapsed, delta, this.mouse);
     }
 
-    this.renderer.update(this.scene.instance, this.camera.instance);
+    // Keep DOF focus near camera distance to particle origin
+    if (this.post && this.camera?.instance) {
+      const dist = this.camera.instance.position.length();
+      this.post.setFocus(dist);
+    }
+
+    // Post-processing render (falls back to direct if disabled)
+    const rendered = this.post?.render(elapsed);
+    if (!rendered) {
+      this.renderer.update(this.scene.instance, this.camera.instance);
+    }
 
     this.animationId = requestAnimationFrame(this.tick);
   }
@@ -119,6 +137,11 @@ export default class Experience {
     if (this.timeline) {
       this.timeline.destroy();
       this.timeline = null;
+    }
+
+    if (this.post) {
+      this.post.dispose();
+      this.post = null;
     }
 
     if (this.mouse) {
