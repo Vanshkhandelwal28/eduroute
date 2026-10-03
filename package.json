@@ -38,6 +38,7 @@
     "jest": "^30.2.0",
     "jsonwebtoken": "^9.0.3",
     "lenis": "^1.2.3",
+    "lil-gui": "^0.20.0",
     "lucide-react": "^0.563.0",
     "mongoose": "^9.1.6",
     "multer": "^2.0.2",
