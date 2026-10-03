@@ -1,5 +1,6 @@
 /**
- * AI-designed mixed courses — hybrid localStorage + Neon (via /api/ai-courses).
+ * AI-designed mixed courses — localStorage + Neon on Render.
+ * Always targets Render first so cross-browser works without Netlify rewrites.
  */
 
 import {
@@ -40,6 +41,7 @@ export type AiDesignedCourse = {
 
 const KEY = 'eduroute:ai-designed-courses-v1';
 const KEY_USER = (uid: string) => `eduroute:ai-designed-courses-v1:${uid}`;
+const RENDER = 'https://eduroute-api-nho4.onrender.com';
 
 function storageKey(): string {
   try {
@@ -116,14 +118,55 @@ function normalizeCourse(raw: any): AiDesignedCourse | null {
   };
 }
 
+function courseUrls(uid: string, id?: string): string[] {
+  const q = `userId=${encodeURIComponent(uid)}`;
+  if (id) {
+    return [
+      `${RENDER}/api/ai-courses/${encodeURIComponent(id)}?${q}`,
+      `/api/ai-courses/${encodeURIComponent(id)}?${q}`,
+    ];
+  }
+  return [`${RENDER}/api/ai-courses?${q}`, `/api/ai-courses?${q}`, `/.netlify/functions/ai-courses?${q}`];
+}
+
 export async function syncAiCoursesFromServer(): Promise<AiDesignedCourse[]> {
   const local = readAiCourses();
   const uid = currentUserId();
-  const res = await apiFetch<any[]>(`/ai-courses?userId=${encodeURIComponent(uid)}`, { method: 'GET' });
-  if (!res.ok || !Array.isArray(res.data)) return local;
+
+  // Prefer apiFetch (uses Render base) then explicit absolute URLs
+  const res = await apiFetch<any[]>(`/api/ai-courses?userId=${encodeURIComponent(uid)}`, {
+    method: 'GET',
+  });
+  let rows: any[] | null = res.ok && Array.isArray(res.data) ? res.data : null;
+
+  if (!rows) {
+    for (const url of courseUrls(uid)) {
+      try {
+        const r = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Id': uid,
+          },
+        });
+        const ct = r.headers.get('content-type') || '';
+        if (!r.ok || !ct.includes('application/json')) continue;
+        const body = await r.json();
+        const data = body?.data ?? body;
+        if (Array.isArray(data)) {
+          rows = data;
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  if (!rows) return local;
 
   const byId = new Map(local.map((c) => [c.id, c]));
-  for (const row of res.data) {
+  for (const row of rows) {
     const c = normalizeCourse(row);
     if (!c) continue;
     const prev = byId.get(c.id);
@@ -144,14 +187,31 @@ export async function syncAiCoursesFromServer(): Promise<AiDesignedCourse[]> {
 
 async function pushCourseToServer(course: AiDesignedCourse) {
   const uid = currentUserId();
-  await apiFetch(`/ai-courses?userId=${encodeURIComponent(uid)}`, {
+  const body = JSON.stringify({
+    id: course.id,
+    title: course.title,
+    userId: uid,
+    ...course,
+  });
+
+  // Direct Render first
+  try {
+    const r = await fetch(`${RENDER}/api/ai-courses?userId=${encodeURIComponent(uid)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': uid,
+      },
+      body,
+    });
+    if (r.ok) return;
+  } catch {
+    /* fall through */
+  }
+
+  await apiFetch(`/api/ai-courses?userId=${encodeURIComponent(uid)}`, {
     method: 'POST',
-    body: JSON.stringify({
-      id: course.id,
-      title: course.title,
-      userId: uid,
-      ...course,
-    }),
+    body,
   });
 }
 
@@ -194,9 +254,10 @@ export function saveAiCourse(course: AiDesignedCourse): AiDesignedCourse {
 export function deleteAiCourse(id: string) {
   writeJson(readAiCourses().filter((c) => c.id !== id));
   const uid = currentUserId();
-  void apiFetch(`/ai-courses/${encodeURIComponent(id)}?userId=${encodeURIComponent(uid)}`, {
+  void fetch(`${RENDER}/api/ai-courses/${encodeURIComponent(id)}?userId=${encodeURIComponent(uid)}`, {
     method: 'DELETE',
-  });
+    headers: { 'X-User-Id': uid },
+  }).catch(() => undefined);
 }
 
 export function updateCourseTopics(id: string, topics: CourseTopic[]): AiDesignedCourse | null {
