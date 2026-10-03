@@ -1,201 +1,256 @@
-import { useRef, useMemo, useEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+/**
+ * Faithful port of kekkorider/threejs-dala (Dala.ai WebGL module)
+ * - brain.glb vertices → instanced micro-cubes
+ * - custom vertex shader: distance(uPointer) → scale + rotate
+ * - raycast on brain mesh · camera parallax
+ * Assets: https://github.com/kekkorider/threejs-dala
+ */
+import { useRef, useMemo, useEffect, useState, Suspense } from 'react';
+import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
-/**
- * Realistic Dala-style particle brain.
- * Dual hemispheres + longitudinal fissure + gyri noise on a surface shell
- * (like GLTF vertex sampling). Tiny wireframe cubes, distance-field hover,
- * camera parallax. Palette matches threejs-dala replica.
- */
+// CDN of original static/brain.glb from threejs-dala
+const BRAIN_URL =
+  'https://cdn.jsdelivr.net/gh/kekkorider/threejs-dala@main/static/brain.glb';
 
-const COUNT = 3600;
-const COLORS = ['#963CBD', '#FF6F61', '#C5299B', '#FEAE51', '#d4b0e8', '#ffffff'];
+const COLORS = [
+  new THREE.Color(0x963cbd),
+  new THREE.Color(0xff6f61),
+  new THREE.Color(0xc5299b),
+  new THREE.Color(0xfeae51),
+];
 
-/** Sample a point on a brain-like surface (two lobes + wrinkles). */
-function sampleBrainPoint(out: THREE.Vector3): void {
-  // Which hemisphere
-  const side = Math.random() < 0.5 ? -1 : 1;
+const vertexShader = /* glsl */ `
+uniform vec3 uPointer;
+uniform float uHover;
 
-  // Parametric ellipsoid for one lobe
-  const u = Math.random() * Math.PI * 2;
-  const v = Math.acos(2 * Math.random() - 1);
+attribute float aRotation;
+attribute float aSize;
+attribute vec3 aColor;
 
-  // Surface shell (not filled volume) — Dala uses mesh vertices
-  const rx = 0.42 + Math.random() * 0.06;
-  const ry = 0.52 + Math.random() * 0.05;
-  const rz = 0.38 + Math.random() * 0.05;
+varying vec3 vColor;
 
-  let x = rx * Math.sin(v) * Math.cos(u);
-  let y = ry * Math.cos(v);
-  let z = rz * Math.sin(v) * Math.sin(u);
+#define PI 3.14159265359
 
-  // Offset lobe away from mid-sagittal plane (fissure gap)
-  x = x * 0.85 + side * 0.28;
-
-  // Flatten underside slightly (brain sits on brainstem-ish)
-  if (y < -0.15) y *= 0.72;
-
-  // Gyri / sulci: multi-frequency noise along the surface
-  const gyri =
-    0.035 * Math.sin(u * 6 + v * 4) +
-    0.028 * Math.sin(u * 11 - v * 7) +
-    0.02 * Math.cos(u * 3 + v * 9) +
-    0.015 * Math.sin((x + y) * 14);
-
-  const len = Math.sqrt(x * x + y * y + z * z) || 1;
-  const n = 1 + gyri / len;
-  x *= n;
-  y *= n;
-  z *= n;
-
-  // Slight forward frontal lobe bias
-  z += 0.06 * Math.max(0, y + 0.2);
-
-  // Tiny random jitter
-  x += (Math.random() - 0.5) * 0.02;
-  y += (Math.random() - 0.5) * 0.02;
-  z += (Math.random() - 0.5) * 0.02;
-
-  out.set(x, y, z);
+mat2 rotate(float angle) {
+  float s = sin(angle);
+  float c = cos(angle);
+  return mat2(c, -s, s, c);
 }
 
-function BrainParticles({ ready }: { ready: boolean }) {
-  const mesh = useRef<THREE.InstancedMesh>(null);
-  const { viewport, pointer, camera } = useThree();
-  const dummy = useMemo(() => new THREE.Object3D(), []);
+void main() {
+  vec4 mvPosition = vec4(position, 1.0);
+  mvPosition = instanceMatrix * mvPosition;
+
+  float d = distance(uPointer, mvPosition.xyz);
+  float c = smoothstep(0.45, 0.1, d);
+
+  float scale = aSize + c * 8.0 * uHover;
+  vec3 pos = position;
+  pos *= scale;
+  pos.xz *= rotate(PI * c * aRotation + PI * aRotation * 0.43);
+  pos.xy *= rotate(PI * c * aRotation + PI * aRotation * 0.71);
+
+  mvPosition = instanceMatrix * vec4(pos, 1.0);
+  gl_Position = projectionMatrix * modelViewMatrix * mvPosition;
+  vColor = aColor;
+}
+`;
+
+const fragmentShader = /* glsl */ `
+varying vec3 vColor;
+void main() {
+  gl_FragColor = vec4(vColor, 1.0);
+}
+`;
+
+function BrainInstances({ ready }: { ready: boolean }) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const brainRef = useRef<THREE.Mesh | null>(null);
+  const { camera, size, pointer } = useThree();
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const mouse = useMemo(() => new THREE.Vector2(), []);
+  const targetPoint = useRef(new THREE.Vector3());
+  const smoothPoint = useRef(new THREE.Vector3());
+  const hoverRef = useRef(0);
+  const targetHover = useRef(0);
   const targetCam = useRef({ x: 0, y: 0 });
-  const pointer3 = useRef(new THREE.Vector3());
-  const tmp = useMemo(() => new THREE.Vector3(), []);
 
-  const palette = useMemo(() => COLORS.map((c) => new THREE.Color(c)), []);
+  const gltf = useGLTF(BRAIN_URL);
 
-  const { pos, baseScale, rotSeed, col } = useMemo(() => {
-    const pos = new Float32Array(COUNT * 3);
-    const baseScale = new Float32Array(COUNT);
-    const rotSeed = new Float32Array(COUNT);
-    const col = new Uint8Array(COUNT);
-    const p = new THREE.Vector3();
+  const { count, material, geometry } = useMemo(() => {
+    // Find first mesh with position attribute
+    let brainMesh: THREE.Mesh | null = null;
+    gltf.scene.traverse((obj) => {
+      if (!brainMesh && (obj as THREE.Mesh).isMesh) {
+        brainMesh = obj as THREE.Mesh;
+      }
+    });
+    brainRef.current = brainMesh;
 
-    for (let i = 0; i < COUNT; i++) {
-      sampleBrainPoint(p);
-      pos[i * 3] = p.x;
-      pos[i * 3 + 1] = p.y;
-      pos[i * 3 + 2] = p.z;
-      // Dala: randFloat(0.3, 3) relative size — keep small absolute cubes
-      baseScale[i] = 0.005 + Math.random() * 0.012;
-      rotSeed[i] = (Math.random() * 2 - 1) * Math.PI;
-      col[i] = Math.floor(Math.random() * palette.length);
+    const positions = brainMesh?.geometry?.attributes?.position;
+    const count = positions ? positions.count : 2000;
+
+    const geo = new THREE.BoxGeometry(0.004, 0.004, 0.004);
+    const aRotation = new Float32Array(count);
+    const aSize = new Float32Array(count);
+    const aColor = new Float32Array(count * 3);
+
+    for (let i = 0; i < count; i++) {
+      aRotation[i] = THREE.MathUtils.randFloat(-1, 1);
+      aSize[i] = THREE.MathUtils.randFloat(0.3, 3);
+      const col = COLORS[Math.floor(Math.random() * COLORS.length)];
+      aColor[i * 3] = col.r;
+      aColor[i * 3 + 1] = col.g;
+      aColor[i * 3 + 2] = col.b;
     }
-    return { pos, baseScale, rotSeed, col };
-  }, [palette.length]);
 
+    geo.setAttribute('aRotation', new THREE.InstancedBufferAttribute(aRotation, 1));
+    geo.setAttribute('aSize', new THREE.InstancedBufferAttribute(aSize, 1));
+    geo.setAttribute('aColor', new THREE.InstancedBufferAttribute(aColor, 3));
+
+    const mat = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      wireframe: true,
+      uniforms: {
+        uPointer: { value: new THREE.Vector3() },
+        uHover: { value: 0 },
+      },
+    });
+
+    return { count, material: mat, geometry: geo, brainMesh, positions };
+  }, [gltf]);
+
+  // Place instances on brain vertices (exactly like threejs-dala)
   useEffect(() => {
-    if (!mesh.current) return;
-    for (let i = 0; i < COUNT; i++) {
-      dummy.position.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
-      dummy.scale.setScalar(0.0003);
+    const mesh = meshRef.current;
+    if (!mesh || !brainRef.current) return;
+
+    const positions = brainRef.current.geometry.attributes.position;
+    const dummy = new THREE.Object3D();
+
+    for (let i = 0; i < count; i++) {
+      dummy.position.set(
+        positions.getX(i),
+        positions.getY(i),
+        positions.getZ(i),
+      );
       dummy.updateMatrix();
-      mesh.current.setMatrixAt(i, dummy.matrix);
-      mesh.current.setColorAt(i, palette[col[i]]);
+      mesh.setMatrixAt(i, dummy.matrix);
     }
-    mesh.current.instanceMatrix.needsUpdate = true;
-    if (mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true;
-  }, [pos, col, palette, dummy]);
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [count, gltf]);
 
   useFrame((state) => {
-    if (!mesh.current) return;
-    const t = state.clock.elapsedTime;
+    const mesh = meshRef.current;
+    if (!mesh) return;
 
-    // Smooth camera parallax (Dala ~0.15 / 0.1)
-    targetCam.current.x = pointer.x * 0.18;
-    targetCam.current.y = pointer.y * 0.11;
-    camera.position.x += (targetCam.current.x - camera.position.x) * 0.05;
-    camera.position.y += (targetCam.current.y - camera.position.y) * 0.05;
-    camera.position.z = 2.15;
-    camera.lookAt(0, 0.02, 0);
+    // Camera parallax (GSAP equivalent in threejs-dala)
+    const x = pointer.x;
+    const y = pointer.y;
+    targetCam.current.x = x * 0.15;
+    targetCam.current.y = y * 0.1;
+    camera.position.x += (targetCam.current.x - camera.position.x) * 0.08;
+    camera.position.y += (targetCam.current.y - camera.position.y) * 0.08;
+    camera.position.z = size.width < 767 ? 2.3 : 1.2;
+    camera.lookAt(0, 0, 0);
 
-    // Project pointer into particle space for distance field
-    pointer3.current.set(
-      pointer.x * viewport.width * 0.32,
-      pointer.y * viewport.height * 0.32,
-      0,
-    );
+    // Raycast against brain
+    mouse.set(pointer.x, pointer.y);
+    raycaster.setFromCamera(mouse, camera);
 
-    const appear = ready ? Math.min(1, Math.max(0, (t - 0.15) * 0.5)) : 0;
-    const hover = ready ? 1 : 0;
-
-    for (let i = 0; i < COUNT; i++) {
-      const ix = i * 3;
-      const bx = pos[ix];
-      const by = pos[ix + 1];
-      const bz = pos[ix + 2];
-
-      tmp.set(bx, by, bz);
-      const dist = tmp.distanceTo(pointer3.current);
-      // smoothstep(0.5, 0.12, d)
-      const c = THREE.MathUtils.smoothstep(0.12, 0.52, dist);
-      const influence = (1 - c) * hover;
-
-      // scale = uSize + c * 8 * uHover
-      const s = baseScale[i] * appear * (1 + influence * 6.5);
-
-      // Subtle organic drift
-      const breath = Math.sin(t * 0.5 + rotSeed[i]) * 0.006;
-      const driftX = Math.sin(t * 0.28 + rotSeed[i] * 1.3) * 0.005;
-      const driftZ = Math.cos(t * 0.24 + rotSeed[i]) * 0.005;
-
-      dummy.position.set(bx + driftX, by + breath, bz + driftZ);
-
-      // Rotation intensifies near cursor (Dala rotate in xz/xy)
-      const spin = rotSeed[i] + t * 0.2 + influence * Math.PI * 1.4;
-      dummy.rotation.set(
-        spin * 0.55 + influence * 0.8,
-        spin * 0.9,
-        spin * 0.35 + influence * 0.5,
-      );
-      dummy.scale.setScalar(Math.max(0.0003, s));
-      dummy.updateMatrix();
-      mesh.current.setMatrixAt(i, dummy.matrix);
+    if (brainRef.current) {
+      const hits = raycaster.intersectObject(brainRef.current);
+      if (hits.length > 0 && hits[0]) {
+        targetHover.current = ready ? 1 : 0;
+        targetPoint.current.copy(hits[0].point);
+      } else {
+        targetHover.current = 0;
+      }
     }
 
-    mesh.current.instanceMatrix.needsUpdate = true;
-    // Slow whole-brain turn
-    mesh.current.rotation.y = t * 0.04;
-    mesh.current.rotation.x = Math.sin(t * 0.08) * 0.04;
+    // Smooth point + hover (GSAP duration ~0.25–0.3)
+    smoothPoint.current.lerp(targetPoint.current, 0.15);
+    hoverRef.current += (targetHover.current - hoverRef.current) * 0.12;
+
+    const mat = mesh.material as THREE.ShaderMaterial;
+    mat.uniforms.uPointer.value.copy(smoothPoint.current);
+    mat.uniforms.uHover.value = hoverRef.current * (ready ? 1 : 0);
   });
 
-  const geo = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
-
+  // Invisible brain for raycasting only (not rendered)
   return (
-    <instancedMesh ref={mesh} args={[geo, undefined, COUNT]}>
-      {/* Wireframe reads closer to Dala replica cubes */}
-      <meshBasicMaterial toneMapped={false} wireframe transparent opacity={0.92} />
-    </instancedMesh>
+    <>
+      {brainRef.current && (
+        <mesh
+          geometry={brainRef.current.geometry}
+          visible={false}
+          raycast={brainRef.current.raycast.bind(brainRef.current)}
+        >
+          <meshBasicMaterial />
+        </mesh>
+      )}
+      <instancedMesh
+        ref={meshRef}
+        args={[geometry, material, count]}
+        frustumCulled={false}
+      />
+    </>
   );
 }
 
 function Scene({ ready }: { ready: boolean }) {
   return (
-    <>
-      <ambientLight intensity={1} />
-      <BrainParticles ready={ready} />
-    </>
+    <Suspense fallback={null}>
+      <BrainInstances ready={ready} />
+    </Suspense>
   );
 }
 
+// Preload GLB
+useGLTF.preload(BRAIN_URL);
+
 export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
+  const [webglOk, setWebglOk] = useState(true);
+
+  useEffect(() => {
+    try {
+      const c = document.createElement('canvas');
+      const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+      if (!gl) setWebglOk(false);
+    } catch {
+      setWebglOk(false);
+    }
+  }, []);
+
+  if (!webglOk) {
+    return (
+      <div
+        className="absolute inset-0 z-0"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 40%, #692a84 0%, #3c184c 55%, #0a0a0a 100%)',
+        }}
+      />
+    );
+  }
+
   return (
     <div className="absolute inset-0 z-0">
       <Canvas
-        camera={{ position: [0, 0.05, 2.15], fov: 50, near: 0.1, far: 50 }}
-        dpr={[1, 1.75]}
+        camera={{ position: [0, 0, 1.2], fov: 75, near: 0.1, far: 100 }}
+        dpr={[1, 1.5]}
         gl={{
-          antialias: true,
+          antialias: typeof window !== 'undefined' ? window.devicePixelRatio === 1 : true,
           alpha: true,
           powerPreference: 'high-performance',
         }}
         style={{ background: 'transparent' }}
+        onCreated={({ gl }) => {
+          gl.setClearColor(0x000000, 0);
+        }}
       >
         <Scene ready={ready} />
       </Canvas>
@@ -203,7 +258,7 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse 70% 60% at 50% 45%, transparent 0%, transparent 30%, rgba(0,0,0,0.35) 58%, rgba(0,0,0,0.88) 100%)',
+            'radial-gradient(ellipse 75% 65% at 50% 42%, transparent 0%, transparent 28%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.9) 100%)',
         }}
       />
     </div>
