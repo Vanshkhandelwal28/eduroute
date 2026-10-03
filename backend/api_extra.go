@@ -439,7 +439,3 @@ func (s *Server) aiCourseByID(w http.ResponseWriter, r *http.Request, id string)
 	}
 	failure(w, 405, "Method not allowed")
 }
-
-func randID() string {
-	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), time.Now().Unix()%1000)
-}
