@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "npm install --prefix netlify/functions && vite build",
-    "preview": "vite preview"
+    "dev": "node scripts/fetch-brain.mjs && vite",
+    "build": "node scripts/fetch-brain.mjs && npm install --prefix netlify/functions && vite build",
+    "preview": "vite preview",
+    "fetch-brain": "node scripts/fetch-brain.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
