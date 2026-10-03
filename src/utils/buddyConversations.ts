@@ -1,6 +1,6 @@
 /**
- * Multi-conversation store for AI Buddy (ChatGPT-style history).
- * Frontend-only localStorage — does not change backend/API setup.
+ * Multi-conversation store for AI Buddy.
+ * Hybrid: localStorage cache + Neon sync via /api/buddy/sync (same userId → cross-browser).
  */
 
 import type { BuddyMessage } from '../types/buddy';
@@ -58,6 +58,90 @@ function writeStore(userId: string, store: ConversationStore) {
   } catch {
     /* quota / private mode */
   }
+  // Fire-and-forget server sync for cross-browser
+  void pushStoreToServer(userId, store);
+}
+
+function authHeaders(): HeadersInit {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const token =
+      localStorage.getItem('eduroute_token') ||
+      localStorage.getItem('token') ||
+      localStorage.getItem('authToken');
+    if (token && !token.startsWith('open-') && !token.startsWith('pending-') && token.includes('.')) {
+      h.Authorization = `Bearer ${token}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return h;
+}
+
+async function pushStoreToServer(userId: string, store: ConversationStore) {
+  if (!userId || typeof fetch === 'undefined') return;
+  try {
+    await fetch(`/api/buddy/sync`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        userId,
+        conversations: store.conversations,
+        activeId: store.activeId,
+      }),
+    });
+  } catch {
+    /* offline ok — localStorage still works */
+  }
+}
+
+/** Pull from Neon; merge if server has more/newer chats. Call on Buddy page mount. */
+export async function pullConversationsFromServer(userId: string): Promise<ConversationStore> {
+  const local = readStore(userId);
+  if (!userId || typeof fetch === 'undefined') return local;
+
+  try {
+    const res = await fetch(`/api/buddy/sync?userId=${encodeURIComponent(userId)}`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) return local;
+    const envelope = await res.json();
+    const data = envelope?.data ?? envelope;
+    if (!data || data.empty) return local;
+
+    const remoteConversations = Array.isArray(data.conversations) ? data.conversations : [];
+    if (remoteConversations.length === 0) return local;
+
+    // Prefer server when it has more user messages or more conversations
+    const localUserMsgs = local.conversations.reduce(
+      (n, c) => n + c.messages.filter((m) => m.role === 'user').length,
+      0,
+    );
+    const remoteUserMsgs = remoteConversations.reduce(
+      (n: number, c: BuddyConversation) =>
+        n + (Array.isArray(c.messages) ? c.messages.filter((m) => m.role === 'user').length : 0),
+      0,
+    );
+
+    if (remoteUserMsgs >= localUserMsgs || remoteConversations.length > local.conversations.length) {
+      const merged: ConversationStore = {
+        conversations: remoteConversations as BuddyConversation[],
+        activeId:
+          typeof data.activeId === 'string'
+            ? data.activeId
+            : remoteConversations[0]?.id ?? null,
+      };
+      try {
+        window.localStorage.setItem(STORAGE_KEY(userId), JSON.stringify(merged));
+      } catch {
+        /* ignore */
+      }
+      return merged;
+    }
+  } catch {
+    /* keep local */
+  }
+  return local;
 }
 
 function newId() {
@@ -71,7 +155,6 @@ function titleFromMessages(messages: BuddyMessage[]): string {
   return t.length > 48 ? `${t.slice(0, 48)}…` : t;
 }
 
-/** Ensure user has at least one active conversation; returns store + active. */
 export function ensureActiveConversation(userId: string): {
   store: ConversationStore;
   active: BuddyConversation;
@@ -97,8 +180,7 @@ export function ensureActiveConversation(userId: string): {
 }
 
 export function listConversations(userId: string): BuddyConversation[] {
-  const { store } = ensureActiveConversation(userId);
-  return [...store.conversations].sort((a, b) => b.updatedAt - a.updatedAt);
+  return readStore(userId).conversations.slice().sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function getActiveConversation(userId: string): BuddyConversation {
@@ -106,12 +188,16 @@ export function getActiveConversation(userId: string): BuddyConversation {
 }
 
 export function saveActiveMessages(userId: string, messages: BuddyMessage[]): BuddyConversation {
-  const { store, active } = ensureActiveConversation(userId);
-  const hasUserMsg = messages.some((m) => m.role === 'user');
+  const store = readStore(userId);
+  let active = store.conversations.find((c) => c.id === store.activeId);
+  if (!active) {
+    const created = ensureActiveConversation(userId);
+    active = created.active;
+  }
   const updated: BuddyConversation = {
     ...active,
     messages,
-    title: hasUserMsg ? titleFromMessages(messages) : active.title || 'New chat',
+    title: titleFromMessages(messages),
     updatedAt: Date.now(),
   };
   store.conversations = store.conversations.map((c) => (c.id === updated.id ? updated : c));
@@ -120,12 +206,10 @@ export function saveActiveMessages(userId: string, messages: BuddyMessage[]): Bu
   return updated;
 }
 
-/** Archive current (if it has user messages), start a fresh chat. */
 export function startNewConversation(userId: string): BuddyConversation {
   const store = readStore(userId);
   const current = store.conversations.find((c) => c.id === store.activeId);
 
-  // Drop empty "New chat" shells that were never used
   if (current && !current.messages.some((m) => m.role === 'user')) {
     store.conversations = store.conversations.filter((c) => c.id !== current.id);
   }
