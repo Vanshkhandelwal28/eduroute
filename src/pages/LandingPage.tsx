@@ -4,90 +4,75 @@ import { AuthModal } from '../components/AuthModal';
 import { DalaBrainHero } from '../components/DalaBrainHero';
 
 /* ================================================================
-   EDUROUTE Landing — Dala visual language (dala.craftedbygc.com)
-   Pure black · light editorial type · sparse nav · scroll manifesto
-   Interactive particle brain · loading gate · line-by-line reveals
+   EDUROUTE × Dala
+   Black canvas · light type · particle brain hero · scroll manifesto
    ================================================================ */
 
 const NAV = [
   { label: 'Manifesto', href: '#manifesto' },
-  { label: 'How it works', href: '#how-it-works' },
+  { label: 'Product', href: '#product' },
   { label: 'Roadmaps', href: '/roadmaps' },
-  { label: 'Get Started', href: '#get-started', cta: true as const },
+  { label: 'Request access', href: '#get-started', cta: true as const },
 ];
 
 const STATS = [
-  { n: '45K+', l: 'Active Learners' },
+  { n: '45K+', l: 'Learners' },
   { n: '80+', l: 'Roadmaps' },
-  { n: '500+', l: 'Opportunities' },
+  { n: '500+', l: 'Roles' },
   { n: '120+', l: 'Hackathons' },
 ];
 
 const STEPS = [
-  { n: '01', t: 'Sign up', b: 'Create a free account and pick the track you care about.' },
-  { n: '02', t: 'Skill quiz', b: 'Answer a short quiz so we map your skill gaps with clarity.' },
-  { n: '03', t: 'Get your path', b: 'Follow a personal roadmap, practice, and apply with confidence.' },
+  { n: '01', t: 'Sign up', b: 'Create a free account and choose the track you care about.' },
+  { n: '02', t: 'Skill quiz', b: 'A short quiz maps your gaps with clarity — no fluff.' },
+  { n: '03', t: 'Your path', b: 'Follow a personal roadmap, practice, and apply with confidence.' },
 ];
 
 const FEATURES = [
   {
-    t: 'Skill Assessment & Analysis',
-    b: 'Take industry-aligned tests, get your skill profile and discover strengths and gaps.',
-    h: '8.5/10 Overall',
+    t: 'Skill assessment',
+    b: 'Industry-aligned tests. See strengths, gaps, and what to learn next.',
   },
   {
-    t: 'Personalized Learning Path',
-    b: 'AI-powered roadmaps and curated resources to bridge gaps and reach your goals.',
-    h: 'Beginner → Intermediate',
+    t: 'Personal roadmaps',
+    b: 'AI-shaped paths and curated resources from beginner to hire-ready.',
   },
   {
-    t: 'Internships & Jobs',
-    b: 'Verified openings from top companies. Apply and track progress in one place.',
-    h: 'Google · Microsoft · TCS',
+    t: 'Internships & jobs',
+    b: 'Verified openings. Apply and track progress in one place.',
   },
   {
-    t: 'Hackathons & Compete',
-    b: 'Showcase skills, win rewards, and build a portfolio that hiring managers notice.',
-    h: 'Win & Showcase',
+    t: 'Hackathons',
+    b: 'Compete, ship, and build a portfolio hiring managers notice.',
   },
 ];
 
-/** Manifesto lines — each reveals on scroll (Dala .js-manifesto-p pattern) */
-const MANIFESTO_LINES = [
-  'This is learning today. Countless fragments of guidance scattered across courses, Discord threads, and outdated roadmaps.',
-  'Hours disappear trying to organise what to learn next — and whether it even matters for the role you want.',
-  'The impossible battle to make sense of this chaos leaves learners overwhelmed and stuck.',
-  'They face the anxiety of bothering mentors again, or applying with incomplete context and half-built portfolios.',
-  'Existing platforms teach or list jobs — almost never both, and almost never with a clear personal path.',
-  'They fail to understand what you need from the vast noise of tech content created every day.',
+const MANIFESTO = [
+  'This is learning today. Fragments of guidance scattered across courses, threads, and outdated roadmaps.',
+  'Hours vanish organising what to learn next — and whether it even matters for the role you want.',
+  'Making sense of the chaos leaves people overwhelmed and stuck.',
+  'The anxiety of asking again. Applying with incomplete context. Half-built portfolios.',
+  'Platforms teach or list jobs — almost never both, and almost never with a personal path.',
+  'They fail to understand what you need from the noise created every day.',
 ];
 
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
+function useReducedMotion() {
+  const [r, setR] = useState(false);
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
+    if (!window.matchMedia) return;
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const apply = () => setReduced(mq.matches);
-    apply();
-    mq.addEventListener?.('change', apply);
-    return () => mq.removeEventListener?.('change', apply);
+    const fn = () => setR(mq.matches);
+    fn();
+    mq.addEventListener?.('change', fn);
+    return () => mq.removeEventListener?.('change', fn);
   }, []);
-  return reduced;
+  return r;
 }
 
-/** Scroll-reveal wrapper — opacity + rise when section enters viewport */
-function Reveal({
-  children,
-  className = '',
-  delay = 0,
-}: {
-  children: ReactNode;
-  className?: string;
-  delay?: number;
-}) {
+function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [on, setOn] = useState(false);
-  const reduced = usePrefersReducedMotion();
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     if (reduced) {
@@ -95,7 +80,7 @@ function Reveal({
       return;
     }
     const el = ref.current;
-    if (!el || typeof IntersectionObserver === 'undefined') {
+    if (!el || !('IntersectionObserver' in window)) {
       setOn(true);
       return;
     }
@@ -106,7 +91,7 @@ function Reveal({
           io.disconnect();
         }
       },
-      { threshold: 0.18, rootMargin: '0px 0px -8% 0px' },
+      { threshold: 0.15, rootMargin: '0px 0px -6% 0px' },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -118,10 +103,10 @@ function Reveal({
       className={className}
       style={{
         opacity: on ? 1 : 0,
-        transform: on ? 'translateY(0)' : 'translateY(28px)',
+        transform: on ? 'none' : 'translate3d(0, 32px, 0)',
         transition: reduced
           ? 'none'
-          : `opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1) ${delay}ms, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) ${delay}ms`,
+          : `opacity 1s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 1s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
       }}
     >
       {children}
@@ -130,48 +115,47 @@ function Reveal({
 }
 
 export const LandingPage = () => {
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [auth, setAuth] = useState(false);
   const [phase, setPhase] = useState<'loading' | 'ready'>('loading');
-  const [showText, setShowText] = useState(false);
+  const [heroIn, setHeroIn] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const reduced = usePrefersReducedMotion();
+  const reduced = useReducedMotion();
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase('ready'), reduced ? 200 : 1600);
-    const t2 = setTimeout(() => setShowText(true), reduced ? 300 : 2000);
+    const a = setTimeout(() => setPhase('ready'), reduced ? 100 : 1700);
+    const b = setTimeout(() => setHeroIn(true), reduced ? 150 : 2100);
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
+      clearTimeout(a);
+      clearTimeout(b);
     };
   }, [reduced]);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
+    const onScroll = () => setScrolled(window.scrollY > 24);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white antialiased selection:bg-white/20">
-      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+    <div className="min-h-screen bg-black text-white antialiased selection:bg-[#963CBD]/40">
+      <AuthModal isOpen={auth} onClose={() => setAuth(false)} />
 
-      {/* Sparse fixed nav — Dala style */}
-      <nav
-        className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-5 transition-colors duration-300 sm:px-10 ${
-          scrolled ? 'bg-black/80 backdrop-blur-md' : 'bg-transparent'
+      <header
+        className={`fixed inset-x-0 top-0 z-50 flex items-center justify-between px-5 py-4 sm:px-10 sm:py-5 ${
+          scrolled ? 'bg-black/75 backdrop-blur-md' : ''
         }`}
       >
-        <a href="#home" className="text-[13px] font-medium tracking-[0.2em] uppercase">
+        <a href="#home" className="text-[12px] font-medium tracking-[0.22em] uppercase">
           EDUROUTE
         </a>
-        <div className="hidden items-center gap-10 md:flex">
+        <nav className="hidden items-center gap-9 md:flex">
           {NAV.map((item) =>
             item.cta ? (
               <button
                 key={item.label}
                 type="button"
-                onClick={() => setIsAuthOpen(true)}
-                className="border border-white/30 px-4 py-1.5 text-[11px] tracking-[0.14em] uppercase transition hover:bg-white hover:text-black"
+                onClick={() => setAuth(true)}
+                className="border border-white/25 px-3.5 py-1.5 text-[10px] tracking-[0.16em] uppercase transition hover:bg-white hover:text-black"
               >
                 {item.label}
               </button>
@@ -179,7 +163,7 @@ export const LandingPage = () => {
               <Link
                 key={item.label}
                 to={item.href}
-                className="text-[11px] tracking-[0.14em] uppercase text-white/50 transition hover:text-white"
+                className="text-[10px] tracking-[0.16em] uppercase text-white/45 transition hover:text-white"
               >
                 {item.label}
               </Link>
@@ -187,131 +171,134 @@ export const LandingPage = () => {
               <a
                 key={item.label}
                 href={item.href}
-                className="text-[11px] tracking-[0.14em] uppercase text-white/50 transition hover:text-white"
+                className="text-[10px] tracking-[0.16em] uppercase text-white/45 transition hover:text-white"
               >
                 {item.label}
               </a>
             ),
           )}
-        </div>
+        </nav>
         <button
           type="button"
-          onClick={() => setIsAuthOpen(true)}
-          className="border border-white/30 px-3 py-1 text-[11px] tracking-[0.12em] uppercase md:hidden"
+          onClick={() => setAuth(true)}
+          className="border border-white/25 px-2.5 py-1 text-[10px] tracking-[0.14em] uppercase md:hidden"
         >
-          Start
+          Access
         </button>
-      </nav>
+      </header>
 
-      {/* ── Hero: particle brain + headline ── */}
-      <section
-        id="home"
-        className="relative flex h-[100svh] min-h-[640px] flex-col items-center justify-center overflow-hidden"
-      >
+      {/* HERO */}
+      <section id="home" className="relative flex h-[100svh] min-h-[620px] flex-col items-center justify-center overflow-hidden">
+        {/* Soft purple depth like Dala replica bg */}
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            background:
+              'radial-gradient(ellipse 80% 70% at 50% 40%, rgba(105,42,132,0.22) 0%, rgba(60,24,76,0.08) 40%, transparent 70%)',
+          }}
+        />
         <DalaBrainHero ready={phase === 'ready'} />
 
         {phase === 'loading' && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black">
-            <div className="mb-10 flex gap-2.5">
+            <div className="mb-12 flex gap-3">
               {[0, 1, 2, 3].map((i) => (
                 <span
                   key={i}
-                  className="block h-1.5 w-1.5 bg-white"
+                  className="h-1 w-1 bg-white"
                   style={{
-                    animation: reduced ? undefined : `dalaPulse 1.4s ease-in-out ${i * 0.18}s infinite`,
+                    animation: reduced ? undefined : `dalaDot 1.35s ease-in-out ${i * 0.16}s infinite`,
                   }}
                 />
               ))}
             </div>
-            <p className="max-w-xs text-center text-[13px] font-light leading-relaxed text-white/70">
-              Your career has the answer.
+            <p className="max-w-[280px] text-center text-[15px] font-light leading-[1.55] text-white/75">
+              Your workplace has the answer.
               <br />
               Ask EDUROUTE to find it.
             </p>
-            <p className="mt-8 text-[10px] tracking-[0.3em] uppercase text-white/30">Loading</p>
+            <p className="mt-10 text-[9px] tracking-[0.35em] uppercase text-white/25">Loading</p>
           </div>
         )}
 
         <div
-          className={`relative z-10 mx-auto max-w-3xl px-6 text-center transition-all duration-1000 ${
-            showText ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
+          className={`relative z-10 mx-auto max-w-2xl px-6 text-center transition-all duration-[1100ms] ease-out ${
+            heroIn ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
           }`}
         >
-          <p className="mb-6 text-[11px] tracking-[0.28em] uppercase text-white/45">
-            Unlock collective growth
-          </p>
-          <h1 className="text-[clamp(2.75rem,9vw,5.5rem)] font-light leading-[1.02] tracking-[-0.035em]">
-            Build Skills.
+          <p className="mb-5 text-[10px] tracking-[0.32em] uppercase text-white/40">Unlock collective growth</p>
+          <h1 className="text-[clamp(2.8rem,9.5vw,5.75rem)] font-light leading-[0.98] tracking-[-0.04em]">
+            Build skills.
             <br />
-            Get Hired.
+            Get hired.
           </h1>
-          <p className="mx-auto mt-8 max-w-md text-[15px] font-light leading-[1.7] text-white/50">
-            Plug into a clear path — roadmaps, internships, hackathons and skill
-            clarity in one place. Focus on doing your best work.
+          <p className="mx-auto mt-7 max-w-sm text-[14px] font-light leading-[1.65] text-white/45">
+            Stop managing your career like a second job. Start using a path that
+            connects learning, practice, and real opportunities.
           </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              to="/roadmaps"
-              className="bg-white px-7 py-3 text-[11px] font-medium tracking-[0.14em] uppercase text-black transition hover:bg-white/90"
-            >
-              Explore Roadmaps
-            </Link>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
-              onClick={() => setIsAuthOpen(true)}
-              className="border border-white/30 px-7 py-3 text-[11px] tracking-[0.14em] uppercase transition hover:border-white/70 hover:bg-white/5"
+              onClick={() => setAuth(true)}
+              className="bg-white px-6 py-2.5 text-[10px] font-medium tracking-[0.16em] uppercase text-black transition hover:bg-white/90"
             >
-              Request Access
+              Request access
             </button>
+            <Link
+              to="/roadmaps"
+              className="border border-white/20 px-6 py-2.5 text-[10px] tracking-[0.16em] uppercase text-white/80 transition hover:border-white/50"
+            >
+              Explore roadmaps
+            </Link>
           </div>
         </div>
 
-        <div
-          className={`absolute bottom-8 left-1/2 z-10 -translate-x-1/2 text-[10px] tracking-[0.25em] uppercase text-white/30 transition-opacity duration-1000 ${
-            showText ? 'opacity-100' : 'opacity-0'
+        <p
+          className={`absolute bottom-7 left-1/2 z-10 -translate-x-1/2 text-[9px] tracking-[0.3em] uppercase text-white/25 transition-opacity duration-1000 ${
+            heroIn ? 'opacity-100' : 'opacity-0'
           }`}
         >
           Scroll
-        </div>
+        </p>
       </section>
 
-      {/* Stats strip */}
-      <section className="border-t border-white/[0.08] px-6 py-14 sm:px-10">
-        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-10 sm:grid-cols-4">
+      {/* STATS */}
+      <section className="border-t border-white/[0.06] px-6 py-16 sm:px-10">
+        <div className="mx-auto grid max-w-4xl grid-cols-2 gap-8 sm:grid-cols-4 sm:gap-6">
           {STATS.map((s, i) => (
-            <Reveal key={s.l} delay={i * 80}>
-              <div className="text-[clamp(1.5rem,3vw,2rem)] font-light tracking-tight">{s.n}</div>
-              <div className="mt-1.5 text-[11px] tracking-[0.06em] text-white/40">{s.l}</div>
+            <Reveal key={s.l} delay={i * 70}>
+              <p className="text-[1.75rem] font-light tracking-tight sm:text-[2rem]">{s.n}</p>
+              <p className="mt-1 text-[10px] tracking-[0.12em] uppercase text-white/35">{s.l}</p>
             </Reveal>
           ))}
         </div>
       </section>
 
-      {/* Intro */}
-      <section className="px-6 py-[min(18vh,8rem)] sm:px-10">
-        <div className="mx-auto max-w-5xl">
+      {/* INTRO */}
+      <section className="px-6 py-28 sm:px-10 sm:py-36">
+        <div className="mx-auto max-w-4xl">
           <Reveal>
-            <h2 className="max-w-2xl text-[clamp(1.9rem,5vw,3.4rem)] font-light leading-[1.12] tracking-[-0.025em]">
+            <h2 className="max-w-xl text-[clamp(2rem,5.5vw,3.6rem)] font-light leading-[1.08] tracking-[-0.03em]">
               Make decisions
               <br />
               with confidence
             </h2>
           </Reveal>
-          <Reveal delay={120}>
-            <p className="mt-8 max-w-lg text-[15px] font-light leading-[1.75] text-white/50">
-              EDUROUTE maps what you know, what you need, and where to apply — so
-              you can take the guesswork out of growing in tech.
+          <Reveal delay={100}>
+            <p className="mt-8 max-w-md text-[15px] font-light leading-[1.7] text-white/45">
+              EDUROUTE extracts clarity from the noise — skills you have, skills
+              you need, and where to apply — so growth stops feeling like guesswork.
             </p>
           </Reveal>
         </div>
       </section>
 
-      {/* Manifesto — line by line (Dala pattern) */}
-      <section id="manifesto" className="px-6 py-[min(12vh,5rem)] sm:px-10">
-        <div className="mx-auto max-w-3xl">
-          {MANIFESTO_LINES.map((line, i) => (
-            <Reveal key={i} delay={Math.min(i * 60, 240)} className="mb-10 last:mb-0">
-              <p className="text-[clamp(1.05rem,2.4vw,1.45rem)] font-light leading-[1.55] tracking-[-0.015em] text-white/55">
+      {/* MANIFESTO */}
+      <section id="manifesto" className="px-6 py-16 sm:px-10 sm:py-24">
+        <div className="mx-auto max-w-2xl">
+          {MANIFESTO.map((line, i) => (
+            <Reveal key={i} delay={Math.min(i * 50, 200)} className="mb-12 last:mb-0 sm:mb-14">
+              <p className="text-[clamp(1.15rem,2.6vw,1.55rem)] font-light leading-[1.5] tracking-[-0.02em] text-white/50">
                 {line}
               </p>
             </Reveal>
@@ -319,192 +306,141 @@ export const LandingPage = () => {
         </div>
       </section>
 
-      {/* Solution */}
-      <section className="px-6 py-[min(20vh,9rem)] sm:px-10">
-        <div className="mx-auto max-w-5xl">
+      {/* SOLUTION */}
+      <section className="px-6 py-28 sm:px-10 sm:py-36">
+        <div className="mx-auto max-w-4xl">
           <Reveal>
-            <h2 className="max-w-2xl text-[clamp(1.9rem,5vw,3.4rem)] font-light leading-[1.12] tracking-[-0.025em]">
+            <h2 className="max-w-xl text-[clamp(2rem,5.5vw,3.6rem)] font-light leading-[1.08] tracking-[-0.03em]">
               Spark lightbulb
               <br />
               moments
             </h2>
           </Reveal>
-          <Reveal delay={100}>
-            <p className="mt-8 max-w-lg text-[15px] font-light leading-[1.75] text-white/50">
-              We connect assessment, learning and opportunity behind the scenes —
-              and pull together exactly the path you need into one coherent view.
+          <Reveal delay={90}>
+            <p className="mt-8 max-w-md text-[15px] font-light leading-[1.7] text-white/45">
+              Assessment, learning, and opportunity — connected. One contextual
+              view of the next step that actually advances your work.
             </p>
           </Reveal>
-          <Reveal delay={160}>
-            <p className="mt-5 max-w-lg text-[15px] font-light leading-[1.75] text-white/50">
-              Just ask EDUROUTE for the next step that advances your work — and
-              help you decide with more confidence.
+          <Reveal delay={140}>
+            <p className="mt-5 max-w-md text-[15px] font-light leading-[1.7] text-white/45">
+              Ask EDUROUTE. Move with conviction.
             </p>
           </Reveal>
         </div>
       </section>
 
-      {/* How it works */}
-      <section
-        id="how-it-works"
-        className="border-t border-white/[0.08] px-6 py-[min(20vh,9rem)] sm:px-10"
-      >
-        <div className="mx-auto max-w-5xl">
+      {/* PRODUCT / HOW */}
+      <section id="product" className="border-t border-white/[0.06] px-6 py-28 sm:px-10 sm:py-32">
+        <div className="mx-auto max-w-4xl">
           <Reveal>
-            <p className="mb-3 text-[11px] tracking-[0.22em] uppercase text-white/35">How it works</p>
-            <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-light tracking-[-0.02em]">
-              Three clear steps.
-            </h2>
+            <p className="mb-2 text-[10px] tracking-[0.28em] uppercase text-white/30">How it works</p>
+            <h2 className="text-[clamp(1.75rem,4vw,2.6rem)] font-light tracking-[-0.025em]">Three clear steps</h2>
           </Reveal>
-          <div className="mt-16 grid gap-14 sm:grid-cols-3">
+          <div className="mt-16 grid gap-12 sm:grid-cols-3 sm:gap-10">
             {STEPS.map((s, i) => (
-              <Reveal key={s.n} delay={i * 90}>
-                <div className="mb-5 text-[11px] tracking-[0.2em] text-white/35">{s.n}</div>
-                <h3 className="text-lg font-normal tracking-tight">{s.t}</h3>
-                <p className="mt-3 text-[14px] font-light leading-relaxed text-white/45">{s.b}</p>
+              <Reveal key={s.n} delay={i * 80}>
+                <p className="mb-4 text-[10px] tracking-[0.22em] text-white/30">{s.n}</p>
+                <h3 className="text-[17px] font-normal tracking-tight">{s.t}</h3>
+                <p className="mt-3 text-[13px] font-light leading-relaxed text-white/40">{s.b}</p>
               </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="border-t border-white/[0.08] px-6 py-[min(20vh,9rem)] sm:px-10">
-        <div className="mx-auto max-w-5xl">
+      {/* FEATURES */}
+      <section className="border-t border-white/[0.06] px-6 py-28 sm:px-10 sm:py-32">
+        <div className="mx-auto max-w-4xl">
           <Reveal>
-            <p className="mb-3 text-[11px] tracking-[0.22em] uppercase text-white/35">What we offer</p>
-            <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-light tracking-[-0.02em]">
+            <p className="mb-2 text-[10px] tracking-[0.28em] uppercase text-white/30">Platform</p>
+            <h2 className="text-[clamp(1.75rem,4vw,2.6rem)] font-light tracking-[-0.025em]">
               Everything you need to grow
             </h2>
           </Reveal>
-          <div className="mt-16 grid gap-x-16 gap-y-14 sm:grid-cols-2">
+          <div className="mt-16 grid gap-12 sm:grid-cols-2 sm:gap-x-16 sm:gap-y-14">
             {FEATURES.map((f, i) => (
-              <Reveal key={f.t} delay={i * 70}>
-                <h3 className="text-lg font-normal tracking-tight">{f.t}</h3>
-                <p className="mt-3 text-[14px] font-light leading-relaxed text-white/45">{f.b}</p>
-                <p className="mt-4 text-[11px] tracking-[0.08em] text-white/55">{f.h}</p>
+              <Reveal key={f.t} delay={i * 60}>
+                <h3 className="text-[17px] font-normal tracking-tight">{f.t}</h3>
+                <p className="mt-3 text-[13px] font-light leading-relaxed text-white/40">{f.b}</p>
               </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Mission */}
-      <section className="px-6 py-[min(20vh,9rem)] sm:px-10">
-        <div className="mx-auto max-w-5xl">
+      {/* MISSION */}
+      <section className="px-6 py-28 sm:px-10 sm:py-36">
+        <div className="mx-auto max-w-4xl">
           <Reveal>
-            <h2 className="max-w-2xl text-[clamp(1.9rem,5vw,3.4rem)] font-light leading-[1.12] tracking-[-0.025em]">
+            <h2 className="max-w-xl text-[clamp(2rem,5.5vw,3.6rem)] font-light leading-[1.08] tracking-[-0.03em]">
               Build a better path
               <br />
               into tech
             </h2>
           </Reveal>
           <Reveal delay={100}>
-            <p className="mt-8 max-w-lg text-[15px] font-light leading-[1.75] text-white/50">
-              Our mission is to make career growth coherent and delightful —
-              reframing progress from “figure it out alone” to having a clear
-              partner every step of the way.
+            <p className="mt-8 max-w-md text-[15px] font-light leading-[1.7] text-white/45">
+              We reframe growth from “figure it out alone” to a coherent partner —
+              so your best moments are shipping, learning, and landing roles that matter.
             </p>
           </Reveal>
         </div>
       </section>
 
       {/* CTA */}
-      <section
-        id="get-started"
-        className="border-y border-white/[0.08] px-6 py-24 text-center sm:px-10"
-      >
+      <section id="get-started" className="border-y border-white/[0.06] px-6 py-24 text-center sm:px-10">
         <Reveal>
-          <h2 className="text-[clamp(1.7rem,3.8vw,2.6rem)] font-light tracking-[-0.02em]">
-            Your workplace has the answer.
+          <h2 className="text-[clamp(1.6rem,4vw,2.5rem)] font-light leading-[1.15] tracking-[-0.025em]">
+            Your career has the answer.
             <br />
-            Your growth starts here.
+            Start here.
           </h2>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              to="/roadmaps"
-              className="bg-white px-8 py-3.5 text-[11px] font-medium tracking-[0.14em] uppercase text-black transition hover:bg-white/90"
-            >
-              Explore Roadmaps
-            </Link>
             <button
               type="button"
-              onClick={() => setIsAuthOpen(true)}
-              className="border border-white/30 px-8 py-3.5 text-[11px] tracking-[0.14em] uppercase transition hover:border-white/70"
+              onClick={() => setAuth(true)}
+              className="bg-white px-7 py-3 text-[10px] font-medium tracking-[0.16em] uppercase text-black transition hover:bg-white/90"
             >
-              Get Started
+              Request access
             </button>
+            <Link
+              to="/roadmaps"
+              className="border border-white/25 px-7 py-3 text-[10px] tracking-[0.16em] uppercase transition hover:border-white/60"
+            >
+              Explore roadmaps
+            </Link>
           </div>
         </Reveal>
       </section>
 
-      {/* Footer */}
-      <footer className="px-6 py-16 sm:px-10">
-        <div className="mx-auto grid max-w-5xl gap-12 sm:grid-cols-2 lg:grid-cols-4">
+      <footer className="px-6 py-14 sm:px-10">
+        <div className="mx-auto flex max-w-4xl flex-col gap-10 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="text-[13px] font-medium tracking-[0.16em] uppercase">EDUROUTE</div>
-            <p className="mt-4 max-w-[240px] text-[13px] font-light leading-relaxed text-white/40">
-              Learn. Build. Compete. Get Hired.
-              <br />
-              <br />
-              One platform to build skills, explore opportunities and grow in tech.
+            <p className="text-[11px] font-medium tracking-[0.2em] uppercase">EDUROUTE</p>
+            <p className="mt-3 max-w-[200px] text-[12px] font-light leading-relaxed text-white/35">
+              Learn. Build. Compete. Get hired.
             </p>
           </div>
-          <div>
-            <div className="mb-5 text-[10px] tracking-[0.18em] uppercase text-white/35">Quick links</div>
-            <div className="space-y-2.5 text-[13px] font-light text-white/50">
-              <a href="#home" className="block transition hover:text-white">Home</a>
-              <a href="#manifesto" className="block transition hover:text-white">Manifesto</a>
-              <a href="#how-it-works" className="block transition hover:text-white">How it works</a>
-              <Link to="/roadmaps" className="block transition hover:text-white">Roadmaps</Link>
-              <Link to="/internships" className="block transition hover:text-white">Internships</Link>
-            </div>
-          </div>
-          <div>
-            <div className="mb-5 text-[10px] tracking-[0.18em] uppercase text-white/35">Company</div>
-            <div className="space-y-2.5 text-[13px] font-light text-white/50">
-              <a href="#manifesto" className="block transition hover:text-white">About</a>
-              <a href="#manifesto" className="block transition hover:text-white">Mission</a>
-              <a href="#get-started" className="block transition hover:text-white">Contact</a>
-              <span className="block text-white/30">Privacy</span>
-              <span className="block text-white/30">Terms</span>
-            </div>
-          </div>
-          <div>
-            <div className="mb-5 text-[10px] tracking-[0.18em] uppercase text-white/35">Stay updated</div>
-            <p className="mb-4 text-[13px] font-light text-white/40">
-              Roadmaps, opportunities and tips — occasional, useful.
-            </p>
-            <input
-              type="email"
-              placeholder="Your email"
-              className="mb-2 w-full border border-white/20 bg-transparent px-3 py-2.5 text-[13px] text-white outline-none placeholder:text-white/25 focus:border-white/50"
-            />
-            <button
-              type="button"
-              className="w-full bg-white py-2.5 text-[11px] font-medium tracking-[0.14em] uppercase text-black transition hover:bg-white/90"
-            >
-              Subscribe
+          <div className="flex flex-wrap gap-x-10 gap-y-3 text-[12px] font-light text-white/40">
+            <a href="#manifesto" className="hover:text-white">Manifesto</a>
+            <a href="#product" className="hover:text-white">Product</a>
+            <Link to="/roadmaps" className="hover:text-white">Roadmaps</Link>
+            <Link to="/internships" className="hover:text-white">Internships</Link>
+            <button type="button" onClick={() => setAuth(true)} className="hover:text-white">
+              Access
             </button>
           </div>
         </div>
-        <div className="mx-auto mt-16 flex max-w-5xl flex-col items-center justify-between gap-4 border-t border-white/[0.08] pt-8 text-[11px] text-white/30 sm:flex-row">
-          <div>© 2026 EDUROUTE. All rights reserved.</div>
-          <div className="flex gap-8">
-            <a href="#manifesto" className="transition hover:text-white">Manifesto</a>
-            <a href="#how-it-works" className="transition hover:text-white">How it works</a>
-            <Link to="/roadmaps" className="transition hover:text-white">Roadmaps</Link>
-          </div>
+        <div className="mx-auto mt-12 max-w-4xl border-t border-white/[0.06] pt-6 text-[10px] text-white/25">
+          © 2026 EDUROUTE
         </div>
       </footer>
 
       <style>{`
-        @keyframes dalaPulse {
-          0%, 100% { opacity: 0.2; transform: scale(0.85); }
-          50% { opacity: 1; transform: scale(1.2); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        @keyframes dalaDot {
+          0%, 100% { opacity: 0.15; transform: scale(0.7); }
+          50% { opacity: 1; transform: scale(1.25); }
         }
       `}</style>
     </div>
