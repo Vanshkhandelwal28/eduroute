@@ -118,48 +118,29 @@ function normalizeCourse(raw: any): AiDesignedCourse | null {
   };
 }
 
-function courseUrls(uid: string, id?: string): string[] {
-  const q = `userId=${encodeURIComponent(uid)}`;
-  if (id) {
-    return [
-      `${RENDER}/api/ai-courses/${encodeURIComponent(id)}?${q}`,
-      `/api/ai-courses/${encodeURIComponent(id)}?${q}`,
-    ];
-  }
-  return [`${RENDER}/api/ai-courses?${q}`, `/api/ai-courses?${q}`, `/.netlify/functions/ai-courses?${q}`];
-}
-
 export async function syncAiCoursesFromServer(): Promise<AiDesignedCourse[]> {
   const local = readAiCourses();
   const uid = currentUserId();
 
-  // Prefer apiFetch (uses Render base) then explicit absolute URLs
   const res = await apiFetch<any[]>(`/api/ai-courses?userId=${encodeURIComponent(uid)}`, {
     method: 'GET',
   });
   let rows: any[] | null = res.ok && Array.isArray(res.data) ? res.data : null;
 
   if (!rows) {
-    for (const url of courseUrls(uid)) {
-      try {
-        const r = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Id': uid,
-          },
-        });
-        const ct = r.headers.get('content-type') || '';
-        if (!r.ok || !ct.includes('application/json')) continue;
+    try {
+      const r = await fetch(`${RENDER}/api/ai-courses?userId=${encodeURIComponent(uid)}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': uid },
+      });
+      const ct = r.headers.get('content-type') || '';
+      if (r.ok && ct.includes('application/json')) {
         const body = await r.json();
         const data = body?.data ?? body;
-        if (Array.isArray(data)) {
-          rows = data;
-          break;
-        }
-      } catch {
-        continue;
+        if (Array.isArray(data)) rows = data;
       }
+    } catch {
+      /* offline */
     }
   }
 
@@ -194,14 +175,10 @@ async function pushCourseToServer(course: AiDesignedCourse) {
     ...course,
   });
 
-  // Direct Render first
   try {
     const r = await fetch(`${RENDER}/api/ai-courses?userId=${encodeURIComponent(uid)}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': uid,
-      },
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': uid },
       body,
     });
     if (r.ok) return;
@@ -297,3 +274,10 @@ export const INTEREST_PRESETS = [
 ] as const;
 
 export const DURATION_PRESETS = [3, 15, 30, 60, 90] as const;
+
+/** Browser: pull from Neon shortly after module load (designer / courses pages). */
+if (typeof window !== 'undefined') {
+  window.setTimeout(() => {
+    void syncAiCoursesFromServer().catch(() => undefined);
+  }, 400);
+}
