@@ -1,5 +1,6 @@
 /**
- * Particle shaders — high readability on black background.
+ * Particle shaders — mid balance:
+ * structure clearly visible, no white wash, text remains readable.
  */
 
 export const particleVertexShader = /* glsl */ `
@@ -57,16 +58,16 @@ varying float vBrightness;
 varying float vSeed;
 
 void main() {
-  // Bright cool-white with soft violet variation
-  vec3 base = vec3(0.95, 0.94, 1.0);
-  vec3 accent = vec3(0.65, 0.48, 1.0);
+  // Soft cool white + sparse violet — keep luminance in mid range
+  vec3 base = vec3(0.82, 0.80, 0.90);
+  vec3 accent = vec3(0.50, 0.35, 0.92);
   float tint = fract(vSeed * 7.13);
-  vec3 col = mix(base, accent, tint * 0.22);
+  vec3 col = mix(base, accent, tint * 0.20);
 
-  // Strong mid-to-high luminance so structure reads on pure black
-  col *= (0.7 + vBrightness * 0.35);
+  // Mid luminance: visible structure, additive sum won't clip to pure white
+  col *= (0.38 + vBrightness * 0.32);
 
-  float alpha = 0.78 * uOpacity;
+  float alpha = 0.42 * uOpacity;
 
   gl_FragColor = vec4(col, alpha);
 }

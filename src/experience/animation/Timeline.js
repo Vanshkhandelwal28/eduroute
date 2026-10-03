@@ -6,7 +6,6 @@ gsap.registerPlugin(ScrollTrigger);
 
 /**
  * TimelineController — scroll choreography.
- * Base particle scale 1.15 is preserved when applying timeline scale.
  */
 export default class TimelineController {
   constructor({ experience }) {
@@ -406,8 +405,7 @@ export default class TimelineController {
     const s = this.state;
     if (this.particles) {
       if (this.particles.mesh) {
-        // Base 1.15 * timeline scale so structure stays large
-        this.particles.mesh.scale.setScalar(1.15 * s.scale);
+        this.particles.mesh.scale.setScalar(1.05 * s.scale);
       }
       this.particles._timelineRotY = s.rotY;
       this.particles._timelineRotX = s.rotX;

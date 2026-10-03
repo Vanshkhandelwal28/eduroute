@@ -8,7 +8,8 @@ import GPUCompute from './GPUCompute.js';
 import MorphSystem from './MorphSystem.js';
 
 /**
- * Particles — visible organic structure on black.
+ * Particles — mid-balance visibility.
+ * Triangle size and scale tuned so form reads without covering hero type.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -49,13 +50,13 @@ export default class Particles {
     this.morph.setPair('brain', 'bulb');
     this.morph.setProgress(0);
 
-    // Larger triangles for clear silhouette
+    // Moderate triangle size — structure without solid fill
     const tri = new THREE.BufferGeometry();
-    const s = 0.014;
+    const s = 0.0085;
     const vertices = new Float32Array([
-      0.0, s * 1.3, 0.0,
-      -s, -s * 0.65, 0.0,
-      s, -s * 0.65, 0.0,
+      0.0, s * 1.25, 0.0,
+      -s, -s * 0.7, 0.0,
+      s, -s * 0.7, 0.0,
     ]);
     tri.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 
@@ -66,8 +67,8 @@ export default class Particles {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      aScale[i] = 0.7 + Math.random() * 1.5;
-      aBrightness[i] = 0.55 + Math.random() * 0.45;
+      aScale[i] = 0.5 + Math.random() * 1.3;
+      aBrightness[i] = 0.4 + Math.random() * 0.5;
       aIndex[i] = i;
     }
 
@@ -104,8 +105,7 @@ export default class Particles {
       this.count
     );
     this.mesh.frustumCulled = false;
-    // Slightly larger overall structure in the frame
-    this.mesh.scale.setScalar(1.15);
+    this.mesh.scale.setScalar(1.05);
 
     const dummy = new THREE.Object3D();
     for (let i = 0; i < this.count; i++) {
@@ -177,11 +177,6 @@ export default class Particles {
         (this._rotTarget.x - this._rotCurrent.x) * rotLerp;
       this._rotCurrent.y +=
         (this._rotTarget.y - this._rotCurrent.y) * rotLerp;
-
-      // Timeline scale is applied on top of base 1.15
-      const baseScale = 1.15;
-      // scale from timeline is stored on mesh via TimelineController setScalar
-      // we only set rotation here; Timeline sets scale each frame
 
       this.mesh.rotation.x = this._rotCurrent.x + this._timelineRotX;
       this.mesh.rotation.y =

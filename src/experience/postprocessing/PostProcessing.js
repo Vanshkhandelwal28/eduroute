@@ -9,7 +9,7 @@ import { GrainShader, VignetteShader } from './shaders.js';
 import { getPostQuality, getCappedDPR } from '../utils/device.js';
 
 /**
- * Soft bloom to support particle readability — not a white wash.
+ * Selective bloom — soft edge glow only, core stays detailed.
  */
 export default class PostProcessing {
   constructor({ renderer, scene, camera, sizes }) {
@@ -40,16 +40,17 @@ export default class PostProcessing {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
 
+    // Low strength + higher threshold = soft halo, not white fill
     const bloomStrength =
-      this.quality === 'HIGH' ? 0.65 : this.quality === 'MEDIUM' ? 0.5 : 0.35;
+      this.quality === 'HIGH' ? 0.4 : this.quality === 'MEDIUM' ? 0.3 : 0.22;
     const bloomRadius =
-      this.quality === 'HIGH' ? 0.42 : this.quality === 'MEDIUM' ? 0.35 : 0.28;
+      this.quality === 'HIGH' ? 0.35 : this.quality === 'MEDIUM' ? 0.28 : 0.22;
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(w, h),
       bloomStrength,
       bloomRadius,
-      0.65
+      0.82
     );
     this.composer.addPass(this.bloomPass);
 
@@ -58,20 +59,20 @@ export default class PostProcessing {
       this.bokehPass = new BokehPass(this.scene, this.camera, {
         focus: 4.0,
         aperture: 0.004,
-        maxblur: 0.0018,
+        maxblur: 0.0015,
       });
       this.composer.addPass(this.bokehPass);
     }
 
     this.grainPass = new ShaderPass(GrainShader);
     this.grainPass.uniforms.uIntensity.value =
-      this.quality === 'HIGH' ? 0.025 : 0.015;
+      this.quality === 'HIGH' ? 0.028 : 0.018;
     this.composer.addPass(this.grainPass);
 
     this.vignettePass = new ShaderPass(VignetteShader);
     this.vignettePass.uniforms.uDarkness.value =
-      this.quality === 'HIGH' ? 0.35 : 0.25;
-    this.vignettePass.uniforms.uOffset.value = 1.2;
+      this.quality === 'HIGH' ? 0.4 : 0.3;
+    this.vignettePass.uniforms.uOffset.value = 1.15;
     this.composer.addPass(this.vignettePass);
 
     this.outputPass = new OutputPass();
