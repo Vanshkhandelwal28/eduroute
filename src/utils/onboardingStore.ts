@@ -1,9 +1,10 @@
 /**
  * Client-side onboarding profile for AI Buddy + Skill Profile.
- * Stored in localStorage, keyed by student email when available (no backend).
+ * localStorage + Neon (Render /api/user-data key=onboarding).
  */
 
 import { getAuthUser } from './rbacAuth';
+import { pushUserData, pullUserData } from './userDataStore';
 
 export type InterestTrack = 'software' | 'cybersecurity' | 'data_analyst' | 'custom';
 
@@ -91,279 +92,6 @@ export const INTEREST_OPTIONS: {
   },
 ];
 
-export const GAP_QUESTIONS: Record<
-  InterestTrack,
-  { id: string; question: string; skill: string }[]
-> = {
-  software: [
-    { id: 'sw1', question: 'Have you built a web or mobile app before?', skill: 'Project building' },
-    {
-      id: 'sw2',
-      question: 'Are you comfortable with at least one programming language (JS, Python, or Java)?',
-      skill: 'Programming fundamentals',
-    },
-    {
-      id: 'sw3',
-      question: 'Do you know basic data structures (arrays, linked lists, hash maps)?',
-      skill: 'Data structures',
-    },
-    { id: 'sw4', question: 'Have you used Git and GitHub for version control?', skill: 'Git & GitHub' },
-    { id: 'sw5', question: 'Can you explain how REST APIs work at a basic level?', skill: 'APIs' },
-    {
-      id: 'sw6',
-      question: 'Have you completed any coding internship, freelance, or open-source work?',
-      skill: 'Practical experience',
-    },
-  ],
-  cybersecurity: [
-    {
-      id: 'cy1',
-      question: 'Do you understand networking basics (IP, DNS, HTTP/HTTPS)?',
-      skill: 'Networking basics',
-    },
-    { id: 'cy2', question: 'Have you used the Linux command line for day-to-day tasks?', skill: 'Linux' },
-    { id: 'cy3', question: 'Do you know what encryption and hashing mean?', skill: 'Cryptography basics' },
-    {
-      id: 'cy4',
-      question: 'Have you practiced any CTF challenges or security labs?',
-      skill: 'Hands-on security practice',
-    },
-    {
-      id: 'cy5',
-      question: 'Are you familiar with common vulnerabilities (XSS, SQL injection, CSRF)?',
-      skill: 'Web vulnerabilities',
-    },
-    {
-      id: 'cy6',
-      question: 'Have you studied OS security or configured a firewall?',
-      skill: 'OS & network security',
-    },
-  ],
-  data_analyst: [
-    {
-      id: 'da1',
-      question: 'Are you comfortable analyzing data in Excel or Google Sheets?',
-      skill: 'Spreadsheets',
-    },
-    { id: 'da2', question: 'Have you used SQL to query a database?', skill: 'SQL' },
-    { id: 'da3', question: 'Do you know Python or R for data analysis?', skill: 'Python/R for analysis' },
-    { id: 'da4', question: 'Have you created charts, reports, or dashboards?', skill: 'Visualization' },
-    {
-      id: 'da5',
-      question: 'Do you understand basic statistics (mean, median, correlation)?',
-      skill: 'Statistics',
-    },
-    {
-      id: 'da6',
-      question: 'Have you cleaned or prepared a messy real-world dataset?',
-      skill: 'Data cleaning',
-    },
-  ],
-  custom: [],
-};
-
-export type TrackRecommendation = {
-  title: string;
-  blurb: string;
-  to: string;
-  tag: string;
-};
-
-export const TRACK_RECOMMENDATIONS: Record<InterestTrack, TrackRecommendation[]> = {
-  software: [
-    {
-      title: 'DSA Beginner Sheet',
-      blurb: 'Arrays, linked lists, and problem-solving for SDE interviews.',
-      to: '/dsa-sheet',
-      tag: 'DSA',
-    },
-    {
-      title: 'Frontend Developer',
-      blurb: 'HTML, CSS, React, and modern UI architecture.',
-      to: '/roadmaps/frontend',
-      tag: 'Frontend',
-    },
-    {
-      title: 'Backend Developer',
-      blurb: 'Node.js, SQL/NoSQL, APIs, and system design basics.',
-      to: '/roadmaps/backend',
-      tag: 'Backend',
-    },
-    {
-      title: 'Fullstack Engineer',
-      blurb: 'End-to-end path from UI to infrastructure.',
-      to: '/roadmaps/fullstack',
-      tag: 'Fullstack',
-    },
-    {
-      title: 'Internships',
-      blurb: 'Apply with projects and real interview practice.',
-      to: '/internships',
-      tag: 'Career',
-    },
-  ],
-  cybersecurity: [
-    {
-      title: 'Cybersecurity Roadmap',
-      blurb: 'Networking, Linux, ethical hacking, and defense.',
-      to: '/roadmaps/cybersecurity',
-      tag: 'Security',
-    },
-    {
-      title: 'Assessments',
-      blurb: 'Check networking and web vuln fundamentals.',
-      to: '/assessments',
-      tag: 'Practice',
-    },
-    {
-      title: 'Internships',
-      blurb: 'Security and SOC-style opportunities.',
-      to: '/internships',
-      tag: 'Career',
-    },
-  ],
-  data_analyst: [
-    {
-      title: 'Data Analyst Roadmap',
-      blurb: 'SQL, Python, stats, and visualization.',
-      to: '/roadmaps/data-analyst',
-      tag: 'Data',
-    },
-    {
-      title: 'Assessments',
-      blurb: 'Practice SQL and analysis quizzes.',
-      to: '/assessments',
-      tag: 'Practice',
-    },
-    {
-      title: 'Internships',
-      blurb: 'Analyst and BI intern roles.',
-      to: '/internships',
-      tag: 'Career',
-    },
-  ],
-  custom: [
-    {
-      title: 'AI Course Designer',
-      blurb: 'Build a course for your custom role.',
-      to: '/ai-course-designer',
-      tag: 'Custom',
-    },
-  ],
-};
-
-export type SkillPath = {
-  courseTitle: string;
-  to: string;
-  priority: number;
-};
-
-export const SKILL_TO_PATH: Record<string, SkillPath> = {
-  'Programming fundamentals': { courseTitle: 'Fullstack fundamentals', to: '/roadmaps/fullstack', priority: 1 },
-  'Data structures': { courseTitle: 'DSA Beginner Sheet', to: '/dsa-sheet', priority: 2 },
-  'Git & GitHub': { courseTitle: 'Backend Developer roadmap', to: '/roadmaps/backend', priority: 3 },
-  APIs: { courseTitle: 'Backend & API path', to: '/roadmaps/backend', priority: 4 },
-  'Project building': { courseTitle: 'Frontend & project path', to: '/roadmaps/frontend', priority: 5 },
-  'Practical experience': { courseTitle: 'Internships board', to: '/internships', priority: 6 },
-  'Networking basics': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 1 },
-  Linux: { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 2 },
-  'Cryptography basics': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 3 },
-  'Web vulnerabilities': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 4 },
-  'OS & network security': { courseTitle: 'Cybersecurity roadmap', to: '/roadmaps/cybersecurity', priority: 5 },
-  'Hands-on security practice': { courseTitle: 'Assessments & labs', to: '/assessments', priority: 6 },
-  Spreadsheets: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 1 },
-  SQL: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 2 },
-  'Python/R for analysis': { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 3 },
-  Statistics: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 4 },
-  Visualization: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 5 },
-  'Data cleaning': { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 6 },
-};
-
-export type GapAction = {
-  skill: string;
-  courseTitle: string;
-  to: string;
-  priority: number;
-};
-
-export type NextStepPlan =
-  | { kind: 'quiz' }
-  | {
-      kind: 'gaps';
-      gapCount: number;
-      skills: string[];
-      primary: GapAction;
-      alternatives: GapAction[];
-      trackLabel: string;
-    }
-  | { kind: 'internships'; trackLabel: string };
-
-export function getNextStepPlan(profile?: OnboardingProfile): NextStepPlan {
-  const p = profile ?? readOnboarding();
-  const track = p.interests?.[0];
-  const trackLabel = track ? interestLabel(track) : 'your track';
-
-  if (!p.completedAt) {
-    return { kind: 'quiz' };
-  }
-
-  const missing = [...(p.missingSkills || [])];
-  if (missing.length === 0 && p.gapAnswers?.length) {
-    p.gapAnswers.forEach((a) => {
-      if (a.answer === 'no' && a.skill && !missing.includes(a.skill)) {
-        missing.push(a.skill);
-      }
-    });
-  }
-
-  if (missing.length === 0) {
-    return { kind: 'internships', trackLabel };
-  }
-
-  const actions: GapAction[] = missing.map((skill) => {
-    const mapped = SKILL_TO_PATH[skill];
-    if (mapped) {
-      return {
-        skill,
-        courseTitle: mapped.courseTitle,
-        to: mapped.to,
-        priority: mapped.priority,
-      };
-    }
-    const fallback =
-      track && TRACK_RECOMMENDATIONS[track]?.[0]
-        ? TRACK_RECOMMENDATIONS[track][0]
-        : { title: 'Browse roadmaps', to: '/roadmaps' };
-    return {
-      skill,
-      courseTitle: fallback.title,
-      to: fallback.to,
-      priority: 99,
-    };
-  });
-
-  actions.sort((a, b) => a.priority - b.priority || a.skill.localeCompare(b.skill));
-
-  const primary = actions[0];
-  const seenPaths = new Set<string>([primary.to]);
-  const alternatives: GapAction[] = [];
-  for (const a of actions.slice(1)) {
-    if (seenPaths.has(a.to)) continue;
-    seenPaths.add(a.to);
-    alternatives.push(a);
-    if (alternatives.length >= 3) break;
-  }
-
-  return {
-    kind: 'gaps',
-    gapCount: missing.length,
-    skills: missing,
-    primary,
-    alternatives,
-    trackLabel,
-  };
-}
-
 export function interestLabel(id: InterestTrack): string {
   return INTEREST_OPTIONS.find((o) => o.id === id)?.title || id;
 }
@@ -380,12 +108,7 @@ export function readOnboarding(): OnboardingProfile {
     }
     const raw = localStorage.getItem(GLOBAL_KEY);
     if (!raw) return { ...EMPTY };
-    const parsed = { ...EMPTY, ...JSON.parse(raw) } as OnboardingProfile;
-    if (email && parsed.completedAt) {
-      writeOnboarding({ ...parsed, userEmail: email });
-      return { ...parsed, userEmail: email };
-    }
-    return parsed;
+    return { ...EMPTY, ...JSON.parse(raw) } as OnboardingProfile;
   } catch {
     return { ...EMPTY };
   }
@@ -395,24 +118,18 @@ export function writeOnboarding(profile: OnboardingProfile) {
   try {
     if (typeof window === 'undefined') return;
     const email = currentEmail() || profile.userEmail || null;
-    const payload: OnboardingProfile = {
-      ...profile,
-      userEmail: email,
-    };
+    const payload: OnboardingProfile = { ...profile, userEmail: email };
     const json = JSON.stringify(payload);
     localStorage.setItem(GLOBAL_KEY, json);
+    if (email) localStorage.setItem(emailKey(email), json);
+    void pushUserData('onboarding', payload);
     try {
-      window.dispatchEvent(new CustomEvent('eduroute:onboarding-updated'));
+      window.dispatchEvent(new Event('eduroute:onboarding-updated'));
     } catch {
       /* ignore */
     }
-    if (email) {
-      localStorage.setItem(emailKey(email), json);
-    }
-    // Notify Skill Trend Analysis + Skill Profile to recompute gaps immediately
-    window.dispatchEvent(new Event('eduroute:onboarding-updated'));
   } catch {
-    // ignore private mode
+    /* ignore */
   }
 }
 
@@ -453,31 +170,114 @@ export function buildBuddyOnboardingContext(): {
   const profile = readOnboarding();
   const interests = profile.interests.map(interestLabel);
   const missingSkills = profile.missingSkills || [];
-
   if (!profile.completedAt) {
     return { interests: [], missingSkills: [], summary: '' };
   }
-
-  if (profile.skipped && interests.length === 0) {
-    return {
-      interests: [],
-      missingSkills: [],
-      summary: 'Student skipped interest and skill-gap onboarding.',
-    };
-  }
-
-  const yesSkills = profile.gapAnswers.filter((a) => a.answer === 'yes').map((a) => a.skill);
   const summary = [
     interests.length ? `Career interests: ${interests.join(', ')}.` : '',
     profile.customRole ? `Custom target role: ${profile.customRole}.` : '',
-    yesSkills.length ? `Strengths: ${yesSkills.join(', ')}.` : '',
-    (profile.customSkills || []).length ? `Known skills: ${profile.customSkills!.join(', ')}.` : '',
     missingSkills.length
       ? `Skill gaps to close: ${missingSkills.join(', ')}.`
       : 'No major skill gaps marked from the quiz.',
   ]
     .filter(Boolean)
     .join(' ');
-
   return { interests, missingSkills, summary };
+}
+
+export async function syncOnboardingFromServer(): Promise<void> {
+  const remote = await pullUserData<OnboardingProfile>('onboarding');
+  if (!remote || typeof remote !== 'object') return;
+  writeOnboarding({ ...readOnboarding(), ...remote });
+}
+
+/* Re-export static data used by UI (keep compatibility) */
+export const GAP_QUESTIONS: Record<
+  InterestTrack,
+  { id: string; question: string; skill: string }[]
+> = {
+  software: [
+    { id: 'sw1', question: 'Have you built a web or mobile app before?', skill: 'Project building' },
+    { id: 'sw2', question: 'Are you comfortable with at least one programming language?', skill: 'Programming fundamentals' },
+    { id: 'sw3', question: 'Do you know basic data structures?', skill: 'Data structures' },
+    { id: 'sw4', question: 'Have you used Git and GitHub?', skill: 'Git & GitHub' },
+    { id: 'sw5', question: 'Can you explain REST APIs at a basic level?', skill: 'APIs' },
+    { id: 'sw6', question: 'Any internship/freelance/open-source?', skill: 'Practical experience' },
+  ],
+  cybersecurity: [
+    { id: 'cy1', question: 'Networking basics (IP, DNS, HTTP)?', skill: 'Networking basics' },
+    { id: 'cy2', question: 'Linux command line day-to-day?', skill: 'Linux' },
+    { id: 'cy3', question: 'Encryption and hashing?', skill: 'Cryptography basics' },
+    { id: 'cy4', question: 'CTF or security labs?', skill: 'Hands-on security practice' },
+    { id: 'cy5', question: 'XSS, SQLi, CSRF?', skill: 'Web vulnerabilities' },
+    { id: 'cy6', question: 'OS security or firewall?', skill: 'OS & network security' },
+  ],
+  data_analyst: [
+    { id: 'da1', question: 'Excel or Sheets analysis?', skill: 'Spreadsheets' },
+    { id: 'da2', question: 'SQL queries?', skill: 'SQL' },
+    { id: 'da3', question: 'Python or R for analysis?', skill: 'Python/R for analysis' },
+    { id: 'da4', question: 'Charts/reports/dashboards?', skill: 'Visualization' },
+    { id: 'da5', question: 'Basic statistics?', skill: 'Statistics' },
+    { id: 'da6', question: 'Cleaned a messy dataset?', skill: 'Data cleaning' },
+  ],
+  custom: [],
+};
+
+export type TrackRecommendation = { title: string; blurb: string; to: string; tag: string };
+export const TRACK_RECOMMENDATIONS: Record<InterestTrack, TrackRecommendation[]> = {
+  software: [
+    { title: 'DSA Beginner Sheet', blurb: 'Arrays, lists, interviews.', to: '/dsa-sheet', tag: 'DSA' },
+    { title: 'Frontend Developer', blurb: 'HTML, CSS, React.', to: '/roadmaps/frontend', tag: 'Frontend' },
+    { title: 'Backend Developer', blurb: 'APIs and databases.', to: '/roadmaps/backend', tag: 'Backend' },
+    { title: 'Internships', blurb: 'Apply with projects.', to: '/internships', tag: 'Career' },
+  ],
+  cybersecurity: [
+    { title: 'Cybersecurity Roadmap', blurb: 'Network to defense.', to: '/roadmaps/cybersecurity', tag: 'Security' },
+    { title: 'Assessments', blurb: 'Check fundamentals.', to: '/assessments', tag: 'Practice' },
+  ],
+  data_analyst: [
+    { title: 'Data Analyst Roadmap', blurb: 'SQL, Python, viz.', to: '/roadmaps/data-analyst', tag: 'Data' },
+    { title: 'Assessments', blurb: 'SQL quizzes.', to: '/assessments', tag: 'Practice' },
+  ],
+  custom: [
+    { title: 'AI Course Designer', blurb: 'Course for your role.', to: '/ai-course-designer', tag: 'Custom' },
+  ],
+};
+
+export type SkillPath = { courseTitle: string; to: string; priority: number };
+export const SKILL_TO_PATH: Record<string, SkillPath> = {
+  'Programming fundamentals': { courseTitle: 'Fullstack fundamentals', to: '/roadmaps/fullstack', priority: 1 },
+  'Data structures': { courseTitle: 'DSA Beginner Sheet', to: '/dsa-sheet', priority: 2 },
+  'Git & GitHub': { courseTitle: 'Backend Developer roadmap', to: '/roadmaps/backend', priority: 3 },
+  APIs: { courseTitle: 'Backend & API path', to: '/roadmaps/backend', priority: 4 },
+  SQL: { courseTitle: 'Data Analyst roadmap', to: '/roadmaps/data-analyst', priority: 2 },
+};
+
+export type GapAction = { skill: string; courseTitle: string; to: string; priority: number };
+export type NextStepPlan =
+  | { kind: 'quiz' }
+  | { kind: 'gaps'; gapCount: number; skills: string[]; primary: GapAction; alternatives: GapAction[]; trackLabel: string }
+  | { kind: 'internships'; trackLabel: string };
+
+export function getNextStepPlan(profile?: OnboardingProfile): NextStepPlan {
+  const p = profile ?? readOnboarding();
+  const track = p.interests?.[0];
+  const trackLabel = track ? interestLabel(track) : 'your track';
+  if (!p.completedAt) return { kind: 'quiz' };
+  const missing = [...(p.missingSkills || [])];
+  if (missing.length === 0 && p.gapAnswers?.length) {
+    p.gapAnswers.forEach((a) => {
+      if (a.answer === 'no' && a.skill && !missing.includes(a.skill)) missing.push(a.skill);
+    });
+  }
+  if (missing.length === 0) return { kind: 'internships', trackLabel };
+  const actions: GapAction[] = missing.map((skill) => {
+    const mapped = SKILL_TO_PATH[skill];
+    if (mapped) return { skill, courseTitle: mapped.courseTitle, to: mapped.to, priority: mapped.priority };
+    return { skill, courseTitle: 'Browse roadmaps', to: '/roadmaps', priority: 99 };
+  });
+  actions.sort((a, b) => a.priority - b.priority);
+  const primary = actions[0];
+  const alternatives = actions.slice(1, 4);
+  return { kind: 'gaps', gapCount: missing.length, skills: missing, primary, alternatives, trackLabel };
 }
