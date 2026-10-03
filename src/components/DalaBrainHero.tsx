@@ -1,18 +1,34 @@
 /**
- * Faithful Dala brain hero (threejs-dala / craftedbygc).
- * - Real brain.glb instanced wireframe boxes
- * - Strong hover: scale + rotate under cursor
- * - Purple radial background
- * - Crosshair on hover
- * - Fixed full-bleed for landing
+ * Faithful port of threejs-dala / craftedbygc Dala brain hero.
+ * Exact shader falloff, camera, colors from upstream.
  */
 import { useRef, useMemo, useEffect, useState, Suspense, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
-const BRAIN_URL =
-  'https://cdn.jsdelivr.net/gh/kekkorider/threejs-dala@main/static/brain.glb';
+/** Prefer self-hosted, fall back to upstream CDN */
+const BRAIN_CANDIDATES = [
+  '/models/brain.glb',
+  'https://cdn.jsdelivr.net/gh/kekkorider/threejs-dala@main/static/brain.glb',
+];
+
+let RESOLVED_BRAIN_URL = BRAIN_CANDIDATES[1];
+
+async function resolveBrainUrl(): Promise<string> {
+  for (const url of BRAIN_CANDIDATES) {
+    try {
+      const res = await fetch(url, { method: 'HEAD', cache: 'force-cache' });
+      if (res.ok) {
+        RESOLVED_BRAIN_URL = url;
+        return url;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  return BRAIN_CANDIDATES[1];
+}
 
 const COLORS = [
   new THREE.Color(0x963cbd),
@@ -21,6 +37,7 @@ const COLORS = [
   new THREE.Color(0xfeae51),
 ];
 
+/** Exact upstream vertex shader (kekkorider/threejs-dala) */
 const vertexShader = /* glsl */ `
 uniform vec3 uPointer;
 uniform float uHover;
@@ -44,10 +61,10 @@ void main() {
   mvPosition = instanceMatrix * mvPosition;
 
   float d = distance(uPointer, mvPosition.xyz);
-  // Dala-like falloff — tight core, readable burst
-  float c = smoothstep(0.65, 0.06, d);
+  // Exact Dala falloff
+  float c = smoothstep(0.45, 0.1, d);
 
-  float scale = aSize + c * 14.0 * uHover;
+  float scale = aSize + c * 8.0 * uHover;
   vec3 pos = position;
   pos *= scale;
   pos.xz *= rotate(PI * c * aRotation + PI * aRotation * 0.43);
@@ -73,19 +90,19 @@ function BrainInstances({
   mouseRef,
   onModelReady,
   onHoverChange,
+  brainUrl,
 }: {
   ready: boolean;
   mouseRef: React.MutableRefObject<MouseState>;
   onModelReady: () => void;
   onHoverChange: (hovering: boolean) => void;
+  brainUrl: string;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const hitMeshRef = useRef<THREE.Mesh>(null);
   const { camera, size } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const ndc = useMemo(() => new THREE.Vector2(), []);
-  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), []);
-  const planeHit = useMemo(() => new THREE.Vector3(), []);
   const targetPoint = useRef(new THREE.Vector3());
   const smoothPoint = useRef(new THREE.Vector3());
   const hoverRef = useRef(0);
@@ -93,7 +110,6 @@ function BrainInstances({
   const camTarget = useRef({ x: 0, y: 0 });
   const notified = useRef(false);
   const wasHovering = useRef(false);
-  const sphere = useMemo(() => new THREE.Sphere(new THREE.Vector3(0, 0, 0), 0.7), []);
 
   const uniforms = useMemo(
     () => ({
@@ -103,7 +119,7 @@ function BrainInstances({
     [],
   );
 
-  const gltf = useGLTF(BRAIN_URL);
+  const gltf = useGLTF(brainUrl);
 
   const brainGeo = useMemo(() => {
     let mesh: THREE.Mesh | null = null;
@@ -119,15 +135,16 @@ function BrainInstances({
     }
     const posAttr = brainGeo.attributes.position;
     const count = posAttr.count;
-    const boxGeo = new THREE.BoxGeometry(0.0045, 0.0045, 0.0045);
+    // Exact upstream box size
+    const boxGeo = new THREE.BoxGeometry(0.004, 0.004, 0.004);
     const aRotation = new Float32Array(count);
     const aSize = new Float32Array(count);
     const aColor = new Float32Array(count * 3);
 
     for (let i = 0; i < count; i++) {
       aRotation[i] = THREE.MathUtils.randFloat(-1, 1);
-      aSize[i] = THREE.MathUtils.randFloat(0.35, 3.2);
-      const col = COLORS[Math.floor(Math.random() * COLORS.length)];
+      aSize[i] = THREE.MathUtils.randFloat(0.3, 3);
+      const col = COLORS[THREE.MathUtils.randInt(0, COLORS.length - 1)];
       aColor[i * 3] = col.r;
       aColor[i * 3 + 1] = col.g;
       aColor[i * 3 + 2] = col.b;
@@ -163,28 +180,24 @@ function BrainInstances({
     }
     mesh.instanceMatrix.needsUpdate = true;
 
-    brainGeo.computeBoundingSphere();
-    if (brainGeo.boundingSphere) {
-      sphere.center.copy(brainGeo.boundingSphere.center);
-      sphere.radius = brainGeo.boundingSphere.radius * 1.35;
-    }
-
     if (!notified.current) {
       notified.current = true;
       onModelReady();
     }
-  }, [count, brainGeo, onModelReady, sphere]);
+  }, [count, brainGeo, onModelReady]);
 
   useFrame(() => {
     if (!meshRef.current || count === 0) return;
 
     const { x, y, active } = mouseRef.current;
+    const isMobile = size.width < 767;
 
-    camTarget.current.x = x * 0.18;
-    camTarget.current.y = y * 0.12;
-    camera.position.x += (camTarget.current.x - camera.position.x) * 0.08;
-    camera.position.y += (camTarget.current.y - camera.position.y) * 0.08;
-    camera.position.z = size.width < 767 ? 2.4 : 1.15;
+    // Exact upstream camera parallax (gsap-equivalent lerp)
+    camTarget.current.x = x * 0.15;
+    camTarget.current.y = y * 0.1;
+    camera.position.x += (camTarget.current.x - camera.position.x) * 0.12;
+    camera.position.y += (camTarget.current.y - camera.position.y) * 0.12;
+    camera.position.z = isMobile ? 2.3 : 1.2;
     camera.lookAt(0, 0, 0);
 
     let hovering = false;
@@ -201,21 +214,6 @@ function BrainInstances({
           targetPoint.current.copy(hits[0].point);
         }
       }
-
-      if (!hovering) {
-        const hitSphere = raycaster.ray.intersectSphere(sphere, planeHit);
-        if (hitSphere) {
-          hovering = true;
-          targetPoint.current.copy(planeHit);
-        }
-      }
-
-      if (!hovering) {
-        const onPlane = raycaster.ray.intersectPlane(plane, planeHit);
-        if (onPlane) {
-          targetPoint.current.lerp(planeHit, 0.45);
-        }
-      }
     }
 
     targetHover.current = hovering ? 1 : 0;
@@ -225,8 +223,10 @@ function BrainInstances({
       onHoverChange(hovering);
     }
 
-    smoothPoint.current.lerp(targetPoint.current, 0.28);
-    hoverRef.current += (targetHover.current - hoverRef.current) * 0.22;
+    // Upstream-like pointer follow (~0.3s feel)
+    smoothPoint.current.lerp(targetPoint.current, 0.22);
+    // Upstream hover animate ~0.25s
+    hoverRef.current += (targetHover.current - hoverRef.current) * 0.2;
 
     uniforms.uPointer.value.copy(smoothPoint.current);
     uniforms.uHover.value = hoverRef.current;
@@ -236,7 +236,7 @@ function BrainInstances({
 
   return (
     <>
-      <mesh ref={hitMeshRef} geometry={brainGeo} scale={1.2} visible={false}>
+      <mesh ref={hitMeshRef} geometry={brainGeo} visible={false}>
         <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
       <instancedMesh
@@ -253,11 +253,13 @@ function Scene({
   mouseRef,
   onModelReady,
   onHoverChange,
+  brainUrl,
 }: {
   ready: boolean;
   mouseRef: React.MutableRefObject<MouseState>;
   onModelReady: () => void;
   onHoverChange: (hovering: boolean) => void;
+  brainUrl: string;
 }) {
   return (
     <Suspense fallback={null}>
@@ -266,12 +268,11 @@ function Scene({
         mouseRef={mouseRef}
         onModelReady={onModelReady}
         onHoverChange={onHoverChange}
+        brainUrl={brainUrl}
       />
     </Suspense>
   );
 }
-
-useGLTF.preload(BRAIN_URL);
 
 const DALA_BG =
   'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%)';
@@ -279,7 +280,6 @@ const DALA_BG =
 export type DalaBrainHeroProps = {
   ready?: boolean;
   onReady?: () => void;
-  /** fixed = full-page background for landing */
   mode?: 'fixed' | 'absolute';
 };
 
@@ -291,6 +291,7 @@ export function DalaBrainHero({
   const [webglOk, setWebglOk] = useState(true);
   const [modelReady, setModelReady] = useState(false);
   const [brainHover, setBrainHover] = useState(false);
+  const [brainUrl, setBrainUrl] = useState(RESOLVED_BRAIN_URL);
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseRef = useRef<MouseState>({ x: 0, y: 0, active: false });
 
@@ -314,7 +315,16 @@ export function DalaBrainHero({
   useEffect(() => {
     if (!webglOk) {
       onReady?.();
+      return;
     }
+    resolveBrainUrl().then((url) => {
+      setBrainUrl(url);
+      try {
+        useGLTF.preload(url);
+      } catch {
+        /* preload optional */
+      }
+    });
   }, [webglOk, onReady]);
 
   useEffect(() => {
@@ -324,10 +334,10 @@ export function DalaBrainHero({
     const updateFromClient = (clientX: number, clientY: number) => {
       const rect = el.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
-      const x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((clientY - rect.top) / rect.height) * 2 - 1);
-      mouseRef.current.x = THREE.MathUtils.clamp(x, -1.3, 1.3);
-      mouseRef.current.y = THREE.MathUtils.clamp(y, -1.3, 1.3);
+      const x = (clientX / window.innerWidth) * 2 - 1;
+      const y = -(clientY / window.innerHeight) * 2 + 1;
+      mouseRef.current.x = THREE.MathUtils.clamp(x, -1, 1);
+      mouseRef.current.y = THREE.MathUtils.clamp(y, -1, 1);
       mouseRef.current.active = true;
     };
 
@@ -336,20 +346,21 @@ export function DalaBrainHero({
       const t = e.touches[0];
       if (t) updateFromClient(t.clientX, t.clientY);
     };
-    const onLeave = () => {
-      mouseRef.current.active = false;
+    const onTouchEnd = () => {
+      // Keep last pointer so hover fades smoothly (mobile)
+      mouseRef.current.active = true;
     };
 
     window.addEventListener('mousemove', onMouseMove, { passive: true });
     window.addEventListener('touchmove', onTouch, { passive: true });
     window.addEventListener('touchstart', onTouch, { passive: true });
-    el.addEventListener('mouseleave', onLeave);
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
 
     return () => {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('touchmove', onTouch);
       window.removeEventListener('touchstart', onTouch);
-      el.removeEventListener('mouseleave', onLeave);
+      window.removeEventListener('touchend', onTouchEnd);
     };
   }, []);
 
@@ -382,11 +393,11 @@ export function DalaBrainHero({
           width: '100%',
           height: '100%',
           opacity: showCanvas ? 1 : 0,
-          transition: 'opacity 1.1s ease',
+          transition: 'opacity 1s ease',
         }}
       >
         <Canvas
-          camera={{ position: [0, 0, 1.15], fov: 70, near: 0.1, far: 100 }}
+          camera={{ position: [0, 0, 1.2], fov: 75, near: 0.1, far: 100 }}
           dpr={[
             1,
             Math.min(1.5, typeof window !== 'undefined' ? window.devicePixelRatio : 1),
@@ -407,6 +418,7 @@ export function DalaBrainHero({
             mouseRef={mouseRef}
             onModelReady={handleModelReady}
             onHoverChange={onHoverChange}
+            brainUrl={brainUrl}
           />
         </Canvas>
       </div>

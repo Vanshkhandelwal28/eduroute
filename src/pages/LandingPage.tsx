@@ -1,7 +1,7 @@
 /**
- * EduRoute Landing — Dala-matched: real brain.glb hero + editorial chapters.
+ * EduRoute Landing — Dala-matched sparse editorial + real brain hero.
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthModal } from '../components/AuthModal';
 import { DalaBrainHero } from '../components/DalaBrainHero';
@@ -39,22 +39,22 @@ function revealHeroNow() {
       {
         yPercent: 0,
         opacity: 1,
-        duration: 1.25,
+        duration: 1.2,
         ease: 'power3.out',
-        stagger: 0.14,
+        stagger: 0.12,
         overwrite: true,
       }
     );
     const body = document.querySelector('#hero .er-body');
     const label = document.querySelector('#hero .er-label');
     if (label) {
-      gsap.fromTo(label, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.85 });
+      gsap.fromTo(label, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.8 });
     }
     if (body) {
       gsap.fromTo(
         body,
-        { opacity: 0, y: 16 },
-        { opacity: 1, y: 0, duration: 1, delay: 0.35 }
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: 0.9, delay: 0.3 }
       );
     }
   } catch {
@@ -66,7 +66,20 @@ export const LandingPage = () => {
   const [auth, setAuth] = useState(false);
   const [showTop, setShowTop] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
-  const [brainReady, setBrainReady] = useState(false);
+  const loaderRef = useRef<InstanceType<typeof Loader> | null>(null);
+  const revealed = useRef(false);
+
+  const finishLoad = useCallback(() => {
+    if (revealed.current) return;
+    revealed.current = true;
+    const loader = loaderRef.current;
+    if (loader) {
+      loader.setProgress(1);
+      loader.complete().then(() => revealHeroNow());
+    } else {
+      revealHeroNow();
+    }
+  }, []);
 
   const scrollToTop = useCallback(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -95,76 +108,29 @@ export const LandingPage = () => {
     onScroll();
 
     const loader = new Loader();
-    loader.setProgress(0.15);
+    loaderRef.current = loader;
+    loader.setProgress(0.2);
 
-    const safetyT = window.setTimeout(() => {
-      loader.setProgress(1);
-      loader.complete().then(() => revealHeroNow());
-      setBrainReady(true);
-    }, 6000);
+    const safetyT = window.setTimeout(() => finishLoad(), 8000);
 
     return () => {
       document.body.classList.remove('er-on-landing');
       window.removeEventListener('scroll', onScroll);
       window.clearTimeout(safetyT);
       loader.dispose();
+      loaderRef.current = null;
     };
-  }, []);
+  }, [finishLoad]);
 
   const handleBrainReady = useCallback(() => {
-    setBrainReady(true);
-    const loaderEl = document.querySelector('.er-loader');
-    if (!loaderEl) {
-      revealHeroNow();
-      return;
-    }
-    // Drive existing loader if still present
-    const loaders = (window as unknown as { __erLoader?: { setProgress: (n: number) => void; complete: () => Promise<void> } }).__erLoader;
-    void loaders;
-    // Complete via DOM path — create a one-shot complete
-    const finish = async () => {
-      const bar = document.querySelector('.er-loader__bar span') as HTMLElement | null;
-      if (bar) bar.style.transform = 'scaleX(1)';
-      await new Promise((r) => setTimeout(r, 400));
-      const el = document.querySelector('.er-loader') as HTMLElement | null;
-      if (el) {
-        el.style.transition = 'opacity 0.85s ease';
-        el.style.opacity = '0';
-        setTimeout(() => el.remove(), 900);
-      }
-      revealHeroNow();
-    };
-    finish();
-  }, []);
-
-  // Simpler loader integration: when brain ready, dismiss
-  useEffect(() => {
-    if (!brainReady) return;
-    const el = document.querySelector('.er-loader') as HTMLElement | null;
-    if (!el) {
-      revealHeroNow();
-      return;
-    }
-    const bar = el.querySelector('.er-loader__bar span') as HTMLElement | null;
-    const pct = el.querySelector('.er-loader__pct');
-    if (bar) bar.style.transform = 'scaleX(1)';
-    if (pct) pct.textContent = '100';
-    const t = window.setTimeout(() => {
-      el.style.transition = 'opacity 0.9s ease';
-      el.style.opacity = '0';
-      window.setTimeout(() => {
-        el.remove();
-        revealHeroNow();
-      }, 950);
-    }, 350);
-    return () => window.clearTimeout(t);
-  }, [brainReady]);
+    loaderRef.current?.setProgress(0.85);
+    window.setTimeout(() => finishLoad(), 200);
+  }, [finishLoad]);
 
   return (
     <div className="er-landing er-landing--dala">
       <AuthModal isOpen={auth} onClose={() => setAuth(false)} />
 
-      {/* Real Dala brain — fixed full-bleed, interactive */}
       <DalaBrainHero mode="fixed" ready onReady={handleBrainReady} />
 
       <div className="er-progress" aria-hidden="true">
@@ -214,7 +180,7 @@ export const LandingPage = () => {
             </span>
           </h1>
           <p className="er-body">
-            A cinematic platform for discovering skills, mapping opportunity, and building the path that is uniquely yours.
+            Discover skills. Map opportunity. Build the path that is yours.
           </p>
           <div className="er-hero__actions er-interactive">
             <button type="button" className="er-btn er-btn--primary" onClick={() => setAuth(true)}>
@@ -236,10 +202,7 @@ export const LandingPage = () => {
           <p className="er-label">01 — Structure</p>
           <h2 className="er-title er-title--editorial">
             <span className="er-reveal">
-              <span>We believe</span>
-            </span>
-            <span className="er-reveal">
-              <span>learning should</span>
+              <span>Learning should</span>
             </span>
             <span className="er-reveal">
               <span>feel like</span>
@@ -249,7 +212,7 @@ export const LandingPage = () => {
             </span>
           </h2>
           <p className="er-body er-body--wide">
-            Too many platforms treat education as a checklist. We treat it as a living system — one that adapts to who you are and where the world is heading.
+            Not a checklist — a living system that adapts to who you are and where the world is heading.
           </p>
         </section>
 
@@ -264,7 +227,7 @@ export const LandingPage = () => {
             </span>
           </h2>
           <p className="er-body">
-            Map strengths, interests and gaps with clarity. The first step is understanding the shape of your own potential.
+            Map strengths, interests, and gaps with clarity.
           </p>
         </section>
 
@@ -279,7 +242,7 @@ export const LandingPage = () => {
             </span>
           </h2>
           <p className="er-body">
-            From curiosity to capability. From capability to real-world paths — internships, projects, and roles that match your trajectory.
+            From curiosity to capability — internships, projects, and roles that match your trajectory.
           </p>
         </section>
 
@@ -294,7 +257,7 @@ export const LandingPage = () => {
             </span>
           </h2>
           <p className="er-body">
-            Markets shift. Skills age. We keep your route alive with live signals, adaptive roadmaps, and intelligent guidance.
+            Live signals. Adaptive roadmaps. Intelligent guidance.
           </p>
         </section>
 
@@ -349,7 +312,7 @@ export const LandingPage = () => {
             </span>
           </h2>
           <p className="er-body">
-            Join a platform designed for the next generation of builders, thinkers, and explorers.
+            For the next generation of builders, thinkers, and explorers.
           </p>
           <div className="er-cta__actions er-interactive">
             <button type="button" className="er-btn er-btn--primary" onClick={() => setAuth(true)}>
