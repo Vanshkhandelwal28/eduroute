@@ -1,5 +1,6 @@
 /**
- * EduRoute Landing — cinematic redesign (Phase 11 polish).
+ * EduRoute Landing — cinematic redesign.
+ * Hero text reveal is driven here so it never depends on WebGL/Timeline timing.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -7,7 +8,49 @@ import { AuthModal } from '../components/AuthModal';
 import Experience from '../experience/Experience.js';
 import Cursor from '../experience/ui/Cursor.js';
 import Loader from '../experience/ui/Loader.js';
+import gsap from 'gsap';
 import '../experience/styles/landing.css';
+
+function revealHeroNow() {
+  const root = document.querySelector('.er-landing');
+  if (root) root.classList.add('is-ready');
+
+  const spans = document.querySelectorAll('#hero .er-reveal > span');
+  spans.forEach((el) => {
+    (el as HTMLElement).style.transform = 'translateY(0)';
+    (el as HTMLElement).style.opacity = '1';
+  });
+
+  // Animated polish if GSAP available
+  try {
+    gsap.fromTo(
+      spans,
+      { yPercent: 110, opacity: 0 },
+      {
+        yPercent: 0,
+        opacity: 1,
+        duration: 1.1,
+        ease: 'power3.out',
+        stagger: 0.1,
+        overwrite: true,
+      }
+    );
+    const body = document.querySelector('#hero .er-body');
+    const label = document.querySelector('#hero .er-label');
+    if (label) {
+      gsap.fromTo(label, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.7 });
+    }
+    if (body) {
+      gsap.fromTo(
+        body,
+        { opacity: 0, y: 14 },
+        { opacity: 1, y: 0, duration: 0.85, delay: 0.25 }
+      );
+    }
+  } catch {
+    /* static visibility already applied */
+  }
+}
 
 export const LandingPage = () => {
   const [auth, setAuth] = useState(false);
@@ -15,25 +58,43 @@ export const LandingPage = () => {
   const experienceRef = useRef<InstanceType<typeof Experience> | null>(null);
 
   useEffect(() => {
-    if (!canvasRef.current) return;
+    document.body.classList.add('er-on-landing');
+
+    if (!canvasRef.current) {
+      revealHeroNow();
+      return;
+    }
 
     const loader = new Loader();
     const cursor = new Cursor();
 
-    // Mount WebGL after a short beat so loader is visible
-    const experience = new Experience({ canvas: canvasRef.current });
-    experienceRef.current = experience;
+    let experience: InstanceType<typeof Experience> | null = null;
+    try {
+      experience = new Experience({ canvas: canvasRef.current });
+      experienceRef.current = experience;
+    } catch (err) {
+      console.error('[Landing] Experience failed:', err);
+      document.querySelector('.er-landing')?.classList.add('er-no-webgl');
+    }
 
-    // Dismiss loader once first frames are likely ready
-    const t = window.setTimeout(() => {
+    // Reveal hero text after loader window — independent of WebGL
+    const revealT = window.setTimeout(() => {
+      revealHeroNow();
       loader.dismiss();
-    }, 900);
+    }, 1000);
+
+    // Absolute fallback if something blocks the first timeout
+    const safetyT = window.setTimeout(() => {
+      revealHeroNow();
+    }, 2000);
 
     return () => {
-      window.clearTimeout(t);
+      document.body.classList.remove('er-on-landing');
+      window.clearTimeout(revealT);
+      window.clearTimeout(safetyT);
       loader.dispose();
       cursor.dispose();
-      experience.destroy();
+      experience?.destroy();
       experienceRef.current = null;
     };
   }, []);
