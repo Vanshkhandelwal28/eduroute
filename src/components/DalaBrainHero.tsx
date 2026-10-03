@@ -1,11 +1,11 @@
 /**
- * Dala-matched brain (kekkorider/threejs-dala)
- * - exact smoothstep(0.45, 0.1, d) + scale * 8 * uHover
- * - hit-only hover (raycast brain mesh)
- * - window mouse/touch → NDC
- * - purple radial bg, transparent canvas, load fade-in
+ * Dala-matched brain with strong hover effect
+ * - raycast scaled brain mesh
+ * - sphere proximity fallback (easy to trigger)
+ * - pointer follows surface / plane under cursor
+ * - cursor: crosshair while over hero
  */
-import { useRef, useMemo, useEffect, useState, Suspense } from 'react';
+import { useRef, useMemo, useEffect, useState, Suspense, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -20,7 +20,6 @@ const COLORS = [
   new THREE.Color(0xfeae51),
 ];
 
-/** Exact upstream brain.vertex.glsl (rotate inlined) */
 const vertexShader = /* glsl */ `
 uniform vec3 uPointer;
 uniform float uHover;
@@ -44,9 +43,10 @@ void main() {
   mvPosition = instanceMatrix * mvPosition;
 
   float d = distance(uPointer, mvPosition.xyz);
-  float c = smoothstep(0.45, 0.1, d);
+  // Slightly wider falloff so hover reads clearly
+  float c = smoothstep(0.55, 0.08, d);
 
-  float scale = aSize + c * 8.0 * uHover;
+  float scale = aSize + c * 10.0 * uHover;
   vec3 pos = position;
   pos *= scale;
   pos.xz *= rotate(PI * c * aRotation + PI * aRotation * 0.43);
@@ -71,22 +71,28 @@ function BrainInstances({
   ready,
   mouseRef,
   onModelReady,
+  onHoverChange,
 }: {
   ready: boolean;
   mouseRef: React.MutableRefObject<MouseState>;
   onModelReady: () => void;
+  onHoverChange: (hovering: boolean) => void;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const hitMeshRef = useRef<THREE.Mesh>(null);
   const { camera, size } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const ndc = useMemo(() => new THREE.Vector2(), []);
+  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), []);
+  const planeHit = useMemo(() => new THREE.Vector3(), []);
   const targetPoint = useRef(new THREE.Vector3());
   const smoothPoint = useRef(new THREE.Vector3());
   const hoverRef = useRef(0);
   const targetHover = useRef(0);
   const camTarget = useRef({ x: 0, y: 0 });
   const notified = useRef(false);
+  const wasHovering = useRef(false);
+  const sphere = useMemo(() => new THREE.Sphere(new THREE.Vector3(0, 0, 0), 0.55), []);
 
   const uniforms = useMemo(
     () => ({
@@ -155,18 +161,25 @@ function BrainInstances({
       mesh.setMatrixAt(i, dummy.matrix);
     }
     mesh.instanceMatrix.needsUpdate = true;
+
+    // Fit hover sphere to brain bounds
+    brainGeo.computeBoundingSphere();
+    if (brainGeo.boundingSphere) {
+      sphere.center.copy(brainGeo.boundingSphere.center);
+      sphere.radius = brainGeo.boundingSphere.radius * 1.15;
+    }
+
     if (!notified.current) {
       notified.current = true;
       onModelReady();
     }
-  }, [count, brainGeo, onModelReady]);
+  }, [count, brainGeo, onModelReady, sphere]);
 
   useFrame(() => {
     if (!meshRef.current || count === 0) return;
 
     const { x, y, active } = mouseRef.current;
 
-    // Camera parallax — threejs-dala (gsap ~0.5s ≈ lerp 0.08–0.1)
     camTarget.current.x = x * 0.15;
     camTarget.current.y = y * 0.1;
     camera.position.x += (camTarget.current.x - camera.position.x) * 0.1;
@@ -174,30 +187,49 @@ function BrainInstances({
     camera.position.z = size.width < 767 ? 2.3 : 1.2;
     camera.lookAt(0, 0, 0);
 
-    // Hit-only hover (upstream): uHover 1 on brain ray hit, else 0
+    let hovering = false;
+
     if (ready && active) {
       ndc.set(x, y);
       raycaster.setFromCamera(ndc, camera);
 
+      // 1) Raycast enlarged hit mesh
       if (hitMeshRef.current) {
         hitMeshRef.current.updateMatrixWorld(true);
         const hits = raycaster.intersectObject(hitMeshRef.current, false);
         if (hits.length > 0 && hits[0]) {
-          targetHover.current = 1;
+          hovering = true;
           targetPoint.current.copy(hits[0].point);
-        } else {
-          targetHover.current = 0;
         }
-      } else {
-        targetHover.current = 0;
       }
-    } else {
-      targetHover.current = 0;
+
+      // 2) Sphere fallback — easy hover near brain volume
+      if (!hovering) {
+        const hitSphere = raycaster.ray.intersectSphere(sphere, planeHit);
+        if (hitSphere) {
+          hovering = true;
+          targetPoint.current.copy(planeHit);
+        }
+      }
+
+      // Always track pointer on z=0 plane for smooth motion under cursor
+      if (!hovering) {
+        const onPlane = raycaster.ray.intersectPlane(plane, planeHit);
+        if (onPlane) {
+          targetPoint.current.lerp(planeHit, 0.5);
+        }
+      }
     }
 
-    // Smooth like GSAP duration 0.25–0.3
-    smoothPoint.current.lerp(targetPoint.current, 0.18);
-    hoverRef.current += (targetHover.current - hoverRef.current) * 0.14;
+    targetHover.current = hovering ? 1 : 0;
+
+    if (hovering !== wasHovering.current) {
+      wasHovering.current = hovering;
+      onHoverChange(hovering);
+    }
+
+    smoothPoint.current.lerp(targetPoint.current, 0.25);
+    hoverRef.current += (targetHover.current - hoverRef.current) * 0.18;
 
     uniforms.uPointer.value.copy(smoothPoint.current);
     uniforms.uHover.value = hoverRef.current;
@@ -207,8 +239,9 @@ function BrainInstances({
 
   return (
     <>
-      <mesh ref={hitMeshRef} geometry={brainGeo} visible={false}>
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      {/* Slightly scaled invisible mesh = larger hover target */}
+      <mesh ref={hitMeshRef} geometry={brainGeo} scale={1.12} visible={false}>
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
       <instancedMesh
         ref={meshRef}
@@ -223,29 +256,39 @@ function Scene({
   ready,
   mouseRef,
   onModelReady,
+  onHoverChange,
 }: {
   ready: boolean;
   mouseRef: React.MutableRefObject<MouseState>;
   onModelReady: () => void;
+  onHoverChange: (hovering: boolean) => void;
 }) {
   return (
     <Suspense fallback={null}>
-      <BrainInstances ready={ready} mouseRef={mouseRef} onModelReady={onModelReady} />
+      <BrainInstances
+        ready={ready}
+        mouseRef={mouseRef}
+        onModelReady={onModelReady}
+        onHoverChange={onHoverChange}
+      />
     </Suspense>
   );
 }
 
 useGLTF.preload(BRAIN_URL);
 
-/** Upstream index.scss — no heavy black edge */
 const DALA_BG =
   'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%)';
 
 export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
   const [webglOk, setWebglOk] = useState(true);
   const [modelReady, setModelReady] = useState(false);
+  const [brainHover, setBrainHover] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseRef = useRef<MouseState>({ x: 0, y: 0, active: false });
+
+  const onModelReady = useCallback(() => setModelReady(true), []);
+  const onHoverChange = useCallback((h: boolean) => setBrainHover(h), []);
 
   useEffect(() => {
     try {
@@ -257,7 +300,6 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
     }
   }, []);
 
-  // Window mouse/touch — NDC relative to hero (threejs-dala _onMousemove)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -304,7 +346,10 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
     <div
       ref={containerRef}
       className="absolute inset-0 z-0"
-      style={{ background: DALA_BG }}
+      style={{
+        background: DALA_BG,
+        cursor: brainHover ? 'crosshair' : 'default',
+      }}
     >
       <div
         style={{
@@ -334,7 +379,8 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
           <Scene
             ready={ready}
             mouseRef={mouseRef}
-            onModelReady={() => setModelReady(true)}
+            onModelReady={onModelReady}
+            onHoverChange={onHoverChange}
           />
         </Canvas>
       </div>
