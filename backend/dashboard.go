@@ -21,7 +21,7 @@ func (s *Server) profileDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var solvedTotal, easy, medium, hard int
-	_ = s.db.QueryRow("SELECT COUNT(*), COALESCE(SUM(difficulty = 'Easy'),0), COALESCE(SUM(difficulty = 'Medium'),0), COALESCE(SUM(difficulty = 'Hard'),0) FROM user_problem_submissions WHERE user_id = ? AND status = 'Accepted'", claims.ID).Scan(&solvedTotal, &easy, &medium, &hard)
+	_ = s.db.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN difficulty = 'Easy' THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN difficulty = 'Medium' THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN difficulty = 'Hard' THEN 1 ELSE 0 END),0) FROM user_problem_submissions WHERE user_id = ? AND status = 'Accepted'", claims.ID).Scan(&solvedTotal, &easy, &medium, &hard)
 	var assessmentCount, assessmentScore int
 	_ = s.db.QueryRow("SELECT COUNT(*), COALESCE(SUM(score),0) FROM attempts WHERE user_id = ?", claims.ID).Scan(&assessmentCount, &assessmentScore)
 
@@ -48,9 +48,9 @@ func (s *Server) profileDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dashboardActivity(userID string) ([]map[string]any, error) {
-	rows, err := s.queryMaps(`SELECT DATE(submitted_at) AS day, COUNT(*) AS count
+	rows, err := s.queryMaps(`SELECT DATE(submitted_at)::text AS date, COUNT(*)::int AS count
 		FROM user_problem_submissions WHERE user_id = ? AND submitted_at > NOW() - INTERVAL '30 days'
-		GROUP BY DATE(submitted_at) ORDER BY day`, userID)
+		GROUP BY DATE(submitted_at) ORDER BY date`, userID)
 	return rows, err
 }
 
@@ -60,7 +60,13 @@ func calculateStreak(activity []map[string]any) (int, int) {
 	}
 	days := map[string]bool{}
 	for _, a := range activity {
-		days[fmtDay(a["day"])] = true
+		d := stringValue(a["date"], "")
+		if len(d) >= 10 {
+			d = d[:10]
+		}
+		if d != "" {
+			days[d] = true
+		}
 	}
 	current, maxStreak, run := 0, 0, 0
 	now := time.Now().UTC()
@@ -71,41 +77,22 @@ func calculateStreak(activity []map[string]any) (int, int) {
 			if run > maxStreak {
 				maxStreak = run
 			}
-			if i == current || (current == 0 && i <= 1) {
+			if i == 0 || current > 0 {
 				current = run
 			}
-		} else if i > 0 {
+		} else {
+			if i == 0 {
+				run = 0
+				continue
+			}
 			if current == 0 && i == 1 {
+				run = 0
 				continue
 			}
 			break
-		} else {
-			run = 0
 		}
 	}
 	return current, maxStreak
-}
-
-func fmtDay(v any) string {
-	switch t := v.(type) {
-	case time.Time:
-		return t.Format("2006-01-02")
-	case []byte:
-		return string(t)
-	default:
-		return strings.Split(fmtSprint(v), "T")[0]
-	}
-}
-
-func fmtSprint(v any) string {
-	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(fmtString(v), "\"", ""), "'", ""))
-}
-
-func fmtString(v any) string {
-	if v == nil {
-		return ""
-	}
-	return strings.TrimSpace(stringValue(v, ""))
 }
 
 func (s *Server) dashboardRanks(userID string, points int) (int, int) {
@@ -116,8 +103,7 @@ func (s *Server) dashboardRanks(userID string, points int) (int, int) {
 }
 
 func (s *Server) dashboardRoadmaps(userID string) []map[string]any {
-	rows, _ := s.queryMaps(`SELECT r.id, r.name, r.slug, COALESCE(urp.points_earned,0) AS pointsEarned,
-		COALESCE(jsonb_array_length(urp.completed_tasks),0) AS completedTasks
+	rows, _ := s.queryMaps(`SELECT r.id, r.name, r.slug, COALESCE(urp.points_earned,0) AS pointsEarned
 		FROM roadmaps r LEFT JOIN user_roadmap_progress urp ON urp.roadmap_id = r.id AND urp.user_id = ?
 		ORDER BY r.name`, userID)
 	return rows
