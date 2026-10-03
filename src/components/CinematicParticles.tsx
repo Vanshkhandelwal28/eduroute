@@ -1,11 +1,12 @@
 /**
- * River-flow particles: positions integrate toward morph targets
- * with velocity damping — continuous stream, never snaps/breaks.
+ * River-flow particles with Bridson curl-noise fluid field.
+ * Morph targets + divergence-free advection + velocity damping.
  */
 import { useRef, useMemo, useEffect, useState, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { buildAllShapes, morphTargets, type ShapeName } from '../webgl/particleShapes';
+import { curlNoise } from '../webgl/curlNoise';
 
 const ACCENT = new THREE.Color('#c8f542');
 const BASE = new THREE.Color('#e8e6e1');
@@ -23,8 +24,6 @@ function ParticleField({
   const initialized = useRef(false);
 
   const shapes = useMemo(() => buildAllShapes(count), [count]);
-
-  // Live state: position + velocity (river simulation)
   const statePos = useMemo(() => new Float32Array(count * 3), [count]);
   const stateVel = useMemo(() => new Float32Array(count * 3), [count]);
 
@@ -47,7 +46,6 @@ function ParticleField({
     return g;
   }, [statePos, colors]);
 
-  // Seed from scatter
   useEffect(() => {
     const S = shapes.scatter;
     for (let i = 0; i < count * 3; i++) {
@@ -73,10 +71,9 @@ function ParticleField({
   useFrame((clockState, delta) => {
     if (!initialized.current) return;
 
-    const dt = Math.min(delta, 0.05);
-    // Smooth scroll progress so scrubbing doesn't jerk particles
+    const dt = Math.min(delta, 0.048);
     const raw = progressRef.current;
-    smoothProgress.current += (raw - smoothProgress.current) * Math.min(1, dt * 4);
+    smoothProgress.current += (raw - smoothProgress.current) * Math.min(1, dt * 3.5);
     const scrollSpeed = Math.abs(raw - prevProgress.current) / Math.max(dt, 0.001);
     prevProgress.current = raw;
 
@@ -85,36 +82,41 @@ function ParticleField({
     const B = shapes[to as ShapeName];
 
     const time = clockState.clock.elapsedTime;
-    // Spring strength — stronger when settling, gentler when morphing fast
-    const flow = 2.2 + Math.min(scrollSpeed * 0.5, 3);
-    const damp = 0.88;
+
+    // Morph attractor strength + viscosity-like damping
+    const attract = 1.8 + Math.min(scrollSpeed * 0.4, 2.5);
+    const damp = 0.91;
+    // Curl turbulence stronger while morphing / scrolling
+    const morphActivity = Math.sin(t * Math.PI); // peak mid-transition
+    const curlStr = 0.55 + morphActivity * 0.45 + Math.min(scrollSpeed * 0.15, 0.5);
 
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
+      const px = statePos[i3];
+      const py = statePos[i3 + 1];
+      const pz = statePos[i3 + 2];
 
-      // Target along continuous morph path
+      // Continuous morph target
       const tx = A[i3] + (B[i3] - A[i3]) * t;
       const ty = A[i3 + 1] + (B[i3 + 1] - A[i3 + 1]) * t;
       const tz = A[i3 + 2] + (B[i3 + 2] - A[i3 + 2]) * t;
 
-      // Curl-like stream offset (river turbulence)
-      const phase = i * 0.07 + time * 0.35;
-      const streamX = Math.sin(phase + ty * 2) * 0.02;
-      const streamY = Math.cos(phase * 0.9 + tx * 2) * 0.015;
-      const streamZ = Math.sin(phase * 1.1 + tz) * 0.02;
+      // Divergence-free curl noise (river field)
+      const c = curlNoise(px, py, pz, time + i * 0.002, 0.7);
 
-      // Mouse as soft current
-      const mx = mouse.current.x * 0.06;
-      const my = mouse.current.y * 0.05;
+      // Mouse = soft current
+      const mx = mouse.current.x * 0.08;
+      const my = mouse.current.y * 0.06;
 
-      const dx = tx + streamX + mx - statePos[i3];
-      const dy = ty + streamY + my - statePos[i3 + 1];
-      const dz = tz + streamZ - statePos[i3 + 2];
+      // Force toward target + fluid advection
+      const fx = (tx - px) * attract + c.x * curlStr + mx;
+      const fy = (ty - py) * attract + c.y * curlStr + my;
+      const fz = (tz - pz) * attract + c.z * curlStr;
 
-      // Accelerate toward target (river flowing to shape)
-      stateVel[i3] = stateVel[i3] * damp + dx * flow * dt;
-      stateVel[i3 + 1] = stateVel[i3 + 1] * damp + dy * flow * dt;
-      stateVel[i3 + 2] = stateVel[i3 + 2] * damp + dz * flow * dt;
+      // Semi-implicit integrate (viscous fluid feel)
+      stateVel[i3] = stateVel[i3] * damp + fx * dt;
+      stateVel[i3 + 1] = stateVel[i3 + 1] * damp + fy * dt;
+      stateVel[i3 + 2] = stateVel[i3 + 2] * damp + fz * dt;
 
       statePos[i3] += stateVel[i3];
       statePos[i3 + 1] += stateVel[i3 + 1];
@@ -124,7 +126,8 @@ function ParticleField({
     geo.attributes.position.needsUpdate = true;
 
     if (pointsRef.current) {
-      pointsRef.current.rotation.y += (rotY + time * 0.04 - pointsRef.current.rotation.y) * 0.04;
+      pointsRef.current.rotation.y +=
+        (rotY + time * 0.035 - pointsRef.current.rotation.y) * 0.035;
     }
 
     camera.position.z += (cameraZ - camera.position.z) * 0.05;
@@ -156,7 +159,7 @@ export function CinematicParticles({
   const [webgl, setWebgl] = useState(true);
   const count = useMemo(() => {
     if (typeof window === 'undefined') return 3200;
-    return window.innerWidth < 768 ? 1600 : window.innerWidth < 1200 ? 2600 : 3800;
+    return window.innerWidth < 768 ? 1500 : window.innerWidth < 1200 ? 2400 : 3600;
   }, []);
 
   useEffect(() => {
