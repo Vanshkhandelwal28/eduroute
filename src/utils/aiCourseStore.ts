@@ -1,5 +1,6 @@
 /**
- * AI-designed mixed courses — localStorage (student editable).
+ * AI-designed mixed courses — hybrid localStorage + Neon (via /api/ai-courses).
+ * localStorage = instant UI; server = cross-browser sync for same login.
  */
 
 import {
@@ -7,6 +8,7 @@ import {
   minWatchSecondsFromTopics,
   secondsToHoursRounded,
 } from './youtubeDurations';
+import { apiFetch, currentUserId } from './apiClient';
 
 export type CourseTopic = {
   id: string;
@@ -19,7 +21,6 @@ export type CourseTopic = {
   docUrl: string;
   docTitle: string;
   skills: string[];
-  /** Real YouTube length in seconds (unique videos drive min watch time) */
   videoDurationSeconds?: number;
 };
 
@@ -33,18 +34,27 @@ export type AiDesignedCourse = {
   skillGaps: string[];
   demandHints: string[];
   topics: CourseTopic[];
-  /** Minimum watch hours from unique video lengths (not study estimate) */
   totalHours: number;
   createdAt: string;
   updatedAt: string;
 };
 
 const KEY = 'eduroute:ai-designed-courses-v1';
+const KEY_USER = (uid: string) => `eduroute:ai-designed-courses-v1:${uid}`;
+
+function storageKey(): string {
+  try {
+    const uid = currentUserId();
+    return KEY_USER(uid);
+  } catch {
+    return KEY;
+  }
+}
 
 function readJson<T>(fallback: T): T {
   if (typeof window === 'undefined') return fallback;
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(storageKey()) || localStorage.getItem(KEY);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -55,14 +65,15 @@ function readJson<T>(fallback: T): T {
 function writeJson(value: unknown) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(value));
+    const payload = JSON.stringify(value);
+    localStorage.setItem(storageKey(), payload);
+    localStorage.setItem(KEY, payload);
     window.dispatchEvent(new Event('eduroute:ai-courses-updated'));
   } catch {
     /* ignore */
   }
 }
 
-/** Enrich topics with known YT durations, then sum unique videos → hours. */
 export function computeMinWatchHours(topics: CourseTopic[]): number {
   const enriched = topics.map((t) => ({
     ...t,
@@ -73,7 +84,6 @@ export function computeMinWatchHours(topics: CourseTopic[]): number {
   }));
   const sec = minWatchSecondsFromTopics(enriched);
   if (sec > 0) return secondsToHoursRounded(sec);
-  // Fallback only if no video lengths known yet
   return Math.round(topics.reduce((a, t) => a + (t.estimatedHours || 0), 0) * 10) / 10;
 }
 
@@ -86,10 +96,65 @@ export function enrichTopicsWithDurations(topics: CourseTopic[]): CourseTopic[] 
   });
 }
 
-/**
- * Read courses and always re-enrich video durations + recompute totalHours
- * so the header "Min watch" reflects unique YouTube lengths (not stale estimates).
- */
+function normalizeCourse(raw: any): AiDesignedCourse | null {
+  if (!raw) return null;
+  const payload = raw.payload && typeof raw.payload === 'object' ? raw.payload : raw;
+  const id = String(raw.id || payload.id || '');
+  if (!id) return null;
+  const topics = Array.isArray(payload.topics) ? payload.topics : [];
+  return {
+    id,
+    title: String(payload.title || raw.title || 'Untitled course'),
+    summary: String(payload.summary || ''),
+    durationDays: Number(payload.durationDays || 15),
+    interests: Array.isArray(payload.interests) ? payload.interests : [],
+    field: String(payload.field || ''),
+    skillGaps: Array.isArray(payload.skillGaps) ? payload.skillGaps : [],
+    demandHints: Array.isArray(payload.demandHints) ? payload.demandHints : [],
+    topics,
+    totalHours: Number(payload.totalHours || 0),
+    createdAt: String(payload.createdAt || raw.createdAt || new Date().toISOString()),
+    updatedAt: String(payload.updatedAt || raw.updatedAt || new Date().toISOString()),
+  };
+}
+
+/** Merge server courses into local cache (server wins on newer updatedAt). */
+export async function syncAiCoursesFromServer(): Promise<AiDesignedCourse[]> {
+  const local = readAiCourses();
+  const res = await apiFetch<any[]>('/ai-courses', { method: 'GET' });
+  if (!res.ok || !Array.isArray(res.data)) return local;
+
+  const byId = new Map(local.map((c) => [c.id, c]));
+  for (const row of res.data) {
+    const c = normalizeCourse(row);
+    if (!c) continue;
+    const prev = byId.get(c.id);
+    if (!prev || new Date(c.updatedAt).getTime() >= new Date(prev.updatedAt).getTime()) {
+      byId.set(c.id, {
+        ...c,
+        topics: enrichTopicsWithDurations(c.topics),
+        totalHours: computeMinWatchHours(c.topics),
+      });
+    }
+  }
+  const merged = Array.from(byId.values()).sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
+  writeJson(merged);
+  return merged;
+}
+
+async function pushCourseToServer(course: AiDesignedCourse) {
+  await apiFetch('/ai-courses', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: course.id,
+      title: course.title,
+      ...course,
+    }),
+  });
+}
+
 export function readAiCourses(): AiDesignedCourse[] {
   const list = readJson<AiDesignedCourse[]>([]);
   if (!Array.isArray(list) || list.length === 0) return [];
@@ -98,15 +163,12 @@ export function readAiCourses(): AiDesignedCourse[] {
   const next = list.map((c) => {
     const enriched = enrichTopicsWithDurations(c.topics || []);
     const hours = computeMinWatchHours(enriched);
-    const topicsChanged =
-      enriched.some((t, i) => t.videoDurationSeconds !== (c.topics[i]?.videoDurationSeconds));
+    const topicsChanged = enriched.some(
+      (t, i) => t.videoDurationSeconds !== c.topics[i]?.videoDurationSeconds,
+    );
     if (topicsChanged || c.totalHours !== hours) {
       dirty = true;
-      return {
-        ...c,
-        topics: enriched,
-        totalHours: hours,
-      };
+      return { ...c, topics: enriched, totalHours: hours };
     }
     return c;
   });
@@ -125,11 +187,13 @@ export function saveAiCourse(course: AiDesignedCourse): AiDesignedCourse {
   };
   const list = readAiCourses().filter((c) => c.id !== course.id);
   writeJson([next, ...list]);
+  void pushCourseToServer(next);
   return next;
 }
 
 export function deleteAiCourse(id: string) {
   writeJson(readAiCourses().filter((c) => c.id !== id));
+  void apiFetch(`/ai-courses/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function updateCourseTopics(id: string, topics: CourseTopic[]): AiDesignedCourse | null {
@@ -145,10 +209,10 @@ export function updateCourseTopics(id: string, topics: CourseTopic[]): AiDesigne
   };
   list[idx] = next;
   writeJson(list);
+  void pushCourseToServer(next);
   return next;
 }
 
-/** Persist a measured YT duration onto one topic and refresh totalHours. */
 export function updateTopicVideoDuration(
   courseId: string,
   topicId: string,
@@ -168,6 +232,7 @@ export function updateTopicVideoDuration(
   };
   list[idx] = next;
   writeJson(list);
+  void pushCourseToServer(next);
   return next;
 }
 
@@ -190,5 +255,4 @@ export const INTEREST_PRESETS = [
   'Cloud (AWS)',
 ] as const;
 
-/** Includes 30d / 60d for assessment size scaling (10–20 vs 30–40 questions). */
 export const DURATION_PRESETS = [3, 15, 30, 60, 90] as const;

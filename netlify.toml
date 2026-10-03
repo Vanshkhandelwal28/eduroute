@@ -1,4 +1,4 @@
-# EDUROUTE Netlify — REDEPLOY_STAMP 2026-09-28T18:15IST (TrendAnalyse restored)
+# EDUROUTE Netlify — hybrid DB sync (Neon via Go on Render)
 [build]
   command = "npm run build"
   publish = "dist"
@@ -12,7 +12,7 @@
   node_bundler = "esbuild"
   external_node_modules = ["mongoose", "mysql2", "bcryptjs", "nodemailer"]
 
-# Auth → dedicated proxies (Go + MySQL) — must be before generic /api/*
+# Auth → dedicated proxies
 [[redirects]]
   from = "/api/auth/register"
   to = "/.netlify/functions/auth-register"
@@ -43,6 +43,37 @@
   status = 200
   force = true
 
+# Neon-backed routes → Go proxy (GO_API_URL / BACKEND_URL on Netlify)
+[[redirects]]
+  from = "/api/ai-courses"
+  to = "/.netlify/functions/go-api?path=/api/ai-courses"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ai-courses/*"
+  to = "/.netlify/functions/go-api?path=/api/ai-courses/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/buddy/conversations"
+  to = "/.netlify/functions/go-api?path=/api/buddy/conversations"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/buddy/conversations/*"
+  to = "/.netlify/functions/go-api?path=/api/buddy/conversations/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/buddy/chat"
+  to = "/.netlify/functions/go-api?path=/api/buddy/chat"
+  status = 200
+  force = true
+
 # Other API → Netlify functions
 [[redirects]]
   from = "/api/*"
@@ -50,7 +81,7 @@
   status = 200
   force = true
 
-# SPA fallback (never show Netlify 404 HTML for /login etc.)
+# SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
