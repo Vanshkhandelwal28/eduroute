@@ -7,8 +7,8 @@ import {
 import GPUCompute from './GPUCompute.js';
 
 /**
- * Particles — InstancedMesh rendering + GPU simulation (Phase 3 + 4).
- * Rendering stays separate from physics.
+ * Particles — InstancedMesh rendering + GPU simulation.
+ * Phase 5: accepts mouse world position for GPU repulsion + gentle rotation.
  */
 export default class Particles {
   /**
@@ -24,21 +24,22 @@ export default class Particles {
     this.simulation = null;
     this.targets = null;
 
+    // Target rotation from mouse (smoothed in update)
+    this._rotTarget = { x: 0, y: 0 };
+    this._rotCurrent = { x: 0, y: 0 };
+
     this._create();
   }
 
   _create() {
-    // Brain target positions
     this.targets = createBrainShape(this.count);
 
-    // --- GPU simulation ---
     this.simulation = new GPUCompute(
       this.renderer,
       this.targets,
       this.count
     );
 
-    // --- Tiny triangle geometry ---
     const tri = new THREE.BufferGeometry();
     const s = 0.011;
     const vertices = new Float32Array([
@@ -48,7 +49,6 @@ export default class Particles {
     ]);
     tri.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 
-    // --- Instance attributes ---
     const aScale = new Float32Array(this.count);
     const aSeed = new Float32Array(this.count);
     const aBrightness = new Float32Array(this.count);
@@ -71,7 +71,6 @@ export default class Particles {
 
     this.geometry = tri;
 
-    // --- Shader material (samples GPU position texture) ---
     this.material = new THREE.ShaderMaterial({
       vertexShader: particleVertexShader,
       fragmentShader: particleFragmentShader,
@@ -88,7 +87,6 @@ export default class Particles {
       side: THREE.DoubleSide,
     });
 
-    // --- Instanced mesh (identity matrices — position comes from GPU texture) ---
     this.mesh = new THREE.InstancedMesh(
       this.geometry,
       this.material,
@@ -108,16 +106,12 @@ export default class Particles {
 
     this.scene.add(this.mesh);
 
-    // Bind initial position texture
     if (this.simulation.ready) {
       this.material.uniforms.uPositionTexture.value =
         this.simulation.getPositionTexture();
     }
   }
 
-  /**
-   * Exposed controls for later phases.
-   */
   get controls() {
     if (!this.simulation) return null;
     return {
@@ -127,14 +121,31 @@ export default class Particles {
       damping: this.simulation.uniforms.damping,
       noiseStrength: this.simulation.uniforms.noiseStrength,
       time: this.simulation.uniforms.time,
+      mouse: this.simulation.uniforms.mouse,
+      mouseStrength: this.simulation.uniforms.mouseStrength,
       setTargets: (t) => this.simulation.setTargets(t),
     };
   }
 
-  update(elapsed, delta = 0.016) {
+  /**
+   * @param {number} elapsed
+   * @param {number} delta
+   * @param {{ world: THREE.Vector3, strengthValue: number, radius: number, rotationOffset: {x:number,y:number} } | null} mouse
+   */
+  update(elapsed, delta = 0.016, mouse = null) {
     if (!this.material) return;
 
-    // GPU simulation step
+    // Feed mouse into GPU before compute
+    if (this.simulation && mouse) {
+      this.simulation.setMouse(
+        mouse.world,
+        mouse.strengthValue,
+        mouse.radius
+      );
+    } else if (this.simulation) {
+      this.simulation.setMouse(new THREE.Vector3(0, 0, 0), 0);
+    }
+
     if (this.simulation && this.simulation.ready) {
       this.simulation.compute(elapsed, delta);
       this.material.uniforms.uPositionTexture.value =
@@ -143,9 +154,24 @@ export default class Particles {
 
     this.material.uniforms.uTime.value = elapsed;
 
-    // Slow overall rotation of the whole field
+    // Gentle rotation: base spin + mouse influence
     if (this.mesh) {
-      this.mesh.rotation.y = elapsed * 0.035;
+      if (mouse && mouse.rotationOffset) {
+        this._rotTarget.x = mouse.rotationOffset.x;
+        this._rotTarget.y = mouse.rotationOffset.y;
+      } else {
+        this._rotTarget.x = 0;
+        this._rotTarget.y = 0;
+      }
+
+      const rotLerp = 1 - Math.exp(-3 * Math.min(delta, 0.05));
+      this._rotCurrent.x +=
+        (this._rotTarget.x - this._rotCurrent.x) * rotLerp;
+      this._rotCurrent.y +=
+        (this._rotTarget.y - this._rotCurrent.y) * rotLerp;
+
+      this.mesh.rotation.x = this._rotCurrent.x;
+      this.mesh.rotation.y = elapsed * 0.035 + this._rotCurrent.y;
     }
   }
 

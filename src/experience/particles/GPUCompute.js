@@ -7,9 +7,7 @@ import {
 
 /**
  * Phase 4 — GPU particle simulation.
- * Ping-pong position + velocity textures.
- * Forces: spring → target, noise, damping.
- * All physics runs on the GPU.
+ * Phase 5 — mouse repulsion uniforms.
  */
 export default class GPUCompute {
   /**
@@ -21,9 +19,7 @@ export default class GPUCompute {
     this.renderer = renderer;
     this.count = count;
 
-    // Texture size — next power of 2 that fits all particles
     this.texSize = Math.ceil(Math.sqrt(count));
-    // Make power-of-two for better GPU compatibility
     this.texSize = Math.pow(2, Math.ceil(Math.log2(this.texSize)));
 
     this.gpuCompute = new GPUComputationRenderer(
@@ -32,15 +28,12 @@ export default class GPUCompute {
       renderer
     );
 
-    // --- Initial position texture (xyz + seed in w) ---
     const posTex = this.gpuCompute.createTexture();
-    const posArr = posTex.image.data; // Float32Array RGBA
+    const posArr = posTex.image.data;
 
-    // --- Initial velocity texture (xyz + unused) ---
     const velTex = this.gpuCompute.createTexture();
     const velArr = velTex.image.data;
 
-    // --- Target texture (static) ---
     const targetData = new Float32Array(this.texSize * this.texSize * 4);
 
     for (let i = 0; i < this.texSize * this.texSize; i++) {
@@ -64,7 +57,6 @@ export default class GPUCompute {
         targetData[i4 + 2] = targets[i3 + 2];
         targetData[i4 + 3] = 1;
       } else {
-        // Unused texels — park at origin
         posArr[i4] = 0;
         posArr[i4 + 1] = 0;
         posArr[i4 + 2] = 0;
@@ -91,7 +83,6 @@ export default class GPUCompute {
     this.targetTexture.minFilter = THREE.NearestFilter;
     this.targetTexture.magFilter = THREE.NearestFilter;
 
-    // Variables
     this.positionVariable = this.gpuCompute.addVariable(
       'texturePosition',
       positionFragmentShader,
@@ -103,7 +94,6 @@ export default class GPUCompute {
       velTex
     );
 
-    // Dependencies
     this.gpuCompute.setVariableDependencies(this.positionVariable, [
       this.positionVariable,
       this.velocityVariable,
@@ -113,7 +103,6 @@ export default class GPUCompute {
       this.velocityVariable,
     ]);
 
-    // Uniforms on velocity shader
     const velUniforms = this.velocityVariable.material.uniforms;
     velUniforms.uTime = { value: 0 };
     velUniforms.uDelta = { value: 0.016 };
@@ -122,11 +111,14 @@ export default class GPUCompute {
     velUniforms.uNoiseStrength = { value: 0.12 };
     velUniforms.uTarget = { value: this.targetTexture };
 
-    // Uniforms on position shader
+    // Phase 5 — mouse
+    velUniforms.uMouse = { value: new THREE.Vector3(0, 0, 0) };
+    velUniforms.uMouseStrength = { value: 0 };
+    velUniforms.uMouseRadius = { value: 1.1 };
+
     const posUniforms = this.positionVariable.material.uniforms;
     posUniforms.uDelta = { value: 0.016 };
 
-    // Expose for external control
     this.uniforms = {
       time: velUniforms.uTime,
       delta: velUniforms.uDelta,
@@ -134,9 +126,11 @@ export default class GPUCompute {
       springStrength: velUniforms.uSpringStrength,
       noiseStrength: velUniforms.uNoiseStrength,
       target: velUniforms.uTarget,
+      mouse: velUniforms.uMouse,
+      mouseStrength: velUniforms.uMouseStrength,
+      mouseRadius: velUniforms.uMouseRadius,
     };
 
-    // Sync delta on position variable too
     this._posDelta = posUniforms.uDelta;
 
     const error = this.gpuCompute.init();
@@ -147,10 +141,6 @@ export default class GPUCompute {
     this.ready = error === null;
   }
 
-  /**
-   * Update target positions texture (for future morph phases).
-   * @param {Float32Array} targets xyz * count
-   */
   setTargets(targets) {
     const data = this.targetTexture.image.data;
     for (let i = 0; i < this.count; i++) {
@@ -164,10 +154,19 @@ export default class GPUCompute {
   }
 
   /**
-   * Run one simulation step.
-   * @param {number} elapsed  total time
-   * @param {number} delta    frame delta (clamped)
+   * Push mouse state into GPU uniforms.
+   * @param {THREE.Vector3} worldPos
+   * @param {number} strength
+   * @param {number} [radius]
    */
+  setMouse(worldPos, strength, radius) {
+    this.uniforms.mouse.value.copy(worldPos);
+    this.uniforms.mouseStrength.value = strength;
+    if (radius !== undefined) {
+      this.uniforms.mouseRadius.value = radius;
+    }
+  }
+
   compute(elapsed, delta) {
     if (!this.ready) return;
 
@@ -180,12 +179,10 @@ export default class GPUCompute {
     this.gpuCompute.compute();
   }
 
-  /** Current position render target texture (for particle material). */
   getPositionTexture() {
     return this.gpuCompute.getCurrentRenderTarget(this.positionVariable).texture;
   }
 
-  /** Current velocity render target texture. */
   getVelocityTexture() {
     return this.gpuCompute.getCurrentRenderTarget(this.velocityVariable).texture;
   }
@@ -196,8 +193,6 @@ export default class GPUCompute {
 
   dispose() {
     if (this.gpuCompute) {
-      // GPUComputationRenderer doesn't have a full dispose API in all versions;
-      // dispose the materials and render targets we can reach.
       if (this.positionVariable?.renderTargets) {
         this.positionVariable.renderTargets.forEach((rt) => rt.dispose());
       }

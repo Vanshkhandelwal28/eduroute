@@ -3,12 +3,12 @@ import Scene from './Scene.js';
 import Camera from './Camera.js';
 import Renderer from './Renderer.js';
 import Particles from './particles/Particles.js';
+import MouseInteraction from './interaction/MouseInteraction.js';
 
 /**
  * Experience — top-level orchestrator for the WebGL layer.
- * Phase 2: canvas, scene, camera, renderer + animation loop.
- * Phase 3: basic particle object (brain-like InstancedMesh).
- * Phase 4: GPU particle simulation (position/velocity textures).
+ * Phase 2–4: scene, particles, GPU sim.
+ * Phase 5: mouse interaction.
  */
 export default class Experience {
   constructor({ canvas }) {
@@ -36,6 +36,12 @@ export default class Experience {
     this.particles = new Particles({
       scene: this.scene,
       renderer: this.renderer.instance,
+    });
+
+    // Phase 5 — mouse interaction
+    this.mouse = new MouseInteraction({
+      camera: this.camera.instance,
+      sizes: this.sizes,
     });
 
     // Bind methods
@@ -78,8 +84,13 @@ export default class Experience {
     this.camera.update();
     this.scene.update();
 
+    // Mouse → smooth → world
+    if (this.mouse) {
+      this.mouse.update(delta);
+    }
+
     if (this.particles) {
-      this.particles.update(elapsed, delta);
+      this.particles.update(elapsed, delta, this.mouse);
     }
 
     this.renderer.update(this.scene.instance, this.camera.instance);
@@ -93,6 +104,11 @@ export default class Experience {
 
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
+    }
+
+    if (this.mouse) {
+      this.mouse.dispose();
+      this.mouse = null;
     }
 
     if (this.particles) {
