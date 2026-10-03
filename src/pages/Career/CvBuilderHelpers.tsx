@@ -145,3 +145,60 @@ export function twoColList(items: string[]) {
   const right = items.slice(mid);
   return `<div class="two-col"><ul>${left.map((i) => `<li>${esc(i)}</li>`).join('')}</ul><ul>${right.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>`;
 }
+
+/** Print / PDF preview via hidden iframe */
+export function openPrintPreview(data: CvData) {
+  const a = accentHex(data.accent || 'indigo');
+  const skills = (data.skills || []).join(' · ');
+  const exp = (data.experience || [])
+    .filter((e) => e.role || e.title || e.company)
+    .map((e) => `<div style="margin-bottom:10px"><strong>${esc(e.role || e.title || '')}</strong> @ ${esc(e.company || '')} <span style="color:#64748b">${esc(e.duration || '')}</span>${bulletsHtml(e.description || e.details || '')}</div>`)
+    .join('');
+  const edu = (data.education || [])
+    .filter((e) => e.school || e.degree)
+    .map((e) => `<div style="margin-bottom:8px"><strong>${esc(e.degree || '')}</strong> — ${esc(e.school || '')} <span style="color:#64748b">${esc(e.year || e.end || '')}</span></div>`)
+    .join('');
+  const proj = (data.projects || [])
+    .filter((p) => p.name)
+    .map((p) => `<div style="margin-bottom:8px"><strong>${esc(p.name)}</strong> <span style="color:#64748b">${esc(p.tech || p.link || '')}</span>${bulletsHtml(p.description || p.details || '')}</div>`)
+    .join('');
+  const certs = (data.certificates || []).map(esc).join(' · ');
+  const langs = (data.languages || []).map(esc).join(' · ');
+  const contact = [data.email, data.phone, data.city || data.location, data.linkedin].filter(Boolean).map(esc).join(' · ');
+
+  const body = `
+    <h1 style="color:${a};margin:0 0 4px;font-size:26px">${esc(data.fullName || 'Your Name')}</h1>
+    <div style="color:#475569;font-size:14px">${esc(data.title || '')}</div>
+    <div style="color:#64748b;font-size:12px;margin-top:2px">${contact}</div>
+    ${data.summary ? `<div style="margin:12px 0">${esc(data.summary)}</div>` : ''}
+    ${skills ? `<h2 style="border-bottom:2px solid ${a};color:${a};font-size:11px;text-transform:uppercase">Skills</h2><div>${esc(skills)}</div>` : ''}
+    ${exp ? `<h2 style="border-bottom:2px solid ${a};color:${a};font-size:11px;text-transform:uppercase">Experience</h2>${exp}` : ''}
+    ${edu ? `<h2 style="border-bottom:2px solid ${a};color:${a};font-size:11px;text-transform:uppercase">Education</h2>${edu}` : ''}
+    ${certs ? `<h2 style="border-bottom:2px solid ${a};color:${a};font-size:11px;text-transform:uppercase">Certificates</h2><div>${certs}</div>` : ''}
+    ${langs ? `<h2 style="border-bottom:2px solid ${a};color:${a};font-size:11px;text-transform:uppercase">Languages</h2><div>${langs}</div>` : ''}
+    ${proj ? `<h2 style="border-bottom:2px solid ${a};color:${a};font-size:11px;text-transform:uppercase">Projects</h2>${proj}` : ''}
+  `;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${esc(data.fullName || 'CV')}</title>
+    <style>@page{margin:12mm;size:A4}body{font-family:system-ui,sans-serif;color:#0f172a;padding:28px;max-width:800px;margin:0 auto;font-size:13px}
+    h2{margin:14px 0 6px;padding-bottom:2px}ul{margin:4px 0 0 16px;padding:0}li{margin-bottom:2px}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>${body}</body></html>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0';
+  document.body.appendChild(iframe);
+  const idoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!idoc) {
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
+    else alert('Allow pop-ups to print your CV.');
+    return;
+  }
+  idoc.open();
+  idoc.write(html);
+  idoc.close();
+  setTimeout(() => {
+    try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); } catch { /* ignore */ }
+    setTimeout(() => { try { document.body.removeChild(iframe); } catch { /* ignore */ } }, 1500);
+  }, 400);
+}
