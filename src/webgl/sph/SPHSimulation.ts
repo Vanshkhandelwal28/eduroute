@@ -39,7 +39,7 @@ const DEFAULT: SPHParams = {
   viscosity: 0.35,
   gravity: new THREE.Vector3(0, -2.2, 0),
   damping: 0.98,
-  particleSize: 11,
+  particleSize: 5,
   mouseForce: -12,
   mouseRadius: 0.6,
   simSpeed: 1,
@@ -95,7 +95,9 @@ export class SPHSimulation {
       powerPreference: 'high-performance',
       premultipliedAlpha: false,
     });
-    this.renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 1.5));
+    this.renderer.setPixelRatio(
+      Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 1.5),
+    );
     this.renderer.setClearColor(0x080808, 1);
     this.renderer.autoClear = true;
 
@@ -187,7 +189,6 @@ export class SPHSimulation {
     geo.setAttribute('position', new THREE.BufferAttribute(dummy, 3));
     geo.setDrawRange(0, this.params.particleCount);
 
-    // ShaderMaterial (not Raw) so Three.js supplies modelViewMatrix / projectionMatrix
     this.particleMat = new THREE.ShaderMaterial({
       vertexShader: particleVert,
       fragmentShader: particleFrag,
@@ -196,13 +197,15 @@ export class SPHSimulation {
         uTexSize: { value: this.texSize },
         uParticleCount: { value: this.params.particleCount },
         uPointSize: { value: this.params.particleSize },
-        uColor: { value: new THREE.Color('#e4e2dc') },
-        uAccent: { value: new THREE.Color('#c8f542') },
+        // Dimmer base — additive white blowout fix
+        uColor: { value: new THREE.Color('#9a9890') },
+        uAccent: { value: new THREE.Color('#a8c93a') },
       },
       transparent: true,
       depthWrite: false,
       depthTest: true,
-      blending: THREE.AdditiveBlending,
+      // Normal blending prevents white-out when particles overlap
+      blending: THREE.NormalBlending,
     });
 
     this.points = new THREE.Points(geo, this.particleMat);
@@ -331,7 +334,6 @@ export class SPHSimulation {
 
     this.ping = !this.ping;
 
-    // Render particles — matrices handled by ShaderMaterial
     this.particleMat.uniforms.uPos.value = posWrite.texture;
     this.camera.updateMatrixWorld();
     this.points.updateMatrixWorld();
