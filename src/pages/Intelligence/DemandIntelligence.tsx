@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Activity,
-  ArrowDownRight,
   ArrowUpRight,
   Briefcase,
   Database,
@@ -10,7 +9,6 @@ import {
   MapPin,
   RefreshCw,
   Sparkles,
-  Target,
   TrendingUp,
   Zap,
 } from 'lucide-react';
@@ -33,6 +31,16 @@ import {
 } from '../../utils/marketTrendStore';
 
 const REGION_OPTIONS = MARKET_REGIONS;
+
+/** Never show NaN / Infinity in the UI */
+function safeNum(n: unknown, fallback = 0): number {
+  const x = typeof n === 'number' ? n : Number(n);
+  return Number.isFinite(x) ? x : fallback;
+}
+
+function safePct(n: unknown): string {
+  return `${Math.round(safeNum(n, 0))}%`;
+}
 
 function StatCard({
   label,
@@ -79,18 +87,25 @@ export function DemandIntelligence() {
     writePreferredRegion(region);
   }, [region]);
 
+  // Listen to the real event names dispatched by marketEngineStore / marketTrendStore
   useEffect(() => {
     const onJobs = () => refreshLocal();
     const onMarket = () => refreshLocal();
+    window.addEventListener('eduroute:mt-jobs-updated', onJobs);
+    window.addEventListener('eduroute:market-trends-updated', onMarket);
     window.addEventListener('eduroute:jobs-updated', onJobs);
     window.addEventListener('eduroute:market-updated', onMarket);
     return () => {
+      window.removeEventListener('eduroute:mt-jobs-updated', onJobs);
+      window.removeEventListener('eduroute:market-trends-updated', onMarket);
       window.removeEventListener('eduroute:jobs-updated', onJobs);
       window.removeEventListener('eduroute:market-updated', onMarket);
     };
   }, [refreshLocal]);
 
   const regionJobs = useMemo(() => jobsForRegion(jobs, region), [jobs, region]);
+
+  // computeSkillDemand returns { skill, jobCount, demandPct, trend, growthLabel }
   const skillDemand = useMemo(() => computeSkillDemand(regionJobs), [regionJobs]);
 
   const roles = useMemo(() => {
@@ -99,7 +114,8 @@ export function DemandIntelligence() {
       const role = (j.title || 'Role').split(/[-|@]/)[0].trim() || 'Role';
       const cur = map.get(role) || { role, score: 0, delta: 0, count: 0 };
       cur.count += 1;
-      cur.score += Number(j.salaryMax || j.salaryMin || 0) > 0 ? 1 : 0.5;
+      const hasSalary = Boolean(j.salaryText && String(j.salaryText).trim());
+      cur.score += hasSalary ? 1 : 0.5;
       map.set(role, cur);
     }
     return Array.from(map.values())
@@ -112,24 +128,53 @@ export function DemandIntelligence() {
       .slice(0, 8);
   }, [regionJobs]);
 
-  const topSkills = useMemo(
-    () =>
-      skillDemand.slice(0, 10).map((s) => ({
-        skill: s.skill,
-        openings: s.count,
-        demand: Math.min(100, Math.round((s.count / Math.max(1, regionJobs.length)) * 100 + s.count * 3)),
-        emerging: s.count <= 3,
-      })),
-    [skillDemand, regionJobs.length],
-  );
+  const topSkills = useMemo(() => {
+    // Prefer live job-derived demand; fall back to snapshot risingSkills if jobs empty
+    if (skillDemand.length > 0) {
+      return skillDemand.slice(0, 10).map((s) => {
+        const jobCount = safeNum(s.jobCount, 0);
+        const demandPct = safeNum(s.demandPct, 0);
+        // Scale bar to feel full for top skill while keeping real % label
+        const demand = Math.min(100, Math.round(demandPct * 1.2 + jobCount * 2));
+        return {
+          skill: s.skill,
+          openings: jobCount,
+          demand: Number.isFinite(demand) ? demand : 0,
+          demandPct,
+          emerging: jobCount > 0 && jobCount <= 2,
+        };
+      });
+    }
+    const rising = snapshot?.risingSkills || snapshot?.demandTop || [];
+    return rising.slice(0, 10).map((s: any) => {
+      const demandPct = safeNum(s.demandPct ?? s.demandScore, 0);
+      const jobCount = safeNum(s.jobCount, Math.max(1, Math.round(demandPct / 10)));
+      return {
+        skill: String(s.skill || 'Skill'),
+        openings: jobCount,
+        demand: Math.min(100, Math.round(demandPct)),
+        demandPct,
+        emerging: false,
+      };
+    });
+  }, [skillDemand, snapshot]);
 
   const collect = async () => {
     setLoading(true);
     setMsg('');
     try {
-      const res = await apiCollectJobs({ region, limit: 40 });
+      const res = await apiCollectJobs(region);
       refreshLocal();
-      setMsg(`Collected ${res?.added ?? 0} jobs for ${region}`);
+      const added =
+        (res as any)?.run?.jobsInserted ??
+        (res as any)?.added ??
+        (Array.isArray(res?.jobs) ? res.jobs.length : 0);
+      const note = (res as any)?.note || (res as any)?.error || '';
+      setMsg(
+        res?.ok !== false
+          ? `Collected ${safeNum(added, 0)} new jobs for ${region}${note ? ` · ${note}` : ''}`
+          : note || 'Collect finished',
+      );
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Collect failed');
     } finally {
@@ -141,9 +186,9 @@ export function DemandIntelligence() {
     setLoading(true);
     setMsg('');
     try {
-      await apiRefreshMarket(region);
+      const res = await apiRefreshMarket(region);
       refreshLocal();
-      setMsg('Market snapshot refreshed');
+      setMsg(res?.ok ? 'Market snapshot refreshed (Adzuna / data.gov / AI)' : res?.error || 'Refresh failed');
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Refresh failed');
     } finally {
@@ -153,9 +198,17 @@ export function DemandIntelligence() {
 
   const totalOpenings = regionJobs.length;
   const avgDemand = topSkills.length
-    ? Math.round(topSkills.reduce((a, s) => a + s.demand, 0) / topSkills.length)
+    ? Math.round(
+        topSkills.reduce((a, s) => a + safeNum(s.demandPct || s.demand, 0), 0) / topSkills.length,
+      )
     : 0;
   const emergingCount = topSkills.filter((s) => s.emerging).length;
+
+  const sourcesHint = useMemo(() => {
+    const src = new Set(regionJobs.map((j) => j.source).filter(Boolean));
+    if (!src.size) return 'Seed / curated';
+    return Array.from(src).join(' · ');
+  }, [regionJobs]);
 
   return (
     <div className="relative min-h-full overflow-hidden text-[var(--text-primary)]">
@@ -177,7 +230,7 @@ export function DemandIntelligence() {
             <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">Demand Intelligence</h1>
             <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
               State-wise skill demand from job collection + trend snapshot. NSQF/NOS badges map skills to
-              qualification levels (local catalog).
+              qualification levels (local catalog). Sources: {sourcesHint}.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -230,8 +283,8 @@ export function DemandIntelligence() {
           />
           <StatCard
             label="Avg skill demand"
-            value={`${avgDemand}%`}
-            hint="Top skills"
+            value={safePct(avgDemand)}
+            hint="Top skills share"
             icon={Activity}
             tone="bg-violet-500/20 text-violet-300"
           />
@@ -244,7 +297,7 @@ export function DemandIntelligence() {
           />
           <StatCard
             label="Snapshot"
-            value={snapshot?.updatedAt ? 'Live' : '—'}
+            value={snapshot?.updatedAt ? (snapshot.isSeed ? 'Seed' : 'Live') : '—'}
             hint={snapshot?.region || region}
             icon={TrendingUp}
             tone="bg-emerald-500/20 text-emerald-300"
@@ -255,7 +308,7 @@ export function DemandIntelligence() {
           <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/90 p-5 shadow-[var(--shadow-card)] backdrop-blur-sm xl:col-span-3">
             <h2 className="mb-1 text-sm font-bold">Top skills in demand — {region}</h2>
             <p className="mb-4 text-xs text-[var(--text-muted)]">
-              From collected jobs · NSQF/NOS badges where mapped
+              From collected jobs · NSQF/NOS badges where mapped · % = share of postings mentioning skill
             </p>
             {topSkills.length === 0 ? (
               <p className="text-sm text-[var(--text-muted)]">Collect jobs to see demand for this state.</p>
@@ -274,13 +327,13 @@ export function DemandIntelligence() {
                         )}
                       </span>
                       <span className="text-[var(--text-muted)]">
-                        {row.openings} jobs · {row.demand}%
+                        {safeNum(row.openings)} jobs · {safePct(row.demandPct || row.demand)}
                       </span>
                     </div>
                     <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500"
-                        style={{ width: `${Math.max(6, row.demand)}%` }}
+                        style={{ width: `${Math.max(6, Math.min(100, safeNum(row.demand)))}%` }}
                       />
                     </div>
                   </li>
@@ -293,7 +346,7 @@ export function DemandIntelligence() {
             <h2 className="mb-3 text-sm font-bold">Top roles — {region}</h2>
             <ul className="space-y-2.5">
               {roles.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">No roles yet.</p>
+                <p className="text-sm text-[var(--text-muted)]">No roles yet — click Collect jobs.</p>
               ) : (
                 roles.map((r) => (
                   <li
@@ -303,12 +356,12 @@ export function DemandIntelligence() {
                     <div>
                       <p className="text-xs font-bold">{r.role}</p>
                       <p className="text-[10px] text-[var(--text-muted)]">
-                        Score {r.score}
+                        Score {safeNum(r.score)} · {safeNum(r.count)} postings
                         {nsqfNosBadgeText(r.role) ? ` · ${nsqfNosBadgeText(r.role)}` : ''}
                       </p>
                     </div>
                     <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-emerald-600 dark:text-emerald-300">
-                      <ArrowUpRight className="h-3 w-3" />+{r.delta}%
+                      <ArrowUpRight className="h-3 w-3" />+{safeNum(r.delta)}%
                     </span>
                   </li>
                 ))
@@ -322,7 +375,7 @@ export function DemandIntelligence() {
             <h2 className="text-sm font-bold">Recent jobs — {region}</h2>
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--text-muted)]">
               <Zap className="h-3 w-3 text-amber-500" />
-              {regionJobs.length} rows
+              {regionJobs.length} rows · {sourcesHint}
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -332,15 +385,17 @@ export function DemandIntelligence() {
                   <th className="pb-2 pr-3">Title</th>
                   <th className="pb-2 pr-3">Company</th>
                   <th className="pb-2 pr-3">Location</th>
+                  <th className="pb-2 pr-3">Source</th>
                   <th className="pb-2">Skills</th>
                 </tr>
               </thead>
               <tbody>
                 {regionJobs.slice(0, 20).map((j) => (
-                  <tr key={j.id} className="border-b border-[var(--border-default)]/60">
+                  <tr key={j.externalId || `${j.source}-${j.title}`} className="border-b border-[var(--border-default)]/60">
                     <td className="py-2.5 pr-3 font-bold">{j.title}</td>
                     <td className="py-2.5 pr-3 text-[var(--text-secondary)]">{j.company || '—'}</td>
                     <td className="py-2.5 pr-3 text-[var(--text-muted)]">{j.location || region}</td>
+                    <td className="py-2.5 pr-3 text-[var(--text-muted)]">{j.source || '—'}</td>
                     <td className="py-2.5 text-[var(--text-muted)]">
                       {(j.skills || []).slice(0, 4).join(', ')}
                     </td>
@@ -350,7 +405,7 @@ export function DemandIntelligence() {
             </table>
             {regionJobs.length === 0 && (
               <p className="py-6 text-center text-sm text-[var(--text-muted)]">
-                No jobs for this state — click Collect jobs.
+                No jobs for this state — click Collect jobs (Adzuna + data.gov.in + curated).
               </p>
             )}
           </div>
