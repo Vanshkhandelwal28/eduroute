@@ -1,113 +1,320 @@
 import { Suspense, lazy, type ReactElement } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { isAdminSessionActive } from './utils/adminSession';
-import { getAuthUser, type UserRole } from './utils/rbacAuth';
-import './index.css';
+import { getAuthUser, isAuthenticated } from './utils/rbacAuth';
+import { ThemeToggle } from './components/ThemeToggle';
 
-const LandingPage = lazy(() => import('./pages/LandingPage').then((module) => ({ default: module.LandingPage ?? module.default })));
-const Dashboard = lazy(() => import('./pages/Dashboard').then((module) => ({ default: module.Dashboard ?? module.default })));
-const MyCourses = lazy(() => import('./pages/MyCourses').then((module) => ({ default: module.MyCourses ?? module.default })));
-const BrowseCourses = lazy(() => import('./pages/BrowseCourses').then((module) => ({ default: module.BrowseCourses ?? module.default })));
-const CourseDetails = lazy(() => import('./pages/CourseDetails').then((module) => ({ default: module.CourseDetails ?? module.default })));
-const Pathways = lazy(() => import('./pages/Pathways').then((module) => ({ default: module.Pathways ?? module.default })));
+const ProtectedRoute = ({ children }: { children: ReactElement }) => {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
+const RoleRoute = ({
+  children,
+  role,
+}: {
+  children: ReactElement;
+  role: 'student' | 'admin' | 'industry' | 'college' | 'faculty';
+}) => {
+  const user = getAuthUser();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (user.role !== role) {
+    if (user.role === 'college') return <Navigate to="/college/placements" replace />;
+    if (user.role === 'admin') return <Navigate to="/admin/students" replace />;
+    if (user.role === 'industry') return <Navigate to="/industry" replace />;
+    if (user.role === 'faculty') return <Navigate to="/faculty" replace />;
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
+const AdminAccessRoute = ({ children }: { children: ReactElement }) => {
+  const user = getAuthUser();
+  if (user?.role === 'college') {
+    return <Navigate to="/college/placements" replace />;
+  }
+  if (user?.role === 'admin') {
+    return children;
+  }
+  if (isAdminSessionActive()) {
+    return children;
+  }
+  if (isAuthenticated()) {
+    const u = getAuthUser();
+    if (u?.role === 'industry') return <Navigate to="/industry" replace />;
+    if (u?.role === 'faculty') return <Navigate to="/faculty" replace />;
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <Navigate to="/admin-login" replace />;
+};
+
+const PublicOnlyRoute = ({ children }: { children: ReactElement }) => {
+  if (isAuthenticated()) {
+    const user = getAuthUser();
+    if (user?.role === 'college') return <Navigate to="/college/placements" replace />;
+    if (user?.role === 'admin') return <Navigate to="/admin/students" replace />;
+    if (user?.role === 'industry') return <Navigate to="/industry" replace />;
+    if (user?.role === 'faculty') return <Navigate to="/faculty" replace />;
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
+const AdminSessionRoute = ({ children }: { children: ReactElement }) => {
+  if (!isAdminSessionActive() && getAuthUser()?.role !== 'admin') {
+    return <Navigate to="/admin-login" replace />;
+  }
+  return children;
+};
+
+const PageLoader = () => (
+  <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+    <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+  </div>
+);
+
+const LandingPage = lazy(() => import('./pages/LandingPage').then((module) => ({ default: module.LandingPage })));
+const Dashboard = lazy(() => import('./pages/Dashboard').then((module) => ({ default: module.Dashboard })));
+const MyCourses = lazy(() => import('./pages/MyCourses').then((module) => ({ default: module.MyCourses })));
+const BrowseCourses = lazy(() => import('./pages/BrowseCourses').then((module) => ({ default: module.BrowseCourses })));
+const CourseDetails = lazy(() => import('./pages/CourseDetails').then((module) => ({ default: module.CourseDetails })));
+const Pathways = lazy(() => import('./pages/Pathways').then((module) => ({ default: module.Pathways })));
 const MainLayout = lazy(() => import('./layouts/MainLayout').then((module) => ({ default: module.MainLayout ?? module.default })));
-const AdminLayout = lazy(() => import('./layouts/AdminLayout').then((module) => ({ default: module.AdminLayout ?? module.default })));
+const AdminLayout = lazy(() => import('./layouts/AdminLayout').then((module) => ({ default: module.AdminLayout })));
 const AuthCallback = lazy(() =>
   import('./pages/Auth/AuthCallback').then((module) => ({ default: module.AuthCallback ?? module.default })),
 );
-const Signup = lazy(() => import('./pages/Auth/Signup').then((module) => ({ default: module.Signup ?? module.default })));
-const Login = lazy(() => import('./pages/Auth/Login').then((module) => ({ default: module.Login ?? module.default })));
-const VerifyOTP = lazy(() => import('./pages/Auth/VerifyOTP').then((module) => ({ default: module.VerifyOTP ?? module.default })));
-const VerifyCollege = lazy(() => import('./pages/Auth/VerifyCollege').then((module) => ({ default: module.VerifyCollege ?? module.default })));
-const OnboardingAnalyze = lazy(() => import('./pages/Auth/OnboardingAnalyze').then((module) => ({ default: module.OnboardingAnalyze ?? module.default })));
-const RoadmapList = lazy(() => import('./pages/Roadmaps/RoadmapList').then((module) => ({ default: module.RoadmapList ?? module.default })));
-const RoadmapDetail = lazy(() => import('./pages/Roadmaps/RoadmapDetail').then((module) => ({ default: module.RoadmapDetail ?? module.default })));
-const Assessments = lazy(() => import('./pages/Assessments/Assessments').then((module) => ({ default: module.Assessments ?? module.default })));
+const Signup = lazy(() => import('./pages/Auth/Signup').then((module) => ({ default: module.Signup })));
+const Login = lazy(() => import('./pages/Auth/Login').then((module) => ({ default: module.Login })));
+const VerifyOTP = lazy(() => import('./pages/Auth/VerifyOTP').then((module) => ({ default: module.VerifyOTP })));
+const VerifyCollege = lazy(() => import('./pages/Auth/VerifyCollege').then((module) => ({ default: module.VerifyCollege })));
+const OnboardingAnalyze = lazy(() => import('./pages/Auth/OnboardingAnalyze').then((module) => ({ default: module.OnboardingAnalyze })));
+const RoadmapList = lazy(() => import('./pages/Roadmaps/RoadmapList').then((module) => ({ default: module.RoadmapList })));
+const RoadmapDetail = lazy(() => import('./pages/Roadmaps/RoadmapDetail').then((module) => ({ default: module.RoadmapDetail })));
+const Assessments = lazy(() => import('./pages/Assessments/Assessments').then((module) => ({ default: module.Assessments })));
 const BuddyChat = lazy(() => import('./pages/Buddy/BuddyChat').then((module) => ({ default: module.BuddyChat ?? module.default })));
-const Leaderboard = lazy(() => import('./pages/Gamification/Leaderboard').then((module) => ({ default: module.Leaderboard ?? module.default })));
-const Rewards = lazy(() => import('./pages/Gamification/Rewards').then((module) => ({ default: module.Rewards ?? module.default })));
-const SoftSkills = lazy(() => import('./pages/SoftSkills/SoftSkills').then((module) => ({ default: module.SoftSkills ?? module.default })));
-const Internships = lazy(() => import('./pages/Internships/Internships').then((module) => ({ default: module.Internships ?? module.default })));
-const Events = lazy(() => import('./pages/Events/Events').then((module) => ({ default: module.Events ?? module.default })));
-const Profile = lazy(() => import('./pages/Profile/Profile').then((module) => ({ default: module.Profile ?? module.default })));
-const PublicProfile = lazy(() =>
-  import('./pages/Profile/PublicProfile').then((module) => ({ default: module.PublicProfile ?? module.default })),
+const Leaderboard = lazy(() => import('./pages/Gamification/Leaderboard').then((module) => ({ default: module.Leaderboard })));
+const Rewards = lazy(() => import('./pages/Gamification/Rewards').then((module) => ({ default: module.Rewards })));
+const Community = lazy(() => import('./pages/Community/Community').then((module) => ({ default: module.Community ?? module.default })));
+const Internships = lazy(() => import('./pages/Career/Internships').then((module) => ({ default: module.Internships })));
+const Certifications = lazy(() => import('./pages/Career/Certifications').then((module) => ({ default: module.Certifications })));
+const FacultyOpportunities = lazy(() =>
+  import('./pages/Career/FacultyOpportunities').then((module) => ({ default: module.FacultyOpportunities })),
 );
-const AdminDashboard = lazy(() => import('./pages/Admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard ?? module.default })));
-const AdminStudents = lazy(() => import('./pages/Admin/AdminStudents').then((module) => ({ default: module.AdminStudents ?? module.default })));
-const AdminCourses = lazy(() => import('./pages/Admin/AdminCourses').then((module) => ({ default: module.AdminCourses ?? module.default })));
-const AdminRoadmaps = lazy(() => import('./pages/Admin/AdminRoadmaps').then((module) => ({ default: module.AdminRoadmaps ?? module.default })));
-const NotFound = lazy(() => import('./pages/NotFound').then((module) => ({ default: module.NotFound ?? module.default })));
+const CvBuilder = lazy(() =>
+  import('./pages/Career/CvBuilder').then((module) => ({ default: module.CvBuilder ?? module.default })),
+);
+const CompanyDetail = lazy(() => import('./pages/Career/CompanyDetail').then((module) => ({ default: module.CompanyDetail })));
+const Events = lazy(() => import('./pages/Growth/Events').then((module) => ({ default: module.Events })));
+const SoftSkills = lazy(() => import('./pages/Growth/SoftSkills').then((module) => ({ default: module.SoftSkills })));
+const AdminDashboard = lazy(() => import('./pages/Admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })));
+const PendingApprovals = lazy(() => import('./pages/Admin/PendingApprovals').then((module) => ({ default: module.PendingApprovals })));
+const AdminLogin = lazy(() => import('./pages/Admin/AdminLogin').then((module) => ({ default: module.AdminLogin })));
+const CourseManager = lazy(() => import('./pages/Admin/CourseManager').then((module) => ({ default: module.CourseManager })));
+const ProfileDashboard = lazy(() =>
+  import('./pages/Profile/ProfileDashboard').then((module) => ({ default: module.ProfileDashboard ?? module.default })),
+);
+const PublicProfile = lazy(() =>
+  import('./pages/Public/PublicProfile').then((module) => ({ default: module.PublicProfile ?? module.default })),
+);
+const DSASheet = lazy(() => import('./pages/DSASheet').then((module) => ({ default: module.DSASheet })));
+const SkillProfile = lazy(() => import('./pages/SkillProfile').then((module) => ({ default: module.SkillProfile })));
+const DigitalPortfolio = lazy(() =>
+  import('./pages/Portfolio/DigitalPortfolio').then((module) => ({ default: module.DigitalPortfolio ?? module.default })),
+);
+const IndustryWorkspace = lazy(() =>
+  import('./pages/Industry/IndustryShell').then((module) => ({ default: module.IndustryShell })),
+);
+const FacultyWorkspace = lazy(() =>
+  import('./pages/Faculty/FacultyWorkspace').then((module) => ({ default: module.FacultyWorkspace })),
+);
+const CollegeLayout = lazy(() =>
+  import('./layouts/CollegeLayout').then((module) => ({ default: module.CollegeLayout })),
+);
+const PlacementDashboard = lazy(() =>
+  import('./pages/Admin/PlacementDashboard').then((module) => ({ default: module.PlacementDashboard })),
+);
+const DemandIntelligence = lazy(() =>
+  import('./pages/Intelligence/DemandIntelligence').then((module) => ({ default: module.DemandIntelligence })),
+);
+const TrendAnalyse = lazy(() =>
+  import('./pages/Intelligence/TrendAnalyse').then((module) => ({ default: module.TrendAnalyse })),
+);
+const CurriculumGapMapper = lazy(() =>
+  import('./pages/Admin/CurriculumGapMapper').then((module) => ({ default: module.CurriculumGapMapper })),
+);
+const DistrictTrainingPlan = lazy(() =>
+  import('./pages/Admin/DistrictTrainingPlan').then((module) => ({ default: module.DistrictTrainingPlan })),
+);
+const AdminMarketTrends = lazy(() =>
+  import('./pages/Admin/AdminMarketTrends').then((module) => ({ default: module.AdminMarketTrends })),
+);
+const AiCourseDesigner = lazy(() =>
+  import('./pages/CourseDesigner/AiCourseDesigner').then((module) => ({ default: module.AiCourseDesigner })),
+);
 
-function PageLoader() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">
-      Loading…
-    </div>
-  );
-}
+const DASHBOARD_ROUTES = [
+  '/dashboard',
+  '/courses',
+  '/browse',
+  '/paths',
+  '/roadmaps',
+  '/assessments',
+  '/buddy',
+  '/leaderboard',
+  '/rewards',
+  '/community',
+  '/internships',
+  '/certifications',
+  '/faculty-opportunities',
+  '/cv-builder',
+  '/events',
+  '/soft-skills',
+  '/dsa-sheet',
+  '/admin',
+  '/profile',
+  '/skill-profile',
+  '/portfolio',
+  '/industry',
+  '/college',
+  '/faculty',
+  '/demand-intelligence',
+  '/trend-analyse',
+  '/ai-course-designer',
+];
 
-function RoleRoute({ role, children }: { role: UserRole; children: ReactElement }) {
-  const user = getAuthUser();
-  if (!user) return <Navigate to="/login" replace />;
-  if (role === 'admin' && user.role !== 'admin' && !isAdminSessionActive()) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  if (role === 'student' && user.role === 'admin') {
-    // allow admin to view student routes
-  }
-  return children;
-}
+const AUTH_HIDE_GLOBAL_TOGGLE = [
+  '/login',
+  '/signup',
+  '/sign-up',
+  '/register',
+  '/signin',
+  '/sign-in',
+  '/verify-otp',
+  '/verify-college',
+  '/onboarding',
+  '/admin-login',
+  '/auth/callback',
+];
 
-function AppRoutes() {
+const GlobalThemeButton = () => {
   const location = useLocation();
-  return (
-    <Suspense fallback={<PageLoader />} key={location.pathname}>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/verify-otp" element={<VerifyOTP />} />
-        <Route path="/verify-college" element={<VerifyCollege />} />
-        <Route path="/onboarding" element={<OnboardingAnalyze />} />
-        <Route path="/u/:username" element={<PublicProfile />} />
-
-        <Route element={<MainLayout />}>
-          <Route path="/dashboard" element={<RoleRoute role="student"><Dashboard /></RoleRoute>} />
-          <Route path="/my-courses" element={<RoleRoute role="student"><MyCourses /></RoleRoute>} />
-          <Route path="/browse" element={<RoleRoute role="student"><BrowseCourses /></RoleRoute>} />
-          <Route path="/courses/:id" element={<RoleRoute role="student"><CourseDetails /></RoleRoute>} />
-          <Route path="/pathways" element={<RoleRoute role="student"><Pathways /></RoleRoute>} />
-          <Route path="/roadmaps" element={<RoleRoute role="student"><RoadmapList /></RoleRoute>} />
-          <Route path="/roadmaps/:slug" element={<RoleRoute role="student"><RoadmapDetail /></RoleRoute>} />
-          <Route path="/assessments" element={<RoleRoute role="student"><Assessments /></RoleRoute>} />
-          <Route path="/buddy" element={<RoleRoute role="student"><BuddyChat /></RoleRoute>} />
-          <Route path="/leaderboard" element={<RoleRoute role="student"><Leaderboard /></RoleRoute>} />
-          <Route path="/rewards" element={<RoleRoute role="student"><Rewards /></RoleRoute>} />
-          <Route path="/soft-skills" element={<RoleRoute role="student"><SoftSkills /></RoleRoute>} />
-          <Route path="/internships" element={<RoleRoute role="student"><Internships /></RoleRoute>} />
-          <Route path="/events" element={<RoleRoute role="student"><Events /></RoleRoute>} />
-          <Route path="/profile" element={<RoleRoute role="student"><Profile /></RoleRoute>} />
-        </Route>
-
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<RoleRoute role="admin"><AdminDashboard /></RoleRoute>} />
-          <Route path="students" element={<RoleRoute role="admin"><AdminStudents /></RoleRoute>} />
-          <Route path="courses" element={<RoleRoute role="admin"><AdminCourses /></RoleRoute>} />
-          <Route path="roadmaps" element={<RoleRoute role="admin"><AdminRoadmaps /></RoleRoute>} />
-        </Route>
-
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </Suspense>
+  const path = location.pathname;
+  const isDashboardArea = DASHBOARD_ROUTES.some(
+    (route) => path === route || path.startsWith(route),
   );
-}
+  const isAuthPage = AUTH_HIDE_GLOBAL_TOGGLE.some(
+    (route) => path === route || path.startsWith(route + '/'),
+  );
+  const isPublicProfile = path.startsWith('/u/');
+  if (isDashboardArea || isAuthPage || isPublicProfile) return null;
+  return <ThemeToggle movable />;
+};
 
-export default function App() {
+export function App() {
   return (
     <Router>
-      <AppRoutes />
+      <GlobalThemeButton />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/u/:username" element={<PublicProfile />} />
+          <Route path="/signup" element={<PublicOnlyRoute><Signup /></PublicOnlyRoute>} />
+          <Route path="/sign-up" element={<Navigate to="/signup" replace />} />
+          <Route path="/register" element={<Navigate to="/signup" replace />} />
+          <Route path="/auth/callback/:provider" element={<AuthCallback />} />
+          <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
+          <Route path="/signin" element={<Navigate to="/login" replace />} />
+          <Route path="/sign-in" element={<Navigate to="/login" replace />} />
+          <Route path="/verify-otp" element={<PublicOnlyRoute><VerifyOTP /></PublicOnlyRoute>} />
+          <Route path="/verify-college" element={<VerifyCollege />} />
+          <Route path="/onboarding" element={<OnboardingAnalyze />} />
+          <Route path="/admin-login" element={<AdminLogin />} />
+          <Route path="/course-manager" element={<AdminSessionRoute><CourseManager /></AdminSessionRoute>} />
+
+          <Route
+            path="/college"
+            element={
+              <ProtectedRoute>
+                <RoleRoute role="college">
+                  <CollegeLayout />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="/college/placements" replace />} />
+            <Route path="placements" element={<PlacementDashboard />} />
+          </Route>
+
+          <Route
+            path="/industry"
+            element={
+              <ProtectedRoute>
+                <RoleRoute role="industry">
+                  <IndustryWorkspace />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/faculty"
+            element={
+              <ProtectedRoute>
+                <RoleRoute role="faculty">
+                  <FacultyWorkspace />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route element={<AdminAccessRoute><AdminLayout /></AdminAccessRoute>}>
+            <Route path="/admin" element={<Navigate to="/admin/students" replace />} />
+            <Route path="/admin/students" element={<PendingApprovals />} />
+            <Route path="/admin/courses" element={<CourseManager />} />
+            <Route path="/admin/curriculum-gaps" element={<CurriculumGapMapper />} />
+            <Route path="/admin/district-plans" element={<DistrictTrainingPlan />} />
+            <Route path="/admin/market-trends" element={<AdminMarketTrends />} />
+          </Route>
+
+          <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<RoleRoute role="student"><Dashboard /></RoleRoute>} />
+            <Route path="/courses" element={<RoleRoute role="student"><MyCourses /></RoleRoute>} />
+            <Route path="/browse" element={<RoleRoute role="student"><BrowseCourses /></RoleRoute>} />
+            <Route path="/course/:id" element={<RoleRoute role="student"><CourseDetails /></RoleRoute>} />
+            <Route path="/paths" element={<RoleRoute role="student"><Pathways /></RoleRoute>} />
+            <Route path="/roadmaps" element={<RoleRoute role="student"><RoadmapList /></RoleRoute>} />
+            <Route path="/roadmaps/:role" element={<RoleRoute role="student"><RoadmapDetail /></RoleRoute>} />
+            <Route path="/assessments" element={<RoleRoute role="student"><Assessments /></RoleRoute>} />
+            <Route path="/buddy" element={<RoleRoute role="student"><BuddyChat /></RoleRoute>} />
+            <Route path="/leaderboard" element={<RoleRoute role="student"><Leaderboard /></RoleRoute>} />
+            <Route path="/rewards" element={<RoleRoute role="student"><Rewards /></RoleRoute>} />
+            <Route path="/community" element={<RoleRoute role="student"><Community /></RoleRoute>} />
+            <Route path="/internships" element={<RoleRoute role="student"><Internships /></RoleRoute>} />
+            <Route path="/certifications" element={<RoleRoute role="student"><Certifications /></RoleRoute>} />
+            <Route path="/faculty-opportunities" element={<RoleRoute role="student"><FacultyOpportunities /></RoleRoute>} />
+            <Route path="/cv-builder" element={<RoleRoute role="student"><CvBuilder /></RoleRoute>} />
+            <Route path="/companies/:id" element={<RoleRoute role="student"><CompanyDetail /></RoleRoute>} />
+            <Route path="/events" element={<RoleRoute role="student"><Events /></RoleRoute>} />
+            <Route path="/soft-skills" element={<RoleRoute role="student"><SoftSkills /></RoleRoute>} />
+            <Route path="/dsa-sheet" element={<RoleRoute role="student"><DSASheet /></RoleRoute>} />
+            <Route path="/profile" element={<RoleRoute role="student"><ProfileDashboard /></RoleRoute>} />
+            <Route path="/skill-profile" element={<RoleRoute role="student"><SkillProfile /></RoleRoute>} />
+            <Route path="/portfolio" element={<RoleRoute role="student"><DigitalPortfolio /></RoleRoute>} />
+            <Route path="/demand-intelligence" element={<RoleRoute role="student"><DemandIntelligence /></RoleRoute>} />
+            <Route path="/trend-analyse" element={<RoleRoute role="student"><TrendAnalyse /></RoleRoute>} />
+            <Route path="/ai-course-designer" element={<RoleRoute role="student"><AiCourseDesigner /></RoleRoute>} />
+          </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </Router>
   );
 }
+
+export default App;
