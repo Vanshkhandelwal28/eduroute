@@ -1,5 +1,5 @@
 /**
- * EduRoute Landing — Dala-class cinematic experience.
+ * EduRoute Landing — paced cinematic chapters + stronger team.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
@@ -15,6 +15,27 @@ const SECTIONS = [
   { id: 'manifesto', label: 'Manifesto' },
   { id: 'feature-01', label: 'Work' },
   { id: 'team', label: 'Team' },
+];
+
+const TEAM = [
+  {
+    initials: 'AR',
+    name: 'Alex Rivera',
+    role: 'Founder & Vision',
+    hue: 265,
+  },
+  {
+    initials: 'SC',
+    name: 'Sam Chen',
+    role: 'Product & Systems',
+    hue: 195,
+  },
+  {
+    initials: 'JL',
+    name: 'Jordan Lee',
+    role: 'Experience Design',
+    hue: 35,
+  },
 ];
 
 function revealHeroNow() {
@@ -80,14 +101,12 @@ export const LandingPage = () => {
     const onScroll = () => {
       setShowTop(window.scrollY > window.innerHeight * 0.75);
 
-      // Active section tracking
       const mid = window.scrollY + window.innerHeight * 0.35;
       let current = 'hero';
       for (const s of SECTIONS) {
         const el = document.getElementById(s.id);
         if (el && el.offsetTop <= mid) current = s.id;
       }
-      // also feature sections for nav highlight on Work
       const f1 = document.getElementById('feature-01');
       if (f1 && f1.offsetTop <= mid) current = 'feature-01';
       const team = document.getElementById('team');
@@ -126,7 +145,6 @@ export const LandingPage = () => {
       loader.complete().then(() => revealHeroNow());
     }
 
-    // Safety: never leave loader stuck
     const safetyT = window.setTimeout(() => {
       loader.complete().then(() => revealHeroNow());
     }, 5000);
@@ -148,13 +166,12 @@ export const LandingPage = () => {
 
       <canvas id="webgl-canvas" ref={canvasRef} />
 
-      {/* Vertical progress ticks */}
       <div className="er-progress" aria-hidden="true">
         {['hero', 'manifesto', 'feature-01', 'feature-02', 'feature-03', 'team', 'cta'].map(
           (id) => (
             <span
               key={id}
-              className={`er-progress__tick${activeSection === id || (id === 'feature-01' && activeSection === 'feature-01') ? ' is-active' : ''}`}
+              className={`er-progress__tick${activeSection === id ? ' is-active' : ''}`}
             />
           )
         )}
@@ -235,7 +252,8 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        <section id="feature-01" className="er-section er-feature">
+        {/* Extra vertical room for the long morph */}
+        <section id="feature-01" className="er-section er-feature er-feature--tall">
           <p className="er-label">02 — Transform</p>
           <h2 className="er-title er-title--short">
             <span className="er-reveal">
@@ -291,25 +309,25 @@ export const LandingPage = () => {
             </span>
           </h2>
           <div className="er-team__grid">
-            <div className="er-team__member">
-              <div className="er-team__avatar" aria-hidden="true">AR</div>
-              <p className="er-team__name">Alex Rivera</p>
-              <p className="er-team__role">Founder & Vision</p>
-            </div>
-            <div className="er-team__member">
-              <div className="er-team__avatar" aria-hidden="true">SC</div>
-              <p className="er-team__name">Sam Chen</p>
-              <p className="er-team__role">Product & Systems</p>
-            </div>
-            <div className="er-team__member">
-              <div className="er-team__avatar" aria-hidden="true">JL</div>
-              <p className="er-team__name">Jordan Lee</p>
-              <p className="er-team__role">Experience Design</p>
-            </div>
+            {TEAM.map((m) => (
+              <div key={m.initials} className="er-team__member">
+                <div
+                  className="er-team__avatar"
+                  style={{
+                    background: `linear-gradient(145deg, hsla(${m.hue}, 40%, 22%, 0.9), hsla(${m.hue}, 30%, 8%, 0.95))`,
+                    borderColor: `hsla(${m.hue}, 35%, 45%, 0.35)`,
+                  }}
+                  aria-hidden="true"
+                >
+                  <span>{m.initials}</span>
+                </div>
+                <p className="er-team__name">{m.name}</p>
+                <p className="er-team__role">{m.role}</p>
+              </div>
+            ))}
           </div>
         </section>
 
-        {/* Partners / proof */}
         <section id="partners" className="er-section er-partners">
           <p className="er-label">Supported by</p>
           <div className="er-partners__row">

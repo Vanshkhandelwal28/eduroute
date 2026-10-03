@@ -9,7 +9,7 @@ import { GrainShader, VignetteShader } from './shaders.js';
 import { getPostQuality, getCappedDPR } from '../utils/device.js';
 
 /**
- * Selective bloom — soft edge glow only, core stays detailed.
+ * Locked bloom preset — soft halo, never white fill.
  */
 export default class PostProcessing {
   constructor({ renderer, scene, camera, sizes }) {
@@ -40,17 +40,17 @@ export default class PostProcessing {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
 
-    // Low strength + higher threshold = soft halo, not white fill
+    // Locked: strength low, threshold high
     const bloomStrength =
-      this.quality === 'HIGH' ? 0.4 : this.quality === 'MEDIUM' ? 0.3 : 0.22;
+      this.quality === 'HIGH' ? 0.32 : this.quality === 'MEDIUM' ? 0.26 : 0.18;
     const bloomRadius =
-      this.quality === 'HIGH' ? 0.35 : this.quality === 'MEDIUM' ? 0.28 : 0.22;
+      this.quality === 'HIGH' ? 0.32 : this.quality === 'MEDIUM' ? 0.26 : 0.2;
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(w, h),
       bloomStrength,
       bloomRadius,
-      0.82
+      0.85
     );
     this.composer.addPass(this.bloomPass);
 
@@ -58,20 +58,20 @@ export default class PostProcessing {
     if (this.quality === 'HIGH') {
       this.bokehPass = new BokehPass(this.scene, this.camera, {
         focus: 4.0,
-        aperture: 0.004,
-        maxblur: 0.0015,
+        aperture: 0.0035,
+        maxblur: 0.0012,
       });
       this.composer.addPass(this.bokehPass);
     }
 
     this.grainPass = new ShaderPass(GrainShader);
     this.grainPass.uniforms.uIntensity.value =
-      this.quality === 'HIGH' ? 0.028 : 0.018;
+      this.quality === 'HIGH' ? 0.025 : 0.016;
     this.composer.addPass(this.grainPass);
 
     this.vignettePass = new ShaderPass(VignetteShader);
     this.vignettePass.uniforms.uDarkness.value =
-      this.quality === 'HIGH' ? 0.4 : 0.3;
+      this.quality === 'HIGH' ? 0.38 : 0.28;
     this.vignettePass.uniforms.uOffset.value = 1.15;
     this.composer.addPass(this.vignettePass);
 
