@@ -2,6 +2,9 @@
  * Full port of kekkorider/threejs-dala (Dala.ai WebGL module)
  * https://github.com/kekkorider/threejs-dala
  *
+ * Vendored sources (shaders, original app, LICENSE):
+ *   src/vendor/threejs-dala/
+ *
  * brain.glb vertices → InstancedMesh of BoxGeometry(0.004)
  * Vertex shader: distance(uPointer) → scale + rotate (exact GLSL logic)
  * Raycast on brain · camera parallax · Dala palette · wireframe cubes
@@ -11,6 +14,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
+/** Upstream static/brain.glb (same file as threejs-dala) */
 const BRAIN_URL =
   'https://cdn.jsdelivr.net/gh/kekkorider/threejs-dala@main/static/brain.glb';
 
@@ -21,7 +25,7 @@ const COLORS = [
   new THREE.Color(0xfeae51),
 ];
 
-/** Exact threejs-dala vertex shader (rotate inlined) */
+/** Exact threejs-dala vertex shader (rotate inlined from shaders/modules/rotate.glsl) */
 const vertexShader = /* glsl */ `
 uniform vec3 uPointer;
 uniform float uHover;
@@ -159,7 +163,6 @@ function BrainInstances({ ready }: { ready: boolean }) {
     const mesh = meshRef.current;
     if (!mesh || count === 0) return;
 
-    // threejs-dala camera parallax
     targetCam.current.x = pointer.x * 0.15;
     targetCam.current.y = pointer.y * 0.1;
     camera.position.x += (targetCam.current.x - camera.position.x) * 0.1;
