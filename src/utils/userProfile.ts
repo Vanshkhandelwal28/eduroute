@@ -32,28 +32,26 @@ export const getStoredUserProfile = (): StoredUserProfile | null => {
     const raw = window.localStorage.getItem(USER_PROFILE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    return parsed && typeof parsed === 'object' ? (parsed as StoredUserProfile) : null;
   } catch {
     return null;
   }
 };
 
-export const getCurrentUser = () => {
-  return getStoredUserProfile();
-};
+export const getCurrentUser = () => getStoredUserProfile();
 
 export const updateEnrollment = (courseId: string) => {
   const profile = getStoredUserProfile() || {};
-  const enrolled = Array.isArray(profile.enrolledCourses) ? profile.enrolledCourses : [];
+  const enrolled = Array.isArray(profile.enrolledCourses) ? [...profile.enrolledCourses] : [];
   if (!enrolled.includes(courseId)) {
-    saveUserProfile({ ...profile, enrolledCourses: [...enrolled, courseId] });
+    enrolled.push(courseId);
+    saveUserProfile({ ...profile, enrolledCourses: enrolled });
   }
 };
 
 export const getDisplayFirstName = () => {
-  const p = getStoredUserProfile();
-  const name = p?.name || '';
-  return name.split(' ')[0] || 'Student';
+  const name = getStoredUserProfile()?.name || '';
+  return String(name).split(' ')[0] || 'Student';
 };
 
 export const parseGoogleCredential = (credential: string) => {
@@ -75,5 +73,5 @@ export async function syncUserProfileFromServer(): Promise<void> {
   const remote = await pullUserData<StoredUserProfile>('user-profile');
   if (!remote || typeof remote !== 'object') return;
   const local = getStoredUserProfile();
-  saveUserProfile({ ...(local || {}), ...remote } as StoredUserProfile);
+  saveUserProfile({ ...(local || {}), ...remote });
 }
