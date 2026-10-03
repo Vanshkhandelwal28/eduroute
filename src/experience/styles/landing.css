@@ -1,5 +1,5 @@
 /* ============================================================
-   EduRoute landing — phase-audit CSS
+   EduRoute landing — includes scroll-to-top
    ============================================================ */
 
 :root {
@@ -15,7 +15,6 @@
   --dur: 0.45s;
 }
 
-/* Hide global theme toggle on landing (class is theme-toggle) */
 body.er-on-landing .theme-toggle {
   display: none !important;
   visibility: hidden !important;
@@ -137,6 +136,63 @@ body.er-on-landing .theme-toggle {
   background: #fff;
   transform: scaleX(0);
   transform-origin: left center;
+}
+
+/* ---- Scroll to top ---- */
+.er-landing .er-to-top {
+  position: fixed;
+  bottom: 1.75rem;
+  right: 1.75rem;
+  z-index: 60;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition:
+    opacity 0.4s var(--ease),
+    visibility 0.4s var(--ease),
+    transform 0.4s var(--ease),
+    border-color 0.35s var(--ease),
+    background 0.35s var(--ease);
+  pointer-events: none;
+}
+
+.er-landing .er-to-top.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.er-landing .er-to-top:hover {
+  border-color: var(--border-hover);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.er-landing .er-to-top__arrow {
+  font-size: 0.85rem;
+  line-height: 1;
+  transition: transform 0.35s var(--ease);
+}
+
+.er-landing .er-to-top:hover .er-to-top__arrow {
+  transform: translateY(-2px);
+}
+
+@media (min-width: 768px) {
+  .er-landing .er-to-top {
+    bottom: 2.25rem;
+    right: 2.5rem;
+  }
 }
 
 .er-landing .er-nav {
@@ -276,7 +332,6 @@ body.er-on-landing .theme-toggle {
   margin: 1.85rem 0 0;
 }
 
-/* Text reveals */
 .er-landing .er-reveal {
   display: block;
   overflow: hidden;
@@ -288,14 +343,10 @@ body.er-on-landing .theme-toggle {
   opacity: 0;
 }
 
-/* Hero forced visible after loader */
 .er-landing.is-ready #hero .er-reveal > span {
   transform: translateY(0) !important;
   opacity: 1 !important;
 }
-
-/* Section titles become visible when scrolled into view via GSAP;
-   fallback: once is-ready, other sections can still animate via GSAP */
 
 .er-landing .er-btn {
   display: inline-flex !important;
@@ -511,5 +562,9 @@ body.er-on-landing .theme-toggle {
   .er-landing .er-reveal > span {
     transform: none !important;
     opacity: 1 !important;
+  }
+
+  .er-landing .er-to-top {
+    transition: none;
   }
 }

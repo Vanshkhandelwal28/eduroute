@@ -1,8 +1,7 @@
 /**
- * EduRoute Landing — final cinematic experience.
- * Story: IDEA → STRUCTURE → TRANSFORM → INTELLIGENCE → CONNECTION → ACTION
+ * EduRoute Landing — cinematic experience + scroll-to-top.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthModal } from '../components/AuthModal';
 import Experience from '../experience/Experience.js';
@@ -53,15 +52,56 @@ function revealHeroNow() {
 
 export const LandingPage = () => {
   const [auth, setAuth] = useState(false);
+  const [showTop, setShowTop] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const experienceRef = useRef<InstanceType<typeof Experience> | null>(null);
+
+  const scrollToTop = useCallback(() => {
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reduced) {
+      window.scrollTo(0, 0);
+      return;
+    }
+
+    // Smooth scroll — ScrollTrigger will scrub particle state as we go
+    gsap.to(window, {
+      scrollTo: { y: 0, autoKill: true },
+      duration: 1.4,
+      ease: 'power2.inOut',
+    });
+
+    // Fallback if ScrollToPlugin is not registered
+    try {
+      // gsap ScrollToPlugin may not be loaded — native smooth as backup
+      if (!(gsap as unknown as { plugins?: unknown }).plugins) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Always use native smooth as reliable path
+    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+  }, []);
 
   useEffect(() => {
     document.body.classList.add('er-on-landing');
 
+    const onScroll = () => {
+      setShowTop(window.scrollY > window.innerHeight * 0.6);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+
     if (!canvasRef.current) {
       revealHeroNow();
-      return;
+      return () => {
+        document.body.classList.remove('er-on-landing');
+        window.removeEventListener('scroll', onScroll);
+      };
     }
 
     const loader = new Loader();
@@ -75,7 +115,6 @@ export const LandingPage = () => {
       document.querySelector('.er-landing')?.classList.add('er-no-webgl');
     }
 
-    // Loader → first frame → hero type: one continuous beat
     const revealT = window.setTimeout(() => {
       revealHeroNow();
       loader.dismiss();
@@ -87,6 +126,7 @@ export const LandingPage = () => {
 
     return () => {
       document.body.classList.remove('er-on-landing');
+      window.removeEventListener('scroll', onScroll);
       window.clearTimeout(revealT);
       window.clearTimeout(safetyT);
       loader.dispose();
@@ -118,7 +158,6 @@ export const LandingPage = () => {
       </nav>
 
       <main className="er-main">
-        {/* IDEA */}
         <section id="hero" className="er-section er-hero">
           <p className="er-label">Idea</p>
           <h1 className="er-title">
@@ -152,7 +191,6 @@ export const LandingPage = () => {
           <p className="er-scroll-hint">Scroll</p>
         </section>
 
-        {/* STRUCTURE */}
         <section id="manifesto" className="er-section er-manifesto">
           <p className="er-label">01 — Structure</p>
           <h2 className="er-title">
@@ -174,7 +212,6 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        {/* TRANSFORM */}
         <section id="feature-01" className="er-section er-feature">
           <p className="er-label">02 — Transform</p>
           <h2 className="er-title">
@@ -190,7 +227,6 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        {/* INTELLIGENCE */}
         <section id="feature-02" className="er-section er-feature er-feature--right">
           <p className="er-label">03 — Intelligence</p>
           <h2 className="er-title">
@@ -206,7 +242,6 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        {/* CONNECTION */}
         <section id="feature-03" className="er-section er-feature">
           <p className="er-label">04 — Connection</p>
           <h2 className="er-title">
@@ -248,7 +283,6 @@ export const LandingPage = () => {
           </div>
         </section>
 
-        {/* ACTION */}
         <section id="cta" className="er-section er-cta">
           <p className="er-label">06 — Action</p>
           <h2 className="er-title">
@@ -289,6 +323,19 @@ export const LandingPage = () => {
           <p className="er-footer__copy">© 2026 EduRoute</p>
         </footer>
       </main>
+
+      {/* Scroll to top — appears after leaving hero */}
+      <button
+        type="button"
+        className={`er-to-top${showTop ? ' is-visible' : ''}`}
+        onClick={scrollToTop}
+        aria-label="Scroll to top"
+        title="Back to top"
+      >
+        <span className="er-to-top__arrow" aria-hidden="true">
+          ↑
+        </span>
+      </button>
     </div>
   );
 };
