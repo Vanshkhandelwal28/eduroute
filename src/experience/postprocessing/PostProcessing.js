@@ -9,8 +9,8 @@ import { GrainShader, VignetteShader } from './shaders.js';
 import { getPostQuality, getCappedDPR } from '../utils/device.js';
 
 /**
- * Post-processing pipeline.
- * Tone mapping is applied ONLY here via OutputPass (renderer uses NoToneMapping).
+ * Post-processing — subtle bloom that supports particle readability.
+ * Tone mapping only via OutputPass (renderer = NoToneMapping).
  */
 export default class PostProcessing {
   constructor({ renderer, scene, camera, sizes }) {
@@ -41,43 +41,41 @@ export default class PostProcessing {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
 
-    // Selective bloom — high threshold, low strength
+    // Soft cinematic glow — structure stays readable
     const bloomStrength =
-      this.quality === 'HIGH' ? 0.35 : this.quality === 'MEDIUM' ? 0.25 : 0.18;
+      this.quality === 'HIGH' ? 0.55 : this.quality === 'MEDIUM' ? 0.4 : 0.28;
     const bloomRadius =
-      this.quality === 'HIGH' ? 0.35 : this.quality === 'MEDIUM' ? 0.28 : 0.22;
+      this.quality === 'HIGH' ? 0.4 : this.quality === 'MEDIUM' ? 0.32 : 0.25;
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(w, h),
       bloomStrength,
       bloomRadius,
-      0.9
+      0.75 // mid threshold so structure contributes soft glow
     );
     this.composer.addPass(this.bloomPass);
 
-    // DOF only on HIGH — Bokeh can wash additive particles
     this.bokehPass = null;
     if (this.quality === 'HIGH') {
       this.bokehPass = new BokehPass(this.scene, this.camera, {
         focus: 4.0,
-        aperture: 0.006,
-        maxblur: 0.0025,
+        aperture: 0.005,
+        maxblur: 0.002,
       });
       this.composer.addPass(this.bokehPass);
     }
 
     this.grainPass = new ShaderPass(GrainShader);
     this.grainPass.uniforms.uIntensity.value =
-      this.quality === 'HIGH' ? 0.03 : 0.02;
+      this.quality === 'HIGH' ? 0.028 : 0.018;
     this.composer.addPass(this.grainPass);
 
     this.vignettePass = new ShaderPass(VignetteShader);
     this.vignettePass.uniforms.uDarkness.value =
-      this.quality === 'HIGH' ? 0.4 : 0.3;
+      this.quality === 'HIGH' ? 0.38 : 0.28;
     this.vignettePass.uniforms.uOffset.value = 1.15;
     this.composer.addPass(this.vignettePass);
 
-    // OutputPass applies tone mapping + color space once
     this.outputPass = new OutputPass();
     this.composer.addPass(this.outputPass);
   }

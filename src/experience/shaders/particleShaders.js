@@ -1,5 +1,5 @@
 /**
- * Particle render shaders — tuned for subtle glow, not white-out.
+ * Particle render shaders — balanced visibility (readable structure, no white-out).
  */
 
 export const particleVertexShader = /* glsl */ `
@@ -57,16 +57,16 @@ varying float vBrightness;
 varying float vSeed;
 
 void main() {
-  // Soft cool white + sparse violet — keep luminance low for bloom threshold
-  vec3 base = vec3(0.72, 0.70, 0.78);
-  vec3 accent = vec3(0.42, 0.28, 0.85);
+  // Cool white base + soft violet tint
+  vec3 base = vec3(0.88, 0.86, 0.94);
+  vec3 accent = vec3(0.55, 0.38, 0.95);
   float tint = fract(vSeed * 7.13);
-  vec3 col = mix(base, accent, tint * 0.22);
+  vec3 col = mix(base, accent, tint * 0.25);
 
-  // Dim overall so only brightest tips hit bloom threshold
-  col *= (0.22 + vBrightness * 0.28);
+  // Visible but not blown-out — mid luminance for selective bloom
+  col *= (0.45 + vBrightness * 0.50);
 
-  float alpha = 0.28 * uOpacity;
+  float alpha = 0.55 * uOpacity;
 
   gl_FragColor = vec4(col, alpha);
 }

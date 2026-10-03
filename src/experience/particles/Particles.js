@@ -9,7 +9,7 @@ import MorphSystem from './MorphSystem.js';
 
 /**
  * Particles — InstancedMesh + GPU sim + morph.
- * Phase audit: no per-frame Vector3 allocations.
+ * Tuned for visible structure without white-out.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -50,8 +50,9 @@ export default class Particles {
     this.morph.setPair('brain', 'bulb');
     this.morph.setProgress(0);
 
+    // Readable triangle size
     const tri = new THREE.BufferGeometry();
-    const s = 0.0065;
+    const s = 0.009;
     const vertices = new Float32Array([
       0.0, s * 1.25, 0.0,
       -s, -s * 0.7, 0.0,
@@ -66,8 +67,8 @@ export default class Particles {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      aScale[i] = 0.4 + Math.random() * 1.4;
-      aBrightness[i] = 0.25 + Math.random() * 0.55;
+      aScale[i] = 0.55 + Math.random() * 1.6;
+      aBrightness[i] = 0.4 + Math.random() * 0.55;
       aIndex[i] = i;
     }
 
@@ -86,7 +87,7 @@ export default class Particles {
       fragmentShader: particleFragmentShader,
       uniforms: {
         uTime: { value: 0 },
-        uBreathAmount: { value: 0.022 },
+        uBreathAmount: { value: 0.025 },
         uBreathSpeed: { value: 0.45 },
         uPositionTexture: { value: null },
         uTexSize: { value: this.simulation.textureSize },
