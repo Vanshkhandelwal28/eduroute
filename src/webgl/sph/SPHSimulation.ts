@@ -32,19 +32,19 @@ export type SPHParams = {
 };
 
 const DEFAULT: SPHParams = {
-  particleCount: 2048,
-  smoothingRadius: 0.22,
-  restDensity: 12,
-  gasConstant: 40,
-  viscosity: 0.18,
-  gravity: new THREE.Vector3(0, -3.5, 0),
-  damping: 0.985,
-  particleSize: 8,
-  mouseForce: -18,
-  mouseRadius: 0.55,
+  particleCount: 1600,
+  smoothingRadius: 0.28,
+  restDensity: 8,
+  gasConstant: 12,
+  viscosity: 0.35,
+  gravity: new THREE.Vector3(0, -2.2, 0),
+  damping: 0.98,
+  particleSize: 11,
+  mouseForce: -12,
+  mouseRadius: 0.6,
   simSpeed: 1,
   mass: 1,
-  morphStrength: 4,
+  morphStrength: 3,
   neighborStride: 2,
 };
 
@@ -78,7 +78,7 @@ export class SPHSimulation {
   integPosMat!: THREE.RawShaderMaterial;
 
   points!: THREE.Points;
-  particleMat!: THREE.RawShaderMaterial;
+  particleMat!: THREE.ShaderMaterial;
 
   private mouse = new THREE.Vector3(0, -10, 0);
   private morphProgress = 0;
@@ -87,34 +87,33 @@ export class SPHSimulation {
 
   constructor(canvas: HTMLCanvasElement, params?: Partial<SPHParams>) {
     this.params = { ...DEFAULT, ...params };
+
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: false,
       alpha: true,
       powerPreference: 'high-performance',
+      premultipliedAlpha: false,
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+    this.renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 1.5));
     this.renderer.setClearColor(0x080808, 1);
+    this.renderer.autoClear = true;
 
     this.caps = detectGPUCaps(this.renderer);
-    this.supported =
-      this.caps.webgl2 && this.caps.floatColorBuffer;
+    this.supported = this.caps.webgl2 && this.caps.floatColorBuffer;
+    this.compute = new GPUCompute(this.renderer);
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 50);
+    this.camera.position.set(0, 0.15, 3.4);
+    this.camera.lookAt(0, 0, 0);
 
     if (!this.supported) {
       this.fallbackReason = !this.caps.webgl2
         ? 'WebGL2 required for GPU SPH.'
         : 'Floating-point color buffers required (EXT_color_buffer_float).';
-      this.compute = new GPUCompute(this.renderer);
-      this.scene = new THREE.Scene();
-      this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 50);
+      this.onResize();
       return;
     }
-
-    this.compute = new GPUCompute(this.renderer);
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 40);
-    this.camera.position.set(0, 0.2, 3.2);
 
     this.initTargets();
     this.initMaterials();
@@ -138,7 +137,7 @@ export class SPHSimulation {
     this.morphTarget = createFloatRT(s, s);
   }
 
-  private mat(frag: string, extras: Record<string, THREE.IUniform> = {}) {
+  private mat(frag: string) {
     return new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3,
       vertexShader: fullscreenVert,
@@ -165,11 +164,10 @@ export class SPHSimulation {
         uMorphStrength: { value: this.params.morphStrength },
         uDt: { value: 0.016 },
         uDamping: { value: this.params.damping },
-        uBoundsMin: { value: new THREE.Vector3(-1.2, -0.9, -0.8) },
-        uBoundsMax: { value: new THREE.Vector3(1.2, 1.1, 0.8) },
-        uRestitution: { value: 0.35 },
+        uBoundsMin: { value: new THREE.Vector3(-1.35, -1.0, -0.9) },
+        uBoundsMax: { value: new THREE.Vector3(1.35, 1.2, 0.9) },
+        uRestitution: { value: 0.4 },
         uWriteMode: { value: 0 },
-        ...extras,
       },
       depthTest: false,
       depthWrite: false,
@@ -185,13 +183,12 @@ export class SPHSimulation {
 
   private initParticles() {
     const geo = new THREE.BufferGeometry();
-    // Vertex ID driven — dummy position attribute required by some drivers
     const dummy = new Float32Array(this.params.particleCount * 3);
     geo.setAttribute('position', new THREE.BufferAttribute(dummy, 3));
     geo.setDrawRange(0, this.params.particleCount);
 
-    this.particleMat = new THREE.RawShaderMaterial({
-      glslVersion: THREE.GLSL3,
+    // ShaderMaterial (not Raw) so Three.js supplies modelViewMatrix / projectionMatrix
+    this.particleMat = new THREE.ShaderMaterial({
       vertexShader: particleVert,
       fragmentShader: particleFrag,
       uniforms: {
@@ -199,13 +196,12 @@ export class SPHSimulation {
         uTexSize: { value: this.texSize },
         uParticleCount: { value: this.params.particleCount },
         uPointSize: { value: this.params.particleSize },
-        uColor: { value: new THREE.Color('#d8d6d0') },
+        uColor: { value: new THREE.Color('#e4e2dc') },
         uAccent: { value: new THREE.Color('#c8f542') },
-        modelViewMatrix: { value: new THREE.Matrix4() },
-        projectionMatrix: { value: new THREE.Matrix4() },
       },
       transparent: true,
       depthWrite: false,
+      depthTest: true,
       blending: THREE.AdditiveBlending,
     });
 
@@ -214,70 +210,47 @@ export class SPHSimulation {
     this.scene.add(this.points);
   }
 
-  private writeDataTexture(
-    rt: THREE.WebGLRenderTarget,
-    data: Float32Array,
-  ) {
-    const s = this.texSize;
-    const tex = new THREE.DataTexture(data, s, s, THREE.RGBAFormat, THREE.FloatType);
-    tex.needsUpdate = true;
-    tex.minFilter = THREE.NearestFilter;
-    tex.magFilter = THREE.NearestFilter;
-    // Blit via scene
-    const mat = new THREE.MeshBasicMaterial({ map: tex });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
-    const sc = new THREE.Scene();
-    sc.add(mesh);
-    const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const prev = this.renderer.getRenderTarget();
-    this.renderer.setRenderTarget(rt);
-    this.renderer.render(sc, cam);
-    this.renderer.setRenderTarget(prev);
-    tex.dispose();
-    mat.dispose();
-    mesh.geometry.dispose();
-  }
-
   private seedFluid() {
     const s = this.texSize;
     const data = new Float32Array(s * s * 4);
     const n = this.params.particleCount;
-    let i = 0;
     const cols = Math.ceil(Math.sqrt(n));
+    const rows = Math.ceil(n / cols);
     for (let p = 0; p < n; p++) {
-      const cx = (p % cols) / cols;
-      const cy = Math.floor(p / cols) / cols;
-      data[i++] = (cx - 0.5) * 1.6 + (Math.random() - 0.5) * 0.05;
-      data[i++] = cy * 1.2 - 0.3 + (Math.random() - 0.5) * 0.05;
-      data[i++] = (Math.random() - 0.5) * 0.5;
-      data[i++] = 1;
+      const col = p % cols;
+      const row = Math.floor(p / cols);
+      const x = (col / Math.max(cols - 1, 1) - 0.5) * 1.5;
+      const y = (row / Math.max(rows - 1, 1)) * 1.0 - 0.2;
+      const z = (Math.random() - 0.5) * 0.4;
+      data[p * 4] = x + (Math.random() - 0.5) * 0.03;
+      data[p * 4 + 1] = y + (Math.random() - 0.5) * 0.03;
+      data[p * 4 + 2] = z;
+      data[p * 4 + 3] = 1;
     }
-    this.writeDataTexture(this.posA, data);
-    this.writeDataTexture(this.posB, data);
+    this.compute.uploadFloatData(this.posA, data, s, s);
+    this.compute.uploadFloatData(this.posB, data, s, s);
     const vel = new Float32Array(s * s * 4);
-    this.writeDataTexture(this.velA, vel);
-    this.writeDataTexture(this.velB, vel);
+    this.compute.uploadFloatData(this.velA, vel, s, s);
+    this.compute.uploadFloatData(this.velB, vel, s, s);
   }
 
-  /** GPU morph target: sphere (ready for brain/logo swaps later) */
   private seedMorphSphere() {
     const s = this.texSize;
     const data = new Float32Array(s * s * 4);
     const n = this.params.particleCount;
     for (let p = 0; p < n; p++) {
-      const y = 1 - (p / (n - 1)) * 2;
+      const y = n <= 1 ? 0 : 1 - (p / (n - 1)) * 2;
       const r = Math.sqrt(Math.max(0, 1 - y * y));
       const theta = Math.PI * (3 - Math.sqrt(5)) * p;
-      const radius = 0.65;
+      const radius = 0.7;
       data[p * 4] = Math.cos(theta) * r * radius;
-      data[p * 4 + 1] = y * radius;
+      data[p * 4 + 1] = y * radius * 0.9;
       data[p * 4 + 2] = Math.sin(theta) * r * radius;
       data[p * 4 + 3] = 1;
     }
-    this.writeDataTexture(this.morphTarget, data);
+    this.compute.uploadFloatData(this.morphTarget, data, s, s);
   }
 
-  /** Public API — EduRoute */
   setMouse(x: number, y: number, z: number) {
     this.mouse.set(x, y, z);
   }
@@ -315,14 +288,17 @@ export class SPHSimulation {
       m.uniforms.uMorphStrength.value = this.params.morphStrength;
       m.uniforms.uDamping.value = this.params.damping;
       m.uniforms.uParticleCount.value = this.params.particleCount;
+      m.uniforms.uTexSize.value = this.texSize;
     }
     this.particleMat.uniforms.uPointSize.value = this.params.particleSize;
+    this.particleMat.uniforms.uParticleCount.value = this.params.particleCount;
+    this.particleMat.uniforms.uTexSize.value = this.texSize;
   }
 
   update(deltaTime: number) {
     if (!this.supported || this.disposed) return;
 
-    const dt = Math.min(deltaTime, 0.033) * this.params.simSpeed;
+    const dt = Math.min(Math.max(deltaTime, 0.001), 0.033) * this.params.simSpeed;
     this.syncUniforms();
 
     const posRead = this.ping ? this.posB : this.posA;
@@ -330,18 +306,15 @@ export class SPHSimulation {
     const velRead = this.ping ? this.velB : this.velA;
     const velWrite = this.ping ? this.velA : this.velB;
 
-    // 1) Density + pressure
     this.densMat.uniforms.uPos.value = posRead.texture;
     this.compute.run(this.densMat, this.dens);
 
-    // 2) Forces
     this.forceMat.uniforms.uPos.value = posRead.texture;
     this.forceMat.uniforms.uVel.value = velRead.texture;
     this.forceMat.uniforms.uDens.value = this.dens.texture;
     this.forceMat.uniforms.uMorphTarget.value = this.morphTarget.texture;
     this.compute.run(this.forceMat, this.force);
 
-    // 3) Integrate velocity
     this.integVelMat.uniforms.uPos.value = posRead.texture;
     this.integVelMat.uniforms.uVel.value = velRead.texture;
     this.integVelMat.uniforms.uForce.value = this.force.texture;
@@ -349,7 +322,6 @@ export class SPHSimulation {
     this.integVelMat.uniforms.uWriteMode.value = 0;
     this.compute.run(this.integVelMat, velWrite);
 
-    // 4) Integrate position (uses new velocity)
     this.integPosMat.uniforms.uPos.value = posRead.texture;
     this.integPosMat.uniforms.uVel.value = velWrite.texture;
     this.integPosMat.uniforms.uForce.value = this.force.texture;
@@ -359,14 +331,10 @@ export class SPHSimulation {
 
     this.ping = !this.ping;
 
-    // Render
+    // Render particles — matrices handled by ShaderMaterial
     this.particleMat.uniforms.uPos.value = posWrite.texture;
-    this.particleMat.uniforms.modelViewMatrix.value = this.points.modelViewMatrix;
-    this.particleMat.uniforms.projectionMatrix.value = this.camera.projectionMatrix;
-    this.points.modelViewMatrix.multiplyMatrices(
-      this.camera.matrixWorldInverse,
-      this.points.matrixWorld,
-    );
+    this.camera.updateMatrixWorld();
+    this.points.updateMatrixWorld();
 
     this.renderer.setRenderTarget(null);
     this.renderer.clear();
@@ -375,8 +343,9 @@ export class SPHSimulation {
 
   onResize() {
     const canvas = this.renderer.domElement;
-    const w = canvas.clientWidth || 1;
-    const h = canvas.clientHeight || 1;
+    const parent = canvas.parentElement;
+    const w = Math.max(1, parent?.clientWidth || canvas.clientWidth || window.innerWidth);
+    const h = Math.max(1, parent?.clientHeight || canvas.clientHeight || window.innerHeight);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -384,10 +353,9 @@ export class SPHSimulation {
 
   dispose() {
     this.disposed = true;
-    [
-      this.posA, this.posB, this.velA, this.velB,
-      this.dens, this.force, this.morphTarget,
-    ].forEach((rt) => rt?.dispose());
+    [this.posA, this.posB, this.velA, this.velB, this.dens, this.force, this.morphTarget].forEach(
+      (rt) => rt?.dispose(),
+    );
     this.densMat?.dispose();
     this.forceMat?.dispose();
     this.integVelMat?.dispose();

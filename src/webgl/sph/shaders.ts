@@ -10,7 +10,6 @@ void main() {
 }
 `;
 
-/** Density + pressure from poly6 kernel (GPU neighbor scan with spatial stride) */
 export const densityFrag = /* glsl */ `
 precision highp float;
 precision highp sampler2D;
@@ -20,11 +19,11 @@ out vec4 fragColor;
 uniform sampler2D uPos;
 uniform float uTexSize;
 uniform float uParticleCount;
-uniform float uH;          // smoothing radius
+uniform float uH;
 uniform float uMass;
 uniform float uRestDensity;
 uniform float uGasConst;
-uniform float uStride;     // neighbor sample stride (>=1)
+uniform float uStride;
 
 const float PI = 3.14159265359;
 
@@ -43,8 +42,6 @@ void main() {
   }
   vec3 pi = texture(uPos, vUv).xyz;
   float density = 0.0;
-  float h = uH;
-  float h2 = h * h;
   float stride = max(uStride, 1.0);
   float n = uParticleCount;
   float ts = uTexSize;
@@ -56,16 +53,14 @@ void main() {
     vec2 juv = (vec2(jx, jy) + 0.5) / ts;
     vec3 pj = texture(uPos, juv).xyz;
     vec3 rij = pi - pj;
-    float r2 = dot(rij, rij);
-    density += uMass * poly6(r2, h);
+    density += uMass * poly6(dot(rij, rij), uH);
   }
-  density = max(density, uRestDensity * 0.15);
-  float pressure = uGasConst * (density - uRestDensity);
+  density = max(density, uRestDensity * 0.2);
+  float pressure = max(uGasConst * (density - uRestDensity), 0.0);
   fragColor = vec4(density, pressure, 0.0, 1.0);
 }
 `;
 
-/** Forces: pressure (spiky grad) + viscosity + gravity + mouse + morph attract */
 export const forceFrag = /* glsl */ `
 precision highp float;
 precision highp sampler2D;
@@ -92,7 +87,7 @@ uniform float uMorphStrength;
 const float PI = 3.14159265359;
 
 float spikyGrad(float r, float h) {
-  if (r <= 0.0 || r >= h) return 0.0;
+  if (r <= 1e-6 || r >= h) return 0.0;
   float x = h - r;
   return -45.0 / (PI * pow(h, 6.0)) * x * x;
 }
@@ -111,12 +106,11 @@ void main() {
   vec3 pi = texture(uPos, vUv).xyz;
   vec3 vi = texture(uVel, vUv).xyz;
   vec2 di = texture(uDens, vUv).xy;
-  float rhoi = max(di.x, 0.001);
+  float rhoi = max(di.x, 0.05);
   float pressi = di.y;
 
   vec3 fPress = vec3(0.0);
   vec3 fVisc = vec3(0.0);
-  float h = uH;
   float stride = max(uStride, 1.0);
   float n = uParticleCount;
   float ts = uTexSize;
@@ -128,19 +122,17 @@ void main() {
     vec2 juv = (vec2(jx, jy) + 0.5) / ts;
     vec3 pj = texture(uPos, juv).xyz;
     vec3 rij = pi - pj;
-    float r2 = dot(rij, rij);
-    float r = sqrt(r2);
-    if (r < 1e-5 || r >= h) continue;
+    float r = length(rij);
+    if (r < 1e-5 || r >= uH) continue;
 
     vec2 dj = texture(uDens, juv).xy;
-    float rhoj = max(dj.x, 0.001);
+    float rhoj = max(dj.x, 0.05);
     float pressj = dj.y;
     vec3 vj = texture(uVel, juv).xyz;
 
     vec3 dir = rij / r;
-    float grad = spikyGrad(r, h);
-    fPress += -uMass * (pressi + pressj) / (2.0 * rhoj) * grad * dir;
-    fVisc += uViscosity * uMass * (vj - vi) / rhoj * viscLap(r, h);
+    fPress += -uMass * (pressi + pressj) / (2.0 * rhoj) * spikyGrad(r, uH) * dir;
+    fVisc += uViscosity * uMass * (vj - vi) / rhoj * viscLap(r, uH);
   }
 
   vec3 fGrav = uGravity * rhoi;
@@ -154,12 +146,10 @@ void main() {
   vec3 morphT = texture(uMorphTarget, vUv).xyz;
   vec3 fMorph = (morphT - pi) * uMorphStrength * uMorphProgress * rhoi;
 
-  vec3 force = fPress + fVisc + fGrav + fMouse + fMorph;
-  fragColor = vec4(force, rhoi);
+  fragColor = vec4(fPress + fVisc + fGrav + fMouse + fMorph, rhoi);
 }
 `;
 
-/** Integrate velocity + position, box bounds */
 export const integrateFrag = /* glsl */ `
 precision highp float;
 precision highp sampler2D;
@@ -174,19 +164,25 @@ uniform float uDamping;
 uniform vec3 uBoundsMin;
 uniform vec3 uBoundsMax;
 uniform float uRestitution;
-uniform int uWriteMode; // 0 = new vel, 1 = new pos
+uniform float uWriteMode; // 0.0 = vel, 1.0 = pos
 
 void main() {
   vec3 p = texture(uPos, vUv).xyz;
   vec3 v = texture(uVel, vUv).xyz;
   vec4 f = texture(uForce, vUv);
-  float rho = max(f.w, 0.001);
+  float rho = max(f.w, 0.05);
   vec3 a = f.xyz / rho;
 
+  // Clamp acceleration to avoid explosions
+  float aLen = length(a);
+  if (aLen > 80.0) a *= 80.0 / aLen;
+
   v = (v + a * uDt) * uDamping;
+  float vLen = length(v);
+  if (vLen > 12.0) v *= 12.0 / vLen;
+
   p = p + v * uDt;
 
-  // Boundary collisions
   if (p.x < uBoundsMin.x) { p.x = uBoundsMin.x; v.x *= -uRestitution; }
   if (p.x > uBoundsMax.x) { p.x = uBoundsMax.x; v.x *= -uRestitution; }
   if (p.y < uBoundsMin.y) { p.y = uBoundsMin.y; v.y *= -uRestitution; }
@@ -194,7 +190,7 @@ void main() {
   if (p.z < uBoundsMin.z) { p.z = uBoundsMin.z; v.z *= -uRestitution; }
   if (p.z > uBoundsMax.z) { p.z = uBoundsMax.z; v.z *= -uRestitution; }
 
-  if (uWriteMode == 0) {
+  if (uWriteMode < 0.5) {
     fragColor = vec4(v, 1.0);
   } else {
     fragColor = vec4(p, 1.0);
@@ -202,17 +198,17 @@ void main() {
 }
 `;
 
+/** ShaderMaterial (non-raw) — Three injects modelViewMatrix / projectionMatrix */
 export const particleVert = /* glsl */ `
 precision highp float;
 precision highp sampler2D;
+
 uniform sampler2D uPos;
 uniform float uTexSize;
 uniform float uParticleCount;
 uniform float uPointSize;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
-out float vAlpha;
-out vec3 vViewPos;
+
+varying float vAlpha;
 
 void main() {
   float id = float(gl_VertexID);
@@ -226,21 +222,21 @@ void main() {
   float x = mod(id, ts);
   float y = floor(id / ts);
   vec2 uv = (vec2(x, y) + 0.5) / ts;
-  vec3 pos = texture(uPos, uv).xyz;
-  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-  vViewPos = mv.xyz;
-  gl_Position = projectionMatrix * mv;
-  float dist = max(-mv.z, 0.5);
-  gl_PointSize = uPointSize * (120.0 / dist);
+  vec3 pos = texture2D(uPos, uv).xyz;
+
+  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+
+  float dist = max(0.4, -mvPosition.z);
+  gl_PointSize = clamp(uPointSize * (180.0 / dist), 2.0, 64.0);
   vAlpha = 1.0;
 }
 `;
 
 export const particleFrag = /* glsl */ `
 precision highp float;
-in float vAlpha;
-in vec3 vViewPos;
-out vec4 fragColor;
+
+varying float vAlpha;
 uniform vec3 uColor;
 uniform vec3 uAccent;
 
@@ -248,10 +244,9 @@ void main() {
   vec2 c = gl_PointCoord - vec2(0.5);
   float d = length(c);
   if (d > 0.5) discard;
-  float soft = smoothstep(0.5, 0.05, d);
-  float core = smoothstep(0.25, 0.0, d);
-  vec3 col = mix(uColor, uAccent, core * 0.5);
-  float alpha = soft * soft * vAlpha * 0.85;
-  fragColor = vec4(col, alpha);
+  float soft = 1.0 - smoothstep(0.15, 0.5, d);
+  float core = 1.0 - smoothstep(0.0, 0.2, d);
+  vec3 col = mix(uColor, uAccent, core * 0.55);
+  gl_FragColor = vec4(col, soft * soft * vAlpha * 0.9);
 }
 `;
