@@ -42,34 +42,11 @@
   status = 200
   force = true
 
-# Buddy sync → dedicated function (avoids /api/* splat 404)
 [[redirects]]
   from = "/api/buddy/sync"
   to = "/.netlify/functions/buddy-sync"
   status = 200
   force = true
-
-# Neon via Go — set GO_API_URL=https://eduroute-api-nho4.onrender.com
-[[redirects]]
-  from = "/api/ai-courses"
-  to = "/.netlify/functions/go-api"
-  status = 200
-  force = true
-  query = { path = "/api/ai-courses" }
-
-[[redirects]]
-  from = "/api/buddy/conversations"
-  to = "/.netlify/functions/go-api"
-  status = 200
-  force = true
-  query = { path = "/api/buddy/conversations" }
-
-[[redirects]]
-  from = "/api/buddy/chat"
-  to = "/.netlify/functions/go-api"
-  status = 200
-  force = true
-  query = { path = "/api/buddy/chat" }
 
 [[redirects]]
   from = "/api/buddy-progress"
@@ -80,6 +57,24 @@
 [[redirects]]
   from = "/api/buddy-chat"
   to = "/.netlify/functions/buddy-chat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ai-courses"
+  to = "/.netlify/functions/go-api"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/buddy/conversations"
+  to = "/.netlify/functions/go-api"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/buddy/chat"
+  to = "/.netlify/functions/go-api"
   status = 200
   force = true
 

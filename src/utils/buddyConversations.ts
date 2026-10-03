@@ -1,6 +1,6 @@
 /**
  * Multi-conversation store for AI Buddy.
- * Hybrid: localStorage cache + Neon sync via /api/buddy/sync (same userId → cross-browser).
+ * Hybrid: localStorage + Neon via buddy-sync Netlify function → Render Go API.
  */
 
 import type { BuddyMessage } from '../types/buddy';
@@ -19,6 +19,9 @@ type ConversationStore = {
 };
 
 const STORAGE_KEY = (userId: string) => `buddy-conversations-v1:${userId}`;
+
+/** Paths that reach the Netlify function (rewrite /api often 404s on previews). */
+const SYNC_URLS = ['/api/buddy/sync', '/.netlify/functions/buddy-sync'];
 
 const WELCOME_TEXT =
   "Hi, I'm Buddy. Tell me what you are trying to learn or achieve, and I will turn it into a practical next step.";
@@ -56,9 +59,8 @@ function writeStore(userId: string, store: ConversationStore) {
   try {
     window.localStorage.setItem(STORAGE_KEY(userId), JSON.stringify(store));
   } catch {
-    /* quota / private mode */
+    /* quota */
   }
-  // Fire-and-forget server sync for cross-browser
   void pushStoreToServer(userId, store);
 }
 
@@ -78,33 +80,56 @@ function authHeaders(): HeadersInit {
   return h;
 }
 
+async function fetchSync(
+  method: 'GET' | 'POST',
+  userId: string,
+  body?: unknown,
+): Promise<Response | null> {
+  const headers = authHeaders();
+  for (const base of SYNC_URLS) {
+    try {
+      const url =
+        method === 'GET'
+          ? `${base}?userId=${encodeURIComponent(userId)}`
+          : base;
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: method === 'POST' ? JSON.stringify(body) : undefined,
+      });
+      // Accept JSON success; skip HTML 404 pages
+      const ct = res.headers.get('content-type') || '';
+      if (res.ok && ct.includes('application/json')) return res;
+      if (res.status === 404 || ct.includes('text/html')) continue;
+      if (res.ok) return res;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 async function pushStoreToServer(userId: string, store: ConversationStore) {
   if (!userId || typeof fetch === 'undefined') return;
   try {
-    await fetch(`/api/buddy/sync`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({
-        userId,
-        conversations: store.conversations,
-        activeId: store.activeId,
-      }),
+    await fetchSync('POST', userId, {
+      userId,
+      conversations: store.conversations,
+      activeId: store.activeId,
     });
   } catch {
-    /* offline ok — localStorage still works */
+    /* offline ok */
   }
 }
 
-/** Pull from Neon; merge if server has more/newer chats. Call on Buddy page mount. */
+/** Pull from Neon; merge if server has more chats. Call on Buddy mount. */
 export async function pullConversationsFromServer(userId: string): Promise<ConversationStore> {
   const local = readStore(userId);
   if (!userId || typeof fetch === 'undefined') return local;
 
   try {
-    const res = await fetch(`/api/buddy/sync?userId=${encodeURIComponent(userId)}`, {
-      headers: authHeaders(),
-    });
-    if (!res.ok) return local;
+    const res = await fetchSync('GET', userId);
+    if (!res) return local;
     const envelope = await res.json();
     const data = envelope?.data ?? envelope;
     if (!data || data.empty) return local;
@@ -112,7 +137,6 @@ export async function pullConversationsFromServer(userId: string): Promise<Conve
     const remoteConversations = Array.isArray(data.conversations) ? data.conversations : [];
     if (remoteConversations.length === 0) return local;
 
-    // Prefer server when it has more user messages or more conversations
     const localUserMsgs = local.conversations.reduce(
       (n, c) => n + c.messages.filter((m) => m.role === 'user').length,
       0,
