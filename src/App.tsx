@@ -204,6 +204,8 @@ const AUTH_HIDE_GLOBAL_TOGGLE = [
 const GlobalThemeButton = () => {
   const location = useLocation();
   const path = location.pathname;
+  // Hide on cinematic landing — it has its own dark UI
+  if (path === '/') return null;
   const isDashboardArea = DASHBOARD_ROUTES.some(
     (route) => path === route || path.startsWith(route),
   );
@@ -272,7 +274,6 @@ export function App() {
             }
           />
 
-          {/* Slim admin: Student Management · Courses · Curriculum Gaps · District Plans · Market Trends */}
           <Route element={<AdminAccessRoute><AdminLayout /></AdminAccessRoute>}>
             <Route path="/admin" element={<Navigate to="/admin/students" replace />} />
             <Route path="/admin/students" element={<PendingApprovals />} />

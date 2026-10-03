@@ -9,7 +9,7 @@ import { GrainShader, VignetteShader } from './shaders.js';
 import { getPostQuality, getCappedDPR } from '../utils/device.js';
 
 /**
- * Post-processing — Phase 11: slightly softer bloom for polish.
+ * Post-processing — aggressive anti-washout bloom settings.
  */
 export default class PostProcessing {
   constructor({ renderer, scene, camera, sizes }) {
@@ -40,17 +40,17 @@ export default class PostProcessing {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
 
-    // Softened bloom — avoid washing out particles
+    // Very selective bloom — high threshold, low strength
     const bloomStrength =
-      this.quality === 'HIGH' ? 0.55 : this.quality === 'MEDIUM' ? 0.42 : 0.32;
+      this.quality === 'HIGH' ? 0.28 : this.quality === 'MEDIUM' ? 0.2 : 0.15;
     const bloomRadius =
-      this.quality === 'HIGH' ? 0.38 : this.quality === 'MEDIUM' ? 0.3 : 0.25;
+      this.quality === 'HIGH' ? 0.32 : this.quality === 'MEDIUM' ? 0.25 : 0.2;
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(w, h),
       bloomStrength,
       bloomRadius,
-      0.85
+      0.92 // only the brightest tips contribute
     );
     this.composer.addPass(this.bloomPass);
 
@@ -58,21 +58,21 @@ export default class PostProcessing {
     if (this.quality !== 'LOW') {
       this.bokehPass = new BokehPass(this.scene, this.camera, {
         focus: 4.2,
-        aperture: this.quality === 'HIGH' ? 0.01 : 0.007,
-        maxblur: this.quality === 'HIGH' ? 0.004 : 0.0025,
+        aperture: this.quality === 'HIGH' ? 0.008 : 0.005,
+        maxblur: this.quality === 'HIGH' ? 0.003 : 0.002,
       });
       this.composer.addPass(this.bokehPass);
     }
 
     this.grainPass = new ShaderPass(GrainShader);
     this.grainPass.uniforms.uIntensity.value =
-      this.quality === 'HIGH' ? 0.028 : 0.018;
+      this.quality === 'HIGH' ? 0.03 : 0.02;
     this.composer.addPass(this.grainPass);
 
     this.vignettePass = new ShaderPass(VignetteShader);
     this.vignettePass.uniforms.uDarkness.value =
-      this.quality === 'HIGH' ? 0.38 : 0.28;
-    this.vignettePass.uniforms.uOffset.value = 1.2;
+      this.quality === 'HIGH' ? 0.42 : 0.32;
+    this.vignettePass.uniforms.uOffset.value = 1.15;
     this.composer.addPass(this.vignettePass);
 
     this.outputPass = new OutputPass();

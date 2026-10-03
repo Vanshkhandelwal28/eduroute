@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { getCappedDPR } from './utils/device.js';
 
 /**
- * Renderer — DPR-capped WebGL renderer for post-processing compatibility.
+ * Renderer — slightly lower exposure to reduce bloom washout.
  */
 export default class Renderer {
   constructor({ canvas, sizes }) {
@@ -24,7 +24,8 @@ export default class Renderer {
 
     this.instance.outputColorSpace = THREE.SRGBColorSpace;
     this.instance.toneMapping = THREE.ACESFilmicToneMapping;
-    this.instance.toneMappingExposure = 0.95;
+    // Lower exposure — particles stay defined under bloom
+    this.instance.toneMappingExposure = 0.72;
   }
 
   resize() {

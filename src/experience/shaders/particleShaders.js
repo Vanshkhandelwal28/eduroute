@@ -1,6 +1,5 @@
 /**
- * Particle render shaders.
- * Phase 7: uOpacity for footer fade.
+ * Particle render shaders — tuned for subtle glow, not white-out.
  */
 
 export const particleVertexShader = /* glsl */ `
@@ -58,14 +57,16 @@ varying float vBrightness;
 varying float vSeed;
 
 void main() {
-  vec3 base = vec3(0.93, 0.91, 0.96);
-  vec3 accent = vec3(0.50, 0.32, 1.0);
+  // Soft cool white + sparse violet — keep luminance low for bloom threshold
+  vec3 base = vec3(0.72, 0.70, 0.78);
+  vec3 accent = vec3(0.42, 0.28, 0.85);
   float tint = fract(vSeed * 7.13);
-  vec3 col = mix(base, accent, tint * 0.28);
+  vec3 col = mix(base, accent, tint * 0.22);
 
-  col *= (0.50 + vBrightness * 0.55);
+  // Dim overall so only brightest tips hit bloom threshold
+  col *= (0.22 + vBrightness * 0.28);
 
-  float alpha = 0.72 * uOpacity;
+  float alpha = 0.28 * uOpacity;
 
   gl_FragColor = vec4(col, alpha);
 }

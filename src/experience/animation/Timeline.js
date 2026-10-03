@@ -1,14 +1,11 @@
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { revealLines } from './textReveal.js';
-import { CAMERA_STATES } from '../Camera.js';
 
 gsap.registerPlugin(ScrollTrigger);
 
 /**
- * TimelineController — master scroll choreography.
- * Phase 7: morph / particles / text
- * Phase 8: drives Camera states (dolly, diagonal, orbit, push-in)
+ * TimelineController — scroll choreography + reliable hero text reveal.
  */
 export default class TimelineController {
   constructor({ experience }) {
@@ -24,7 +21,6 @@ export default class TimelineController {
     this.isMobile = window.innerWidth < 768;
     this.isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
 
-    // Particle / morph state (camera is owned by Camera.js states)
     this.state = {
       rotY: 0,
       rotX: 0,
@@ -36,17 +32,16 @@ export default class TimelineController {
       springStrength: 4.5,
       noiseStrength: 0.12,
       gather: 0,
-      // Camera blend progress within orbital sections (0–1)
       camBlend: 0,
     };
 
-    // Which camera state(s) are active for this frame
     this._camFrom = 'HERO';
     this._camTo = 'HERO';
     this._camT = 0;
 
     this.triggers = [];
     this._currentPair = 'brain-bulb';
+    this._heroRevealed = false;
 
     if (this.reduced) {
       this._setupReduced();
@@ -79,18 +74,35 @@ export default class TimelineController {
     p.noiseStrength = this.state.noiseStrength;
   }
 
-  /** Set camera interpolation between two named states. */
   _setCam(from, to, t = 0) {
     this._camFrom = from;
     this._camTo = to;
     this._camT = t;
   }
 
+  /** Force hero text visible even if GSAP race fails. */
+  _revealHero() {
+    if (this._heroRevealed) return;
+    this._heroRevealed = true;
+
+    const hero = document.querySelector('#hero');
+    if (!hero) return;
+
+    // Ensure spans are visible as a safety net
+    const spans = hero.querySelectorAll('.er-reveal > span');
+    spans.forEach((el) => {
+      el.style.transform = 'translateY(0)';
+      el.style.opacity = '1';
+    });
+
+    revealLines('#hero', { duration: 1.15 });
+  }
+
   _setupReduced() {
     this._setPair('brain', 'bulb');
     this.morph?.setProgress(0);
     this.camera?.setState('HERO');
-    revealLines('#hero');
+    this._revealHero();
   }
 
   _setup() {
@@ -101,9 +113,11 @@ export default class TimelineController {
     this.morph?.setProgress(0);
     this.camera?.setState('HERO');
 
-    gsap.delayedCall(0.3, () => revealLines('#hero', { duration: 1.2 }));
+    // Hero reveal after loader (~1s) + DOM ready
+    gsap.delayedCall(1.1, () => this._revealHero());
+    // Safety fallback
+    gsap.delayedCall(2.2, () => this._revealHero());
 
-    // ---------- HERO → approach MANIFESTO framing ----------
     const heroTl = gsap.timeline({
       scrollTrigger: {
         trigger: '#hero',
@@ -120,13 +134,12 @@ export default class TimelineController {
     heroTl.fromTo(
       s,
       { rotY: 0, noiseStrength: 0.12 },
-      { rotY: 0.35, noiseStrength: 0.18, ease: 'none', duration: 1 },
+      { rotY: 0.35, noiseStrength: 0.16, ease: 'none', duration: 1 },
       0
     );
 
     this.triggers.push(heroTl.scrollTrigger);
 
-    // ---------- MANIFESTO ----------
     const manifestoTl = gsap.timeline({
       scrollTrigger: {
         trigger: '#manifesto',
@@ -150,7 +163,6 @@ export default class TimelineController {
 
     this.triggers.push(manifestoTl.scrollTrigger);
 
-    // ---------- FEATURE 01 — diagonal + Brain → Bulb ----------
     const f1Tl = gsap.timeline({
       scrollTrigger: {
         trigger: '#feature-01',
@@ -162,7 +174,6 @@ export default class TimelineController {
           revealLines('#feature-01');
         },
         onUpdate: (self) => {
-          // Hold FEATURE_01 diagonal framing, ease toward FEATURE_02 start
           this._setCam('FEATURE_01', 'FEATURE_02', self.progress * 0.5);
           this._syncMorphParams();
         },
@@ -174,8 +185,8 @@ export default class TimelineController {
         s,
         { morphProgress: 0, scatter: 0, turbulence: 0.15, rotY: 0.35 },
         {
-          scatter: this.isMobile ? 0.25 : 0.45,
-          turbulence: 0.35,
+          scatter: this.isMobile ? 0.25 : 0.4,
+          turbulence: 0.3,
           rotY: 0.8,
           duration: 0.25,
           ease: 'none',
@@ -185,18 +196,12 @@ export default class TimelineController {
       .to(s, { morphProgress: 1, duration: 0.5, ease: 'none' }, 0.2)
       .to(
         s,
-        {
-          scatter: 0.05,
-          turbulence: 0.12,
-          duration: 0.3,
-          ease: 'none',
-        },
+        { scatter: 0.05, turbulence: 0.12, duration: 0.3, ease: 'none' },
         0.7
       );
 
     this.triggers.push(f1Tl.scrollTrigger);
 
-    // ---------- FEATURE 02 — orbital arc Bulb → Globe ----------
     const f2Tl = gsap.timeline({
       scrollTrigger: {
         trigger: '#feature-02',
@@ -210,7 +215,6 @@ export default class TimelineController {
           revealLines('#feature-02');
         },
         onUpdate: (self) => {
-          // Full orbital scrub FEATURE_02 → FEATURE_02_END
           this._setCam('FEATURE_02', 'FEATURE_02_END', self.progress);
           this._syncMorphParams();
         },
@@ -222,8 +226,8 @@ export default class TimelineController {
         s,
         { morphProgress: 0, scatter: 0.05, scale: 1.05 },
         {
-          scatter: this.isMobile ? 0.2 : 0.35,
-          scale: 1.15,
+          scatter: this.isMobile ? 0.2 : 0.32,
+          scale: 1.12,
           duration: 0.3,
           ease: 'none',
         },
@@ -244,7 +248,6 @@ export default class TimelineController {
 
     this.triggers.push(f2Tl.scrollTrigger);
 
-    // ---------- FEATURE 03 — pull back, Globe → Network ----------
     const f3Tl = gsap.timeline({
       scrollTrigger: {
         trigger: '#feature-03',
@@ -269,7 +272,7 @@ export default class TimelineController {
         s,
         { morphProgress: 0, scatter: 0, rotY: 0.8 },
         {
-          scatter: this.isMobile ? 0.3 : 0.5,
+          scatter: this.isMobile ? 0.28 : 0.45,
           rotY: 1.4,
           duration: 0.3,
           ease: 'none',
@@ -281,7 +284,7 @@ export default class TimelineController {
         s,
         {
           scatter: 0.08,
-          turbulence: 0.18,
+          turbulence: 0.16,
           springStrength: 3.8,
           duration: 0.3,
           ease: 'none',
@@ -291,7 +294,6 @@ export default class TimelineController {
 
     this.triggers.push(f3Tl.scrollTrigger);
 
-    // ---------- TEAM — slow orbit ----------
     const teamTl = gsap.timeline({
       scrollTrigger: {
         trigger: '#team',
@@ -327,7 +329,6 @@ export default class TimelineController {
 
     this.triggers.push(teamTl.scrollTrigger);
 
-    // ---------- CTA — push-in ----------
     const ctaTl = gsap.timeline({
       scrollTrigger: {
         trigger: '#cta',
@@ -365,7 +366,6 @@ export default class TimelineController {
 
     this.triggers.push(ctaTl.scrollTrigger);
 
-    // ---------- FOOTER — pull away ----------
     const footerTl = gsap.timeline({
       scrollTrigger: {
         trigger: '.er-footer',
@@ -398,7 +398,6 @@ export default class TimelineController {
   }
 
   update() {
-    // Apply camera state blend
     if (this.camera && this._camFrom) {
       if (this._camFrom === this._camTo || this._camT < 0.001) {
         this.camera.setState(this._camFrom);

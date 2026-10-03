@@ -9,7 +9,7 @@ import MorphSystem from './MorphSystem.js';
 
 /**
  * Particles — InstancedMesh + GPU sim + morph.
- * Phase 7: accepts timeline rotation / opacity / gather overrides.
+ * Tuned triangle size + additive alpha to avoid white-out.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -25,7 +25,6 @@ export default class Particles {
     this._rotTarget = { x: 0, y: 0 };
     this._rotCurrent = { x: 0, y: 0 };
 
-    // Timeline-driven (set by TimelineController)
     this._timelineRotY = 0;
     this._timelineRotX = 0;
     this._timelineOpacity = 1;
@@ -50,8 +49,9 @@ export default class Particles {
     this.morph.setPair('brain', 'bulb');
     this.morph.setProgress(0);
 
+    // Smaller triangles — less fill, more structure readable
     const tri = new THREE.BufferGeometry();
-    const s = 0.011;
+    const s = 0.0065;
     const vertices = new Float32Array([
       0.0, s * 1.25, 0.0,
       -s, -s * 0.7, 0.0,
@@ -66,8 +66,9 @@ export default class Particles {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      aScale[i] = 0.35 + Math.random() * 2.05;
-      aBrightness[i] = 0.3 + Math.random() * 0.7;
+      // Narrower scale range — fewer oversized bright fragments
+      aScale[i] = 0.4 + Math.random() * 1.4;
+      aBrightness[i] = 0.25 + Math.random() * 0.55;
       aIndex[i] = i;
     }
 
@@ -86,8 +87,8 @@ export default class Particles {
       fragmentShader: particleFragmentShader,
       uniforms: {
         uTime: { value: 0 },
-        uBreathAmount: { value: 0.028 },
-        uBreathSpeed: { value: 0.5 },
+        uBreathAmount: { value: 0.022 },
+        uBreathSpeed: { value: 0.45 },
         uPositionTexture: { value: null },
         uTexSize: { value: this.simulation.textureSize },
         uOpacity: { value: 1 },
@@ -135,9 +136,7 @@ export default class Particles {
   update(elapsed, delta = 0.016, mouse = null) {
     if (!this.material) return;
 
-    // CTA gather: pull targets slightly toward origin + boost spring
     if (this._timelineGather > 0.01 && this.morph) {
-      // Soften ambient motion while gathering
       this.morph.params.noiseStrength = Math.min(
         this.morph.params.noiseStrength,
         0.04
@@ -178,7 +177,6 @@ export default class Particles {
       this._rotCurrent.y +=
         (this._rotTarget.y - this._rotCurrent.y) * rotLerp;
 
-      // Combine mouse tilt + timeline rotation + slow base spin
       this.mesh.rotation.x = this._rotCurrent.x + this._timelineRotX;
       this.mesh.rotation.y =
         elapsed * 0.02 + this._rotCurrent.y + this._timelineRotY;
