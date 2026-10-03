@@ -61,30 +61,10 @@ export const LandingPage = () => {
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    if (reduced) {
-      window.scrollTo(0, 0);
-      return;
-    }
-
-    // Smooth scroll — ScrollTrigger will scrub particle state as we go
-    gsap.to(window, {
-      scrollTo: { y: 0, autoKill: true },
-      duration: 1.4,
-      ease: 'power2.inOut',
+    window.scrollTo({
+      top: 0,
+      behavior: reduced ? 'auto' : 'smooth',
     });
-
-    // Fallback if ScrollToPlugin is not registered
-    try {
-      // gsap ScrollToPlugin may not be loaded — native smooth as backup
-      if (!(gsap as unknown as { plugins?: unknown }).plugins) {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } catch {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    // Always use native smooth as reliable path
-    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
   }, []);
 
   useEffect(() => {
@@ -324,7 +304,6 @@ export const LandingPage = () => {
         </footer>
       </main>
 
-      {/* Scroll to top — appears after leaving hero */}
       <button
         type="button"
         className={`er-to-top${showTop ? ' is-visible' : ''}`}
