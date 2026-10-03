@@ -1,12 +1,10 @@
 /**
- * EduRoute cinematic landing — continuous particle story + spatial typography
- * Inspired by Dala's spatial/scroll philosophy; original EduRoute content & identity.
- * Morph: scatter → brain → bulb → earth → network → EduRoute
+ * EduRoute cinematic landing — GPU SPH fluid + spatial typography
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthModal } from '../components/AuthModal';
-import { CinematicParticles } from '../components/CinematicParticles';
+import { SPHFluidCanvas } from '../components/SPHFluidCanvas';
 
 const ACCENT = '#c8f542';
 
@@ -117,12 +115,10 @@ export const LandingPage = () => {
   const [auth, setAuth] = useState(false);
   const progressRef = useRef(0);
   const [progress, setProgress] = useState(0);
-  const pinRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
   const rafRef = useRef(0);
 
-  // Scroll progress of the long track (pinned viewport effect via sticky)
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
@@ -151,7 +147,6 @@ export const LandingPage = () => {
     };
   }, []);
 
-  // Optional Lenis smooth scroll
   useEffect(() => {
     if (reduced) return;
     let lenis: { destroy: () => void; raf: (t: number) => void } | null = null;
@@ -166,7 +161,7 @@ export const LandingPage = () => {
         };
         id = requestAnimationFrame(loop);
       } catch {
-        /* lenis optional */
+        /* optional */
       }
     })();
     return () => {
@@ -179,7 +174,6 @@ export const LandingPage = () => {
     <div className="bg-[#080808] text-[#e8e6e1] antialiased selection:bg-[#c8f542]/30">
       <AuthModal isOpen={auth} onClose={() => setAuth(false)} />
 
-      {/* Minimal floating nav */}
       <header className="fixed inset-x-0 top-0 z-50 flex items-center justify-between px-5 py-4 sm:px-8">
         <a href="#top" className="text-[11px] font-medium tracking-[0.25em] uppercase">
           EduRoute
@@ -207,7 +201,6 @@ export const LandingPage = () => {
         </button>
       </header>
 
-      {/* Intro hero — 100vh before the pin */}
       <section id="top" className="relative flex h-[100svh] min-h-[560px] flex-col justify-end overflow-hidden px-6 pb-16 sm:px-12 md:px-16">
         <div className="pointer-events-none absolute inset-0 opacity-40">
           <div
@@ -253,15 +246,12 @@ export const LandingPage = () => {
         </p>
       </section>
 
-      {/* Long track — sticky WebGL + scene copy */}
       <div id="story" ref={trackRef} className="relative" style={{ height: reduced ? '100vh' : '700vh' }}>
-        <div ref={pinRef} className="sticky top-0 h-[100svh] w-full overflow-hidden">
-          {/* WebGL layer */}
+        <div className="sticky top-0 h-[100svh] w-full overflow-hidden">
           <div className="absolute inset-0 z-0">
-            <CinematicParticles progressRef={progressRef} />
+            <SPHFluidCanvas progressRef={progressRef} showGui={false} />
           </div>
 
-          {/* Grain */}
           <div
             className="pointer-events-none absolute inset-0 z-[1] opacity-[0.07] mix-blend-overlay"
             style={{
@@ -270,20 +260,16 @@ export const LandingPage = () => {
             }}
           />
 
-          {/* Scene typography layers */}
           {SCENES.map((s) => {
             const o = reduced ? (s.id === '01' ? 1 : 0) : sceneOpacity(progress, s.range);
             if (o < 0.02) return null;
             return (
               <div
                 key={s.id}
-                className={`pointer-events-none absolute z-10 max-w-md px-2 ${
-                  posClass(s.pos)
-                }`}
+                className={`pointer-events-none absolute z-10 max-w-md px-2 ${posClass(s.pos)}`}
                 style={{
                   opacity: o,
                   transform: `translateY(${(1 - o) * 24}px)`,
-                  transition: reduced ? 'none' : 'opacity 0.15s linear',
                 }}
               >
                 <p className="mb-3 text-[10px] tracking-[0.28em] uppercase text-white/35">{s.label}</p>
@@ -299,7 +285,6 @@ export const LandingPage = () => {
             );
           })}
 
-          {/* Ecosystem floating labels (network phase) */}
           {progress > 0.72 && progress < 0.92 && (
             <div className="pointer-events-none absolute inset-0 z-10">
               {ECOSYSTEM.map((label, i) => {
@@ -325,14 +310,12 @@ export const LandingPage = () => {
             </div>
           )}
 
-          {/* Progress tick */}
           <div className="pointer-events-none absolute bottom-6 right-6 z-20 text-[9px] tracking-[0.2em] text-white/25">
             {String(Math.round(progress * 100)).padStart(2, '0')}%
           </div>
         </div>
       </div>
 
-      {/* Final CTA */}
       <section className="relative border-t border-white/[0.06] px-6 py-28 text-center sm:px-12">
         <p className="text-[10px] tracking-[0.28em] uppercase text-white/30">EduRoute</p>
         <h2 className="mx-auto mt-4 max-w-2xl text-[clamp(1.75rem,5vw,3rem)] font-medium leading-[1.1] tracking-[-0.03em]">
@@ -372,7 +355,7 @@ export const LandingPage = () => {
             </a>
           </div>
         </div>
-        <p className="mx-auto mt-8 max-w-5xl text-[10px] text-white/25">© 2026 EduRoute</p>
+        <p className="mx-auto mt-8 max-w-5xl text-[10px] text-white/25">© 2026 EduRoute · GPU SPH</p>
       </footer>
     </div>
   );
