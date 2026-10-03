@@ -7,30 +7,41 @@ import Particles from './particles/Particles.js';
 import MouseInteraction from './interaction/MouseInteraction.js';
 import TimelineController from './animation/Timeline.js';
 import PostProcessing from './postprocessing/PostProcessing.js';
+import SmoothScroll from './utils/SmoothScroll.js';
 import {
   isWebGLAvailable,
   prefersReducedMotion,
 } from './utils/device.js';
 
 /**
- * Experience — single animation loop, single source of truth.
- * Final integration: debounced resize, no duplicate RAF, full dispose.
+ * Experience — Lenis + GPU particles + timeline.
+ * Exposes ready promise for progress loader.
  */
 export default class Experience {
-  constructor({ canvas }) {
+  constructor({ canvas, onProgress } = {}) {
     if (!canvas) return;
 
     this.canvas = canvas;
+    this.onProgress = typeof onProgress === 'function' ? onProgress : () => {};
     this.webglOk = isWebGLAvailable();
     this.sizes = {
       width: window.innerWidth,
       height: window.innerHeight,
     };
 
+    this._readyResolve = null;
+    this.ready = new Promise((r) => {
+      this._readyResolve = r;
+    });
+
     if (!this.webglOk) {
       this._showFallback();
+      this.onProgress(1);
+      this._readyResolve?.();
       return;
     }
+
+    this.onProgress(0.1);
 
     this.clock = new THREE.Clock();
     this.isVisible = true;
@@ -38,20 +49,26 @@ export default class Experience {
     this._running = false;
     this._resizeTimer = null;
     this.reducedMotion = prefersReducedMotion();
+    this._frames = 0;
+
+    // Smooth scroll first so ScrollTrigger uses proxy
+    this.smoothScroll = new SmoothScroll();
+    this.onProgress(0.2);
 
     this.scene = new Scene();
     this.camera = new Camera({ sizes: this.sizes });
     this.renderer = new Renderer({ canvas: this.canvas, sizes: this.sizes });
+    this.onProgress(0.35);
 
     this.particles = new Particles({
       scene: this.scene,
       renderer: this.renderer.instance,
     });
 
-    // Offset structure to the right so hero typography has clear left space
     if (this.particles.mesh) {
       this.particles.mesh.position.set(1.15, 0.05, 0);
     }
+    this.onProgress(0.55);
 
     if (this.reducedMotion && this.particles.morph) {
       this.particles.morph.params.noiseStrength = 0.03;
@@ -71,11 +88,13 @@ export default class Experience {
       camera: this.camera.instance,
       sizes: this.sizes,
     });
+    this.onProgress(0.75);
 
     this.timeline = null;
-    // Build timeline after first paint so DOM sections exist
     requestAnimationFrame(() => {
       this.timeline = new TimelineController({ experience: this });
+      this.onProgress(0.9);
+      ScrollTrigger.refresh();
     });
 
     this.onResize = this.onResize.bind(this);
@@ -97,7 +116,6 @@ export default class Experience {
   onResize() {
     if (!this.webglOk) return;
 
-    // Debounce — avoid thrashing ScrollTrigger + composer
     clearTimeout(this._resizeTimer);
     this._resizeTimer = setTimeout(() => {
       this.sizes.width = window.innerWidth;
@@ -106,6 +124,7 @@ export default class Experience {
       this.camera.resize();
       this.renderer.resize();
       this.post?.resize();
+      this.smoothScroll?.resize();
 
       ScrollTrigger.refresh();
     }, 120);
@@ -153,6 +172,13 @@ export default class Experience {
       this.renderer.update(this.scene.instance, this.camera.instance);
     }
 
+    // Signal ready after a few stable frames
+    this._frames += 1;
+    if (this._frames === 8) {
+      this.onProgress(1);
+      this._readyResolve?.();
+    }
+
     this.animationId = requestAnimationFrame(this.tick);
   }
 
@@ -167,6 +193,9 @@ export default class Experience {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
+
+    this.smoothScroll?.destroy();
+    this.smoothScroll = null;
 
     this.timeline?.destroy();
     this.timeline = null;
