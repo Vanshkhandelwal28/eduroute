@@ -8,7 +8,7 @@ import GPUCompute from './GPUCompute.js';
 import MorphSystem from './MorphSystem.js';
 
 /**
- * Particles — volumetric structure, core brighter tips.
+ * Particles — initial shape is bulb (hero starts bulb→brain).
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -39,14 +39,15 @@ export default class Particles {
 
     this.morph = new MorphSystem(this.count, texSize);
 
+    // Boot simulation on bulb positions (hero opens on bulb)
     this.simulation = new GPUCompute(
       this.renderer,
-      this.morph.shapes.brain,
+      this.morph.shapes.bulb,
       this.count
     );
 
     this.simulation.bindMorph(this.morph);
-    this.morph.setPair('brain', 'bulb');
+    this.morph.setPair('bulb', 'brain');
     this.morph.setProgress(0);
 
     const tri = new THREE.BufferGeometry();
@@ -65,10 +66,11 @@ export default class Particles {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      // Soft distribution + occasional core bright particles
       const core = Math.random() > 0.92;
       aScale[i] = core ? 1.4 + Math.random() * 0.8 : 0.45 + Math.random() * 1.2;
-      aBrightness[i] = core ? 0.85 + Math.random() * 0.15 : 0.35 + Math.random() * 0.45;
+      aBrightness[i] = core
+        ? 0.85 + Math.random() * 0.15
+        : 0.35 + Math.random() * 0.45;
       aIndex[i] = i;
     }
 
