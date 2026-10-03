@@ -1,7 +1,6 @@
 /**
- * Shared proxy to the Go + MySQL API.
- * Netlify env: GO_API_URL (preferred) or BACKEND_URL — base without trailing slash,
- * e.g. https://api.eduroute.example.com  or  http://localhost:5000
+ * Shared proxy to the Go + Neon API on Render.
+ * Netlify env: GO_API_URL=https://eduroute-api-nho4.onrender.com
  */
 function json(statusCode, body) {
   return {
@@ -9,7 +8,7 @@ function json(statusCode, body) {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
-      'Access-Control-Allow-Headers': 'Content-Type,Authorization,x-admin-secret',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id',
       'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     },
     body: JSON.stringify(body),
@@ -21,8 +20,7 @@ function options() {
 }
 
 function resolveGoBase() {
-  const raw = (process.env.GO_API_URL || process.env.BACKEND_URL || '').trim().replace(/\/$/, '');
-  return raw;
+  return (process.env.GO_API_URL || process.env.BACKEND_URL || '').trim().replace(/\/$/, '');
 }
 
 async function forward(event, path) {
@@ -30,30 +28,29 @@ async function forward(event, path) {
   if (!base) {
     return json(503, {
       success: false,
-      error:
-        'MySQL is not configured on Netlify. Set MYSQL_URL (or MYSQL_HOST + MYSQL_USER + MYSQL_PASSWORD from Railway), or set GO_API_URL to your Go backend.',
+      error: 'Set GO_API_URL on Netlify to your Render Go API (e.g. https://eduroute-api-nho4.onrender.com).',
     });
   }
 
   const url = `${base}${path.startsWith('/') ? path : `/${path}`}`;
 
   try {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-    if (event.headers?.authorization || event.headers?.Authorization) {
-      headers.Authorization = event.headers.authorization || event.headers.Authorization;
-    }
+    const headers = { 'Content-Type': 'application/json' };
+    const auth = event.headers?.authorization || event.headers?.Authorization;
+    if (auth) headers.Authorization = auth;
+    const uid = event.headers?.['x-user-id'] || event.headers?.['X-User-Id'];
+    if (uid) headers['X-User-Id'] = uid;
 
     const response = await fetch(url, {
-      method: event.httpMethod || 'POST',
+      method: event.httpMethod || 'GET',
       headers,
-      body: event.body || undefined,
+      body: ['GET', 'HEAD'].includes((event.httpMethod || 'GET').toUpperCase())
+        ? undefined
+        : event.body || undefined,
     });
 
     const contentType = response.headers.get('content-type') || '';
     let payload;
-
     if (contentType.includes('application/json')) {
       payload = await response.json();
     } else {
@@ -63,17 +60,15 @@ async function forward(event, path) {
         error: text?.slice(0, 200) || `Upstream error (${response.status})`,
       };
     }
-
     return json(response.status, payload);
   } catch (err) {
     console.error('goProxy error', path, err);
     return json(502, {
       success: false,
-      error: 'Unable to reach Go/MySQL backend. Check GO_API_URL and that the API is running.',
+      error: 'Unable to reach Go backend. Check GO_API_URL.',
     });
   }
 }
 
 const proxyToGo = { json, options, forward, resolveGoBase };
-
 module.exports = { proxyToGo };

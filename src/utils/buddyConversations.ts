@@ -1,6 +1,6 @@
 /**
  * Multi-conversation store for AI Buddy.
- * Hybrid: localStorage + Neon via buddy-sync Netlify function → Render Go API.
+ * Hybrid: localStorage + Neon via Render Go API (direct URL preferred).
  */
 
 import type { BuddyMessage } from '../types/buddy';
@@ -20,8 +20,14 @@ type ConversationStore = {
 
 const STORAGE_KEY = (userId: string) => `buddy-conversations-v1:${userId}`;
 
-/** Paths that reach the Netlify function (rewrite /api often 404s on previews). */
-const SYNC_URLS = ['/api/buddy/sync', '/.netlify/functions/buddy-sync'];
+/** Prefer absolute Render URL so Netlify rewrite bugs cannot break sync. */
+function syncUrls(): string[] {
+  const env = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, '') || '';
+  const urls: string[] = [];
+  if (env) urls.push(`${env}/api/buddy/sync`);
+  urls.push('/.netlify/functions/buddy-sync', '/api/buddy/sync');
+  return urls;
+}
 
 const WELCOME_TEXT =
   "Hi, I'm Buddy. Tell me what you are trying to learn or achieve, and I will turn it into a practical next step.";
@@ -64,8 +70,11 @@ function writeStore(userId: string, store: ConversationStore) {
   void pushStoreToServer(userId, store);
 }
 
-function authHeaders(): HeadersInit {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+function authHeaders(userId: string): HeadersInit {
+  const h: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-User-Id': userId,
+  };
   try {
     const token =
       localStorage.getItem('eduroute_token') ||
@@ -85,19 +94,18 @@ async function fetchSync(
   userId: string,
   body?: unknown,
 ): Promise<Response | null> {
-  const headers = authHeaders();
-  for (const base of SYNC_URLS) {
+  const headers = authHeaders(userId);
+  for (const base of syncUrls()) {
     try {
       const url =
         method === 'GET'
-          ? `${base}?userId=${encodeURIComponent(userId)}`
+          ? `${base}${base.includes('?') ? '&' : '?'}userId=${encodeURIComponent(userId)}`
           : base;
       const res = await fetch(url, {
         method,
         headers,
         body: method === 'POST' ? JSON.stringify(body) : undefined,
       });
-      // Accept JSON success; skip HTML 404 pages
       const ct = res.headers.get('content-type') || '';
       if (res.ok && ct.includes('application/json')) return res;
       if (res.status === 404 || ct.includes('text/html')) continue;
