@@ -1,10 +1,12 @@
 /**
- * EduRoute Landing — Dala-matched sparse editorial + real brain hero.
+ * EduRoute Landing — one coherent cinematic experience.
+ * DOM typography + Experience (GPU particles / morph / camera) share one scroll timeline.
  */
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthModal } from '../components/AuthModal';
-import { DalaBrainHero } from '../components/DalaBrainHero';
+import Experience from '../experience/Experience.js';
+import Cursor from '../experience/ui/Cursor.js';
 import Loader from '../experience/ui/Loader.js';
 import gsap from 'gsap';
 import '../experience/styles/landing.css';
@@ -39,26 +41,26 @@ function revealHeroNow() {
       {
         yPercent: 0,
         opacity: 1,
-        duration: 1.2,
+        duration: 1.35,
         ease: 'power3.out',
-        stagger: 0.12,
+        stagger: 0.14,
         overwrite: true,
       }
     );
     const body = document.querySelector('#hero .er-body');
     const label = document.querySelector('#hero .er-label');
     if (label) {
-      gsap.fromTo(label, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.8 });
+      gsap.fromTo(label, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.9 });
     }
     if (body) {
       gsap.fromTo(
         body,
-        { opacity: 0, y: 12 },
-        { opacity: 1, y: 0, duration: 0.9, delay: 0.3 }
+        { opacity: 0, y: 14 },
+        { opacity: 1, y: 0, duration: 1.05, delay: 0.4 }
       );
     }
   } catch {
-    /* static */
+    /* static fallback */
   }
 }
 
@@ -66,24 +68,19 @@ export const LandingPage = () => {
   const [auth, setAuth] = useState(false);
   const [showTop, setShowTop] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
-  const loaderRef = useRef<InstanceType<typeof Loader> | null>(null);
-  const revealed = useRef(false);
-
-  const finishLoad = useCallback(() => {
-    if (revealed.current) return;
-    revealed.current = true;
-    const loader = loaderRef.current;
-    if (loader) {
-      loader.setProgress(1);
-      loader.complete().then(() => revealHeroNow());
-    } else {
-      revealHeroNow();
-    }
-  }, []);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const experienceRef = useRef<InstanceType<typeof Experience> | null>(null);
 
   const scrollToTop = useCallback(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+    const exp = experienceRef.current as {
+      smoothScroll?: { scrollTo: (t: number) => void };
+    } | null;
+    if (exp?.smoothScroll) {
+      exp.smoothScroll.scrollTo(0);
+    } else {
+      window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+    }
   }, []);
 
   useEffect(() => {
@@ -107,31 +104,56 @@ export const LandingPage = () => {
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
 
-    const loader = new Loader();
-    loaderRef.current = loader;
-    loader.setProgress(0.2);
+    if (!canvasRef.current) {
+      revealHeroNow();
+      return () => {
+        document.body.classList.remove('er-on-landing');
+        window.removeEventListener('scroll', onScroll);
+      };
+    }
 
-    const safetyT = window.setTimeout(() => finishLoad(), 8000);
+    const loader = new Loader();
+    const cursor = new Cursor();
+
+    let experience: InstanceType<typeof Experience> | null = null;
+    try {
+      experience = new Experience({
+        canvas: canvasRef.current,
+        onProgress: (t: number) => loader.setProgress(t),
+      });
+      experienceRef.current = experience;
+
+      experience.ready.then(() => {
+        loader.complete().then(() => {
+          revealHeroNow();
+        });
+      });
+    } catch {
+      document.querySelector('.er-landing')?.classList.add('er-no-webgl');
+      loader.complete().then(() => revealHeroNow());
+    }
+
+    const safetyT = window.setTimeout(() => {
+      loader.complete().then(() => revealHeroNow());
+    }, 7000);
 
     return () => {
       document.body.classList.remove('er-on-landing');
       window.removeEventListener('scroll', onScroll);
       window.clearTimeout(safetyT);
       loader.dispose();
-      loaderRef.current = null;
+      cursor.dispose();
+      experience?.destroy();
+      experienceRef.current = null;
     };
-  }, [finishLoad]);
-
-  const handleBrainReady = useCallback(() => {
-    loaderRef.current?.setProgress(0.85);
-    window.setTimeout(() => finishLoad(), 200);
-  }, [finishLoad]);
+  }, []);
 
   return (
-    <div className="er-landing er-landing--dala">
+    <div className="er-landing">
       <AuthModal isOpen={auth} onClose={() => setAuth(false)} />
 
-      <DalaBrainHero mode="fixed" ready onReady={handleBrainReady} />
+      {/* Single WebGL surface — Experience owns particles, morph, camera */}
+      <canvas id="webgl-canvas" ref={canvasRef} />
 
       <div className="er-progress" aria-hidden="true">
         {['hero', 'manifesto', 'feature-01', 'feature-02', 'feature-03', 'team', 'cta'].map(
@@ -166,6 +188,7 @@ export const LandingPage = () => {
       </nav>
 
       <main className="er-main">
+        {/* IDEA */}
         <section id="hero" className="er-section er-hero">
           <p className="er-label">Idea</p>
           <h1 className="er-title">
@@ -198,6 +221,7 @@ export const LandingPage = () => {
           </div>
         </section>
 
+        {/* STRUCTURE */}
         <section id="manifesto" className="er-section er-manifesto">
           <p className="er-label">01 — Structure</p>
           <h2 className="er-title er-title--editorial">
@@ -216,7 +240,8 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        <section id="feature-01" className="er-section er-feature">
+        {/* TRANSFORM — tall for brain→bulb morph */}
+        <section id="feature-01" className="er-section er-feature er-feature--tall">
           <p className="er-label">02 — Transform</p>
           <h2 className="er-title er-title--short">
             <span className="er-reveal">
@@ -231,7 +256,8 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        <section id="feature-02" className="er-section er-feature er-feature--right">
+        {/* INTELLIGENCE — tall for bulb→globe */}
+        <section id="feature-02" className="er-section er-feature er-feature--right er-feature--tall">
           <p className="er-label">03 — Intelligence</p>
           <h2 className="er-title er-title--short">
             <span className="er-reveal">
@@ -246,7 +272,8 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        <section id="feature-03" className="er-section er-feature">
+        {/* CONNECTION — tall for globe→network */}
+        <section id="feature-03" className="er-section er-feature er-feature--tall">
           <p className="er-label">04 — Connection</p>
           <h2 className="er-title er-title--short">
             <span className="er-reveal">
@@ -261,6 +288,7 @@ export const LandingPage = () => {
           </p>
         </section>
 
+        {/* TEAM */}
         <section id="team" className="er-section">
           <p className="er-label">05 — Minds</p>
           <h2 className="er-title er-title--short">
@@ -301,6 +329,7 @@ export const LandingPage = () => {
           </div>
         </section>
 
+        {/* ACTION */}
         <section id="cta" className="er-section er-cta">
           <p className="er-label">06 — Action</p>
           <h2 className="er-title er-title--short">

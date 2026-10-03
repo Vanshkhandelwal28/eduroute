@@ -14,8 +14,9 @@ import {
 } from './utils/device.js';
 
 /**
- * Experience — Lenis + GPU particles + timeline.
- * Hero opens on brain, centered (Dala-matched).
+ * Experience — single cinematic system.
+ * Lenis + GPU particles + morph timeline + post.
+ * Hero opens on brain; scroll drives the full story.
  */
 export default class Experience {
   constructor({ canvas, onProgress } = {}) {
@@ -51,7 +52,6 @@ export default class Experience {
     this.reducedMotion = prefersReducedMotion();
     this._frames = 0;
 
-    // Smooth scroll first so ScrollTrigger uses proxy
     this.smoothScroll = new SmoothScroll();
     this.onProgress(0.2);
 
@@ -65,16 +65,16 @@ export default class Experience {
       renderer: this.renderer.instance,
     });
 
-    // Center the brain on hero (was offset to the right)
+    // Center structure for hero readability
     if (this.particles.mesh) {
-      this.particles.mesh.position.set(0.35, 0.05, 0);
+      this.particles.mesh.position.set(0.55, 0.08, 0);
     }
     this.onProgress(0.55);
 
     if (this.reducedMotion && this.particles.morph) {
       this.particles.morph.params.noiseStrength = 0.03;
       this.particles.morph.params.scatter = 0;
-      this.particles.morph.params.turbulence = 0.05;
+      this.particles.morph.params.turbulence = 0.04;
       this.particles.morph.params.springStrength = 6;
     }
 
@@ -173,7 +173,6 @@ export default class Experience {
       this.renderer.update(this.scene.instance, this.camera.instance);
     }
 
-    // Signal ready after a few stable frames
     this._frames += 1;
     if (this._frames === 8) {
       this.onProgress(1);
