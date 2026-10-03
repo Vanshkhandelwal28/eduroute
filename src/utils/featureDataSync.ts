@@ -1,6 +1,5 @@
 /**
  * Pull all feature data from Neon (Render) once on app shell load.
- * Each store still writes locally first, then pushes to user-data API.
  */
 import { syncAiCoursesFromServer } from './aiCourseStore';
 import { syncCourseProgressFromServer } from './courseProgressStore';

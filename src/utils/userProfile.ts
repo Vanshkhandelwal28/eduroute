@@ -1,167 +1,79 @@
-import { MOCK_USER } from '../data/mockData';
-import { getAuthUser } from './rbacAuth';
+import { pushUserData, pullUserData } from './userDataStore';
 
-export interface StoredUserProfile {
-  name: string;
-  email: string;
+export type StoredUserProfile = {
+  id?: string;
+  name?: string;
+  email?: string;
   avatar?: string;
-  roleBio?: string;
+  role?: string;
+  bio?: string;
+  username?: string;
+  phone?: string;
+  college?: string;
   enrolledCourses?: string[];
-}
-
-const USER_PROFILE_KEY = 'eduroute:user-profile';
-
-const safeJsonParse = <T>(value: string | null): T | null => {
-  if (!value) return null;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
+  [key: string]: unknown;
 };
 
-const createAvatar = (name: string) =>
-  `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
-    name
-  )}`;
+const USER_PROFILE_KEY = 'eduroute:user-profile-v1';
 
 export const saveUserProfile = (profile: StoredUserProfile) => {
+  if (typeof window === 'undefined') return;
   try {
-    if (typeof window === 'undefined') return;
-
-    window.localStorage.setItem(
-      USER_PROFILE_KEY,
-      JSON.stringify(profile)
-    );
+    window.localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+    void pushUserData('user-profile', profile);
   } catch {
-    console.warn('Unable to save user profile');
+    /* ignore */
   }
 };
 
 export const getStoredUserProfile = (): StoredUserProfile | null => {
+  if (typeof window === 'undefined') return null;
   try {
-    if (typeof window === 'undefined') return null;
-
-    const parsed = safeJsonParse<Partial<StoredUserProfile>>(
-      window.localStorage.getItem(USER_PROFILE_KEY)
-    );
-
-    if (!parsed?.name || !parsed.email) {
-      return null;
-    }
-
-    return {
-      name: parsed.name,
-      email: parsed.email,
-      avatar: parsed.avatar,
-      roleBio: parsed.roleBio,
-      enrolledCourses: parsed.enrolledCourses,
-    };
+    const raw = window.localStorage.getItem(USER_PROFILE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
   } catch {
     return null;
   }
 };
 
 export const getCurrentUser = () => {
-  const auth = getAuthUser();
-  const storedUser = getStoredUserProfile();
-
-  if (auth?.name && auth?.email) {
-    return {
-      ...MOCK_USER,
-      id: auth.id || MOCK_USER.id,
-      name: auth.name,
-      email: auth.email,
-      avatar: auth.avatar || storedUser?.avatar || createAvatar(auth.name),
-      enrolledCourses: storedUser?.enrolledCourses || MOCK_USER.enrolledCourses,
-    };
-  }
-
-  if (!storedUser) {
-    return MOCK_USER;
-  }
-
-  return {
-    ...MOCK_USER,
-    name: storedUser.name,
-    email: storedUser.email,
-    avatar:
-      storedUser.avatar || createAvatar(storedUser.name),
-    enrolledCourses: storedUser.enrolledCourses || MOCK_USER.enrolledCourses,
-  };
+  return getStoredUserProfile();
 };
 
 export const updateEnrollment = (courseId: string) => {
-  const currentUser = getCurrentUser();
-  const storedUser = getStoredUserProfile();
-  const enrolledCourses = currentUser.enrolledCourses.includes(courseId)
-    ? currentUser.enrolledCourses
-    : [...currentUser.enrolledCourses, courseId];
-
-  saveUserProfile({
-    name: currentUser.name,
-    email: currentUser.email,
-    avatar: currentUser.avatar,
-    roleBio: storedUser?.roleBio,
-    enrolledCourses,
-  });
-
-  return enrolledCourses;
+  const profile = getStoredUserProfile() || {};
+  const enrolled = Array.isArray(profile.enrolledCourses) ? profile.enrolledCourses : [];
+  if (!enrolled.includes(courseId)) {
+    saveUserProfile({ ...profile, enrolledCourses: [...enrolled, courseId] });
+  }
 };
 
 export const getDisplayFirstName = () => {
-  // Prefer logged-in auth session (never fall back to mock "Alex")
-  const auth = getAuthUser();
-  if (auth?.name?.trim()) {
-    return auth.name.trim().split(/\s+/)[0] || 'Learner';
-  }
-  const stored = getStoredUserProfile();
-  if (stored?.name?.trim()) {
-    return stored.name.trim().split(/\s+/)[0] || 'Learner';
-  }
-  // Only use mock when nothing is signed in
-  return 'Learner';
-};
-
-const parseBase64Url = (base64Url: string) => {
-  const base64 = base64Url
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
-
-  const padded =
-    base64 +
-    '='.repeat((4 - (base64.length % 4)) % 4);
-
-  return atob(padded);
+  const p = getStoredUserProfile();
+  const name = p?.name || '';
+  return name.split(' ')[0] || 'Student';
 };
 
 export const parseGoogleCredential = (credential: string) => {
   try {
-    const parts = credential.split('.');
-
-    if (parts.length < 2) {
-      return null;
-    }
-
-    const payload = JSON.parse(
-      parseBase64Url(parts[1])
-    ) as {
-      name?: string;
-      email?: string;
-      picture?: string;
-    };
-
-    if (!payload.name || !payload.email) {
-      return null;
-    }
-
+    const payload = credential.split('.')[1];
+    if (!payload) return null;
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
     return {
-      name: payload.name,
-      email: payload.email,
-      avatar: payload.picture,
+      name: json.name as string | undefined,
+      email: json.email as string | undefined,
+      avatar: json.picture as string | undefined,
     };
   } catch {
     return null;
   }
 };
+
+export async function syncUserProfileFromServer(): Promise<void> {
+  const remote = await pullUserData<StoredUserProfile>('user-profile');
+  if (!remote || typeof remote !== 'object') return;
+  const local = getStoredUserProfile();
+  saveUserProfile({ ...(local || {}), ...remote } as StoredUserProfile);
+}
