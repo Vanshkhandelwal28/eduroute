@@ -1,435 +1,388 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  ArrowRight,
-  BookOpen,
-  Briefcase,
-  Code2,
-  Trophy,
-} from 'lucide-react';
 import { AuthModal } from '../components/AuthModal';
-import { OfferStackSection } from '../components/OfferStackSection';
 import { DalaBrainHero } from '../components/DalaBrainHero';
 
+/* ================================================================
+   EDUROUTE Landing — exact Dala visual language
+   Pure black · large light type · sparse nav · manifesto sections
+   Interactive triangle particles · text appear sequence
+   ================================================================ */
+
 const NAV = [
-  { label: 'Home', href: '#home' },
+  { label: 'Manifesto', href: '#manifesto' },
   { label: 'How it works', href: '#how-it-works' },
   { label: 'Roadmaps', href: '/roadmaps' },
-  { label: 'Internships', href: '/internships' },
-  { label: 'Journey', href: '#journey' },
+  { label: 'Get Started', href: '#get-started', cta: true },
 ];
 
 const STATS = [
-  { target: 45, suffix: 'K+', label: 'Active Learners' },
-  { target: 80, suffix: '+', label: 'Roadmaps' },
-  { target: 500, suffix: '+', label: 'Job & Internship Opportunities' },
-  { target: 120, suffix: '+', label: 'Upcoming Hackathons' },
+  { n: '45K+', l: 'Active Learners' },
+  { n: '80+', l: 'Roadmaps' },
+  { n: '500+', l: 'Job & Internship Opportunities' },
+  { n: '120+', l: 'Upcoming Hackathons' },
 ];
 
-const HOW_STEPS = [
-  {
-    step: '01',
-    title: 'Sign up',
-    body: 'Create a free account and pick the track you care about.',
-  },
-  {
-    step: '02',
-    title: 'Skill quiz',
-    body: 'Answer a short yes/no quiz so we map your skill gaps.',
-  },
-  {
-    step: '03',
-    title: 'Get your path',
-    body: 'Follow a personal roadmap, practice, and apply with confidence.',
-  },
+const STEPS = [
+  { n: '01', t: 'Sign up', b: 'Create a free account and pick the track you care about.' },
+  { n: '02', t: 'Skill quiz', b: 'Answer a short yes/no quiz so we map your skill gaps.' },
+  { n: '03', t: 'Get your path', b: 'Follow a personal roadmap, practice, and apply with confidence.' },
 ];
 
-const JOURNEY = [
-  { title: 'Learn', desc: 'Explore curated roadmaps', icon: BookOpen },
-  { title: 'Build', desc: 'Work on real projects and practice', icon: Code2 },
-  { title: 'Compete', desc: 'Join hackathons and challenges', icon: Trophy },
-  { title: 'Get Hired', desc: 'Land internships and full-time roles', icon: Briefcase },
+const FEATURES = [
+  {
+    t: 'Skill Assessment & Analysis',
+    b: 'Take industry-aligned tests, get your skill profile and discover your strengths and skill gaps.',
+    h: '8.5/10 Overall',
+  },
+  {
+    t: 'Personalized Learning Path',
+    b: 'Get AI-powered roadmaps, curated courses and resources to bridge your skill gaps and achieve your goals.',
+    h: 'Beginner → Intermediate',
+  },
+  {
+    t: 'Internships & Job Opportunities',
+    b: 'Explore verified internships, projects and job openings from top companies. Apply and track your progress easily.',
+    h: 'Google · Microsoft · TCS',
+  },
+  {
+    t: 'Hackathons & Competitions',
+    b: 'Participate in exciting hackathons, showcase your skills, win rewards and build your portfolio.',
+    h: 'Win & Showcase',
+  },
 ];
-
-function useCountUp(target: number, active: boolean, duration = 1400) {
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    let raf = 0;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setValue(Math.round(target * eased));
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [active, target, duration]);
-  return value;
-}
-
-function StatItem({
-  target,
-  suffix,
-  label,
-  active,
-}: {
-  target: number;
-  suffix: string;
-  label: string;
-  active: boolean;
-}) {
-  const value = useCountUp(target, active);
-  return (
-    <div className="text-left">
-      <div className="text-2xl font-light tracking-tight text-white tabular-nums sm:text-3xl">
-        {value}
-        {suffix}
-      </div>
-      <div className="mt-1 text-xs tracking-wide text-white/50">{label}</div>
-    </div>
-  );
-}
-
-function NavItem({
-  item,
-  onClick,
-  className,
-}: {
-  item: { label: string; href: string };
-  onClick?: () => void;
-  className: string;
-}) {
-  if (item.href.startsWith('/')) {
-    return (
-      <Link to={item.href} onClick={onClick} className={className}>
-        {item.label}
-      </Link>
-    );
-  }
-  return (
-    <a href={item.href} onClick={onClick} className={className}>
-      {item.label}
-    </a>
-  );
-}
 
 export const LandingPage = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [newsletterEmail, setNewsletterEmail] = useState('');
-  const [statsActive, setStatsActive] = useState(false);
-  const statsRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<'loading' | 'ready'>('loading');
+  const [showText, setShowText] = useState(false);
 
   useEffect(() => {
-    const el = statsRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setStatsActive(true);
-          io.disconnect();
-        }
-      },
-      { threshold: 0.3 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
+    const t1 = setTimeout(() => setPhase('ready'), 1800);
+    const t2 = setTimeout(() => setShowText(true), 2100);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, []);
 
   return (
-    <div id="home" className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white antialiased selection:bg-white/20">
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
 
-      {/* ---------- NAV (Dala-style sparse) ---------- */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-black/70 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
-          <a href="#home" className="text-sm font-medium tracking-[0.15em] uppercase">
-            EDUROUTE
-          </a>
-
-          <nav className="hidden items-center gap-8 md:flex">
-            {NAV.map((item) => (
-              <NavItem
+      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-5 sm:px-10">
+        <a href="#home" className="text-[13px] font-medium tracking-[0.18em] uppercase">
+          EDUROUTE
+        </a>
+        <div className="hidden items-center gap-10 md:flex">
+          {NAV.map((item) =>
+            item.cta ? (
+              <button
                 key={item.label}
-                item={item}
-                className="text-[11px] font-medium tracking-[0.14em] uppercase text-white/55 transition hover:text-white"
-              />
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsAuthOpen(true)}
-              className="hidden rounded border border-white/25 px-4 py-1.5 text-[11px] font-medium tracking-[0.12em] uppercase transition hover:bg-white hover:text-black sm:inline-block"
-            >
-              Get Started
-            </button>
-            <button
-              type="button"
-              className="rounded p-2 text-white/70 md:hidden"
-              aria-label="Menu"
-              onClick={() => setMobileOpen((v) => !v)}
-            >
-              <span className="block h-px w-5 bg-current" />
-              <span className="mt-1.5 block h-px w-5 bg-current" />
-              <span className="mt-1.5 block h-px w-5 bg-current" />
-            </button>
-          </div>
+                type="button"
+                onClick={() => setIsAuthOpen(true)}
+                className="border border-white/30 px-4 py-1.5 text-[11px] tracking-[0.14em] uppercase transition hover:bg-white hover:text-black"
+              >
+                {item.label}
+              </button>
+            ) : item.href.startsWith('/') ? (
+              <Link
+                key={item.label}
+                to={item.href}
+                className="text-[11px] tracking-[0.14em] uppercase text-white/50 transition hover:text-white"
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <a
+                key={item.label}
+                href={item.href}
+                className="text-[11px] tracking-[0.14em] uppercase text-white/50 transition hover:text-white"
+              >
+                {item.label}
+              </a>
+            ),
+          )}
         </div>
+        <button
+          type="button"
+          onClick={() => setIsAuthOpen(true)}
+          className="border border-white/30 px-3 py-1 text-[11px] tracking-[0.12em] uppercase md:hidden"
+        >
+          Start
+        </button>
+      </nav>
 
-        {mobileOpen && (
-          <div className="border-t border-white/10 bg-black px-5 py-4 md:hidden">
-            {NAV.map((item) => (
-              <NavItem
-                key={item.label}
-                item={item}
-                onClick={() => setMobileOpen(false)}
-                className="block py-2.5 text-sm tracking-wide text-white/70"
-              />
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                setMobileOpen(false);
-                setIsAuthOpen(true);
-              }}
-              className="mt-3 w-full rounded border border-white/25 py-2.5 text-xs tracking-[0.12em] uppercase"
-            >
-              Get Started
-            </button>
+      <section id="home" className="relative flex h-screen flex-col items-center justify-center overflow-hidden">
+        <DalaBrainHero ready={phase === 'ready'} />
+
+        {phase === 'loading' && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black">
+            <div className="mb-10 flex gap-2">
+              {[0, 1, 2, 3].map((i) => (
+                <span
+                  key={i}
+                  className="block h-1.5 w-1.5 rotate-45 bg-white"
+                  style={{
+                    animation: `dalaPulse 1.4s ease-in-out ${i * 0.18}s infinite`,
+                  }}
+                />
+              ))}
+            </div>
+            <p className="text-[11px] tracking-[0.3em] uppercase text-white/40">Loading</p>
           </div>
         )}
-      </header>
 
-      {/* ---------- HERO with interactive brain ---------- */}
-      <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-5 pt-20">
-        <DalaBrainHero />
-
-        <div className="relative z-10 mx-auto max-w-3xl text-center">
-          <div className="mb-6 text-[11px] font-medium tracking-[0.2em] uppercase text-white/50">
+        <div
+          className={`relative z-10 mx-auto max-w-3xl px-6 text-center transition-all duration-1000 ${
+            showText ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'
+          }`}
+        >
+          <p className="mb-6 text-[11px] tracking-[0.25em] uppercase text-white/45">
             Your Growth Partner in Tech
-          </div>
-
-          <h1 className="text-4xl font-light leading-[1.1] tracking-tight sm:text-6xl lg:text-7xl">
+          </p>
+          <h1 className="text-[clamp(2.6rem,8vw,5.2rem)] font-light leading-[1.05] tracking-[-0.03em]">
             Build Skills.
             <br />
-            <span className="text-white/90">Get Hired.</span>
+            Get Hired.
           </h1>
-
-          <p className="mx-auto mt-6 max-w-lg text-base font-light leading-relaxed text-white/55 sm:text-lg">
+          <p className="mx-auto mt-7 max-w-md text-[15px] font-light leading-relaxed text-white/50">
             EDUROUTE helps you find the right roadmap, get internships and job
             opportunities, participate in hackathons and build the skills you
             need to grow in tech — all in one place.
           </p>
-
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <Link
               to="/roadmaps"
-              className="inline-flex items-center gap-2 rounded bg-white px-6 py-3 text-xs font-medium tracking-[0.1em] uppercase text-black transition hover:bg-white/90"
+              className="bg-white px-7 py-3 text-[11px] font-medium tracking-[0.12em] uppercase text-black transition hover:bg-white/90"
             >
-              Explore Roadmaps <ArrowRight className="h-3.5 w-3.5" />
+              Explore Roadmaps →
             </Link>
             <Link
               to="/internships"
-              className="inline-flex items-center gap-2 rounded border border-white/25 px-6 py-3 text-xs font-medium tracking-[0.1em] uppercase text-white transition hover:border-white/50"
+              className="border border-white/25 px-7 py-3 text-[11px] tracking-[0.12em] uppercase transition hover:border-white/60"
             >
               Find Opportunities
             </Link>
-            <button
-              type="button"
-              onClick={() => setIsAuthOpen(true)}
-              className="inline-flex items-center gap-2 rounded border border-white/25 px-6 py-3 text-xs font-medium tracking-[0.1em] uppercase text-white transition hover:border-white/50"
-            >
-              Get Started
-            </button>
           </div>
         </div>
 
-        {/* Stats */}
         <div
-          ref={statsRef}
-          className="relative z-10 mx-auto mt-16 grid w-full max-w-4xl grid-cols-2 gap-8 border-t border-white/10 pt-10 sm:grid-cols-4"
+          className={`absolute bottom-8 left-1/2 z-10 -translate-x-1/2 text-[10px] tracking-[0.2em] uppercase text-white/30 transition-opacity duration-1000 ${
+            showText ? 'opacity-100' : 'opacity-0'
+          }`}
         >
+          Scroll
+        </div>
+      </section>
+
+      <section className="border-t border-white/10 px-6 py-16 sm:px-10">
+        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-10 sm:grid-cols-4">
           {STATS.map((s) => (
-            <StatItem key={s.label} {...s} active={statsActive} />
+            <div key={s.l}>
+              <div className="text-2xl font-light tracking-tight sm:text-3xl">{s.n}</div>
+              <div className="mt-1 text-[11px] tracking-wide text-white/40">{s.l}</div>
+            </div>
           ))}
         </div>
       </section>
 
-      {/* ---------- HOW IT WORKS ---------- */}
-      <section id="how-it-works" className="mx-auto max-w-5xl px-5 py-24 sm:px-8">
-        <div className="mb-3 text-[11px] font-medium tracking-[0.18em] uppercase text-white/40">
-          How it works
-        </div>
-        <h2 className="text-3xl font-light tracking-tight sm:text-4xl">
-          Three clear steps.
-        </h2>
-        <p className="mt-3 max-w-md text-sm font-light text-white/50">
-          Sign up → Skill quiz → Get your path.
-        </p>
-
-        <div className="mt-14 grid gap-10 sm:grid-cols-3">
-          {HOW_STEPS.map((s) => (
-            <div key={s.step}>
-              <div className="mb-4 text-[11px] tracking-[0.15em] text-white/40">
-                {s.step}
-              </div>
-              <h3 className="text-lg font-normal tracking-tight">{s.title}</h3>
-              <p className="mt-2 text-sm font-light leading-relaxed text-white/50">
-                {s.body}
+      <section id="manifesto" className="px-6 py-28 sm:px-10">
+        <div className="mx-auto max-w-5xl">
+          <h2 className="max-w-2xl text-[clamp(1.8rem,4.5vw,3.2rem)] font-light leading-[1.15] tracking-[-0.02em]">
+            The path is unclear.
+          </h2>
+          <div className="mt-14 grid gap-12 md:grid-cols-2">
+            <div className="space-y-6 text-[15px] font-light leading-[1.75] text-white/50">
+              <p>
+                Most learners jump between random courses, outdated roadmaps and
+                scattered job boards. They waste months not knowing which skills
+                actually matter for the roles they want.
+              </p>
+              <p>
+                The anxiety of “Am I learning the right thing?” and the
+                frustration of applying with incomplete portfolios is real.
               </p>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ---------- FEATURES (OfferStack) ---------- */}
-      <div className="border-t border-white/10">
-        <OfferStackSection onExploreAll={() => setIsAuthOpen(true)} />
-      </div>
-
-      {/* ---------- JOURNEY ---------- */}
-      <section id="journey" className="mx-auto max-w-5xl px-5 py-24 sm:px-8">
-        <div className="mb-3 text-[11px] font-medium tracking-[0.18em] uppercase text-white/40">
-          Your Journey
-        </div>
-        <h2 className="text-3xl font-light tracking-tight sm:text-4xl">
-          Learn. Build. Compete. Get Hired.
-        </h2>
-        <p className="mt-4 max-w-lg text-sm font-light leading-relaxed text-white/50">
-          Our mission is to make the journey into tech coherent and delightful —
-          reframing career growth from “figure it out alone” to having a clear
-          partner every step of the way.
-        </p>
-
-        <div className="mt-14 grid grid-cols-2 gap-8 sm:grid-cols-4">
-          {JOURNEY.map((step) => (
-            <div key={step.title}>
-              <step.icon className="mb-3 h-5 w-5 text-white/60" />
-              <div className="text-base font-normal">{step.title}</div>
-              <div className="mt-1 text-xs font-light text-white/45">{step.desc}</div>
+            <div className="space-y-6 text-[15px] font-light leading-[1.75] text-white/50">
+              <p>
+                Existing platforms either teach or list jobs — almost never both,
+                and almost never with a clear personal path.
+              </p>
+              <p>
+                You end up managing your own career like a full-time project
+                instead of simply growing.
+              </p>
             </div>
-          ))}
+          </div>
         </div>
       </section>
 
-      {/* ---------- CTA ---------- */}
-      <section className="border-y border-white/10 py-20 text-center">
-        <h2 className="text-2xl font-light tracking-tight sm:text-3xl">
+      <section className="px-6 py-28 sm:px-10">
+        <div className="mx-auto max-w-5xl">
+          <h2 className="max-w-2xl text-[clamp(1.8rem,4.5vw,3.2rem)] font-light leading-[1.15] tracking-[-0.02em]">
+            Spark clarity.
+            <br />
+            Build with purpose.
+          </h2>
+          <p className="mt-8 max-w-lg text-[15px] font-light leading-[1.75] text-white/50">
+            EDUROUTE is your intelligent growth partner. We map your current
+            skills, generate a personal roadmap, surface real opportunities and
+            let you practice and compete — so you can move from learning to hired
+            with confidence.
+          </p>
+        </div>
+      </section>
+
+      <section id="how-it-works" className="border-t border-white/10 px-6 py-28 sm:px-10">
+        <div className="mx-auto max-w-5xl">
+          <p className="mb-3 text-[11px] tracking-[0.2em] uppercase text-white/35">
+            How it works
+          </p>
+          <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-light tracking-[-0.02em]">
+            Three clear steps.
+          </h2>
+          <div className="mt-16 grid gap-14 sm:grid-cols-3">
+            {STEPS.map((s) => (
+              <div key={s.n}>
+                <div className="mb-5 text-[11px] tracking-[0.18em] text-white/35">{s.n}</div>
+                <h3 className="text-lg font-normal tracking-tight">{s.t}</h3>
+                <p className="mt-3 text-[14px] font-light leading-relaxed text-white/45">{s.b}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t border-white/10 px-6 py-28 sm:px-10">
+        <div className="mx-auto max-w-5xl">
+          <p className="mb-3 text-[11px] tracking-[0.2em] uppercase text-white/35">
+            What we offer
+          </p>
+          <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-light tracking-[-0.02em]">
+            Everything You Need to Grow
+          </h2>
+          <div className="mt-16 grid gap-x-16 gap-y-14 sm:grid-cols-2">
+            {FEATURES.map((f) => (
+              <div key={f.t}>
+                <h3 className="text-lg font-normal tracking-tight">{f.t}</h3>
+                <p className="mt-3 text-[14px] font-light leading-relaxed text-white/45">{f.b}</p>
+                <p className="mt-4 text-[11px] tracking-[0.08em] text-white/60">{f.h}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-6 py-28 sm:px-10">
+        <div className="mx-auto max-w-5xl">
+          <h2 className="max-w-2xl text-[clamp(1.8rem,4.5vw,3.2rem)] font-light leading-[1.15] tracking-[-0.02em]">
+            Learn. Build. Compete.
+            <br />
+            Get Hired.
+          </h2>
+          <p className="mt-8 max-w-lg text-[15px] font-light leading-[1.75] text-white/50">
+            Our mission is to make the journey into tech coherent and delightful —
+            reframing career growth from “figure it out alone” to having a clear
+            partner every step of the way.
+          </p>
+          <p className="mt-5 max-w-lg text-[15px] font-light leading-[1.75] text-white/50">
+            Your most purposeful moments are when you’re building real skills,
+            shipping projects and landing opportunities that matter. We want to
+            recreate that every time you use EDUROUTE.
+          </p>
+        </div>
+      </section>
+
+      <section
+        id="get-started"
+        className="border-y border-white/10 px-6 py-24 text-center sm:px-10"
+      >
+        <h2 className="text-[clamp(1.6rem,3.5vw,2.4rem)] font-light tracking-[-0.02em]">
           Your growth starts here.
         </h2>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
           <Link
             to="/roadmaps"
-            className="rounded bg-white px-6 py-3 text-xs font-medium tracking-[0.1em] uppercase text-black transition hover:bg-white/90"
+            className="bg-white px-8 py-3.5 text-[11px] font-medium tracking-[0.12em] uppercase text-black transition hover:bg-white/90"
           >
             Explore Roadmaps →
           </Link>
           <button
             type="button"
             onClick={() => setIsAuthOpen(true)}
-            className="rounded border border-white/25 px-6 py-3 text-xs font-medium tracking-[0.1em] uppercase transition hover:border-white/50"
+            className="border border-white/30 px-8 py-3.5 text-[11px] tracking-[0.12em] uppercase transition hover:border-white/70"
           >
             Get Started
           </button>
         </div>
       </section>
 
-      {/* ---------- FOOTER ---------- */}
-      <footer className="mx-auto max-w-5xl px-5 py-16 sm:px-8">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+      <footer className="px-6 py-16 sm:px-10">
+        <div className="mx-auto grid max-w-5xl gap-12 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <div className="text-sm font-medium tracking-[0.12em] uppercase">
-              EDUROUTE
-            </div>
-            <p className="mt-3 max-w-xs text-sm font-light leading-relaxed text-white/45">
+            <div className="text-[13px] font-medium tracking-[0.14em] uppercase">EDUROUTE</div>
+            <p className="mt-4 max-w-[220px] text-[13px] font-light leading-relaxed text-white/40">
               Learn. Build. Compete. Get Hired.
-              <br />
-              <br />
+              <br /><br />
               Your one stop platform to build skills, explore opportunities and
               grow your career in tech.
             </p>
           </div>
-
           <div>
-            <div className="mb-4 text-[11px] tracking-[0.14em] uppercase text-white/40">
-              Quick links
-            </div>
-            <div className="space-y-2">
-              {NAV.map((l) => (
-                <NavItem
-                  key={l.label}
-                  item={l}
-                  className="block text-sm font-light text-white/55 transition hover:text-white"
-                />
-              ))}
+            <div className="mb-5 text-[10px] tracking-[0.16em] uppercase text-white/35">Quick links</div>
+            <div className="space-y-2.5 text-[13px] font-light text-white/50">
+              <a href="#home" className="block hover:text-white">Home</a>
+              <a href="#how-it-works" className="block hover:text-white">How it works</a>
+              <Link to="/roadmaps" className="block hover:text-white">Roadmaps</Link>
+              <Link to="/internships" className="block hover:text-white">Internships</Link>
+              <a href="#manifesto" className="block hover:text-white">Journey</a>
             </div>
           </div>
-
           <div>
-            <div className="mb-4 text-[11px] tracking-[0.14em] uppercase text-white/40">
-              Company
-            </div>
-            <div className="space-y-2 text-sm font-light text-white/55">
-              <a href="#contact" className="block hover:text-white">
-                About Us
-              </a>
-              <a href="#journey" className="block hover:text-white">
-                Our Mission
-              </a>
-              <a href="#contact" className="block hover:text-white">
-                Contact Us
-              </a>
-              <a href="#contact" className="block hover:text-white">
-                Privacy Policy
-              </a>
-              <a href="#contact" className="block hover:text-white">
-                Terms & Conditions
-              </a>
+            <div className="mb-5 text-[10px] tracking-[0.16em] uppercase text-white/35">Company</div>
+            <div className="space-y-2.5 text-[13px] font-light text-white/50">
+              <a href="#manifesto" className="block hover:text-white">About Us</a>
+              <a href="#manifesto" className="block hover:text-white">Our Mission</a>
+              <a href="#get-started" className="block hover:text-white">Contact Us</a>
+              <span className="block">Privacy Policy</span>
+              <span className="block">Terms & Conditions</span>
             </div>
           </div>
-
           <div>
-            <div className="mb-4 text-[11px] tracking-[0.14em] uppercase text-white/40">
-              Stay Updated
-            </div>
-            <p className="mb-3 text-sm font-light text-white/45">
+            <div className="mb-5 text-[10px] tracking-[0.16em] uppercase text-white/35">Stay Updated</div>
+            <p className="mb-4 text-[13px] font-light text-white/40">
               Get the latest roadmaps, opportunities and tips in your inbox.
             </p>
             <input
               type="email"
-              value={newsletterEmail}
-              onChange={(e) => setNewsletterEmail(e.target.value)}
               placeholder="Your email"
-              className="mb-2 w-full border border-white/20 bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/40"
+              className="mb-2 w-full border border-white/20 bg-transparent px-3 py-2.5 text-[13px] text-white placeholder:text-white/25 outline-none focus:border-white/45"
             />
             <button
               type="button"
-              className="w-full bg-white py-2 text-xs font-medium tracking-[0.1em] uppercase text-black transition hover:bg-white/90"
+              className="w-full bg-white py-2.5 text-[11px] font-medium tracking-[0.12em] uppercase text-black transition hover:bg-white/90"
             >
               Subscribe
             </button>
           </div>
         </div>
-
-        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 text-xs text-white/40 sm:flex-row">
+        <div className="mx-auto mt-16 flex max-w-5xl flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 text-[11px] text-white/30 sm:flex-row">
           <div>© 2026 EDUROUTE. All rights reserved.</div>
-          <div className="flex gap-6">
-            <a href="#home" className="hover:text-white">
-              Manifesto
-            </a>
-            <a href="#how-it-works" className="hover:text-white">
-              How it works
-            </a>
-            <a href="/roadmaps" className="hover:text-white">
-              Roadmaps
-            </a>
+          <div className="flex gap-8">
+            <a href="#manifesto" className="hover:text-white">Manifesto</a>
+            <a href="#how-it-works" className="hover:text-white">How it works</a>
+            <Link to="/roadmaps" className="hover:text-white">Roadmaps</Link>
           </div>
         </div>
       </footer>
+
+      <style>{`
+        @keyframes dalaPulse {
+          0%, 100% { opacity: 0.25; transform: rotate(45deg) scale(0.85); }
+          50% { opacity: 1; transform: rotate(45deg) scale(1.15); }
+        }
+      `}</style>
     </div>
   );
 };
