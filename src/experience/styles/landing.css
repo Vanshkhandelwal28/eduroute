@@ -1,15 +1,16 @@
 /* ============================================================
-   EduRoute landing — Dala-class editorial finish
+   EduRoute landing — Dala-matched purple atmosphere
    ============================================================ */
 
 :root {
-  --bg: #000000;
+  --bg: #3c184c;
+  --bg-mid: #692a84;
   --text: #f5f5f5;
-  --text-secondary: #8a8a8a;
-  --text-muted: #5a5a5a;
-  --accent: #8052ff;
-  --border: rgba(255, 255, 255, 0.2);
-  --border-hover: rgba(255, 255, 255, 0.5);
+  --text-secondary: rgba(255, 255, 255, 0.62);
+  --text-muted: rgba(255, 255, 255, 0.38);
+  --accent: #c5299b;
+  --border: rgba(255, 255, 255, 0.22);
+  --border-hover: rgba(255, 255, 255, 0.55);
   --font: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --dur: 0.45s;
@@ -31,7 +32,7 @@ body.er-on-landing .theme-toggle {
 }
 
 .er-landing {
-  background: var(--bg);
+  background: radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%);
   color: var(--text);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
@@ -46,8 +47,7 @@ body.er-on-landing .theme-toggle {
 }
 
 .er-landing.er-no-webgl {
-  background:
-    radial-gradient(ellipse 60% 50% at 50% 30%, #1a1028 0%, #000000 70%);
+  background: radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%);
 }
 
 .er-landing.er-no-webgl #webgl-canvas {
@@ -115,7 +115,7 @@ body.er-on-landing .theme-toggle {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: #000;
+  background: radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%);
   display: flex;
   align-items: center;
   justify-content: center;
