@@ -25,16 +25,14 @@ export default class Particles {
 
   _create() {
     // --- Tiny triangle geometry (geometric fragment) ---
-    // Equilateral-ish triangle centered at origin
     const tri = new THREE.BufferGeometry();
-    const s = 0.012; // base size before per-instance scale
+    const s = 0.011;
     const vertices = new Float32Array([
-      0, s * 1.2, 0,
-      -s, -s * 0.7, 0,
-      s, -s * 0.7, 0,
+      0.0, s * 1.25, 0.0,
+      -s, -s * 0.7, 0.0,
+      s, -s * 0.7, 0.0,
     ]);
     tri.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    tri.computeVertexNormals();
 
     // --- Instance attributes ---
     const aScale = new Float32Array(this.count);
@@ -43,20 +41,14 @@ export default class Particles {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      // Size variation: 0.4x – 2.2x
-      aScale[i] = 0.4 + Math.random() * 1.8;
+      // Size variation: 0.35x – 2.4x
+      aScale[i] = 0.35 + Math.random() * 2.05;
       // Brightness variation
-      aBrightness[i] = 0.35 + Math.random() * 0.65;
+      aBrightness[i] = 0.3 + Math.random() * 0.7;
     }
 
-    tri.setAttribute(
-      'aScale',
-      new THREE.InstancedBufferAttribute(aScale, 1)
-    );
-    tri.setAttribute(
-      'aSeed',
-      new THREE.InstancedBufferAttribute(aSeed, 1)
-    );
+    tri.setAttribute('aScale', new THREE.InstancedBufferAttribute(aScale, 1));
+    tri.setAttribute('aSeed', new THREE.InstancedBufferAttribute(aSeed, 1));
     tri.setAttribute(
       'aBrightness',
       new THREE.InstancedBufferAttribute(aBrightness, 1)
@@ -70,8 +62,8 @@ export default class Particles {
       fragmentShader: particleFragmentShader,
       uniforms: {
         uTime: { value: 0 },
-        uBreathAmount: { value: 0.035 },
-        uBreathSpeed: { value: 0.55 },
+        uBreathAmount: { value: 0.032 },
+        uBreathSpeed: { value: 0.5 },
       },
       transparent: true,
       depthWrite: false,
@@ -97,7 +89,6 @@ export default class Particles {
         targets[i3 + 1],
         targets[i3 + 2]
       );
-      // Random micro rotation already handled in shader via seed
       this.dummy.rotation.set(0, 0, 0);
       this.dummy.scale.set(1, 1, 1);
       this.dummy.updateMatrix();
@@ -115,17 +106,20 @@ export default class Particles {
     if (!this.material) return;
     this.material.uniforms.uTime.value = elapsed;
 
-    // Very slow overall rotation for life
+    // Very slow overall rotation so the structure feels alive
     if (this.mesh) {
-      this.mesh.rotation.y = elapsed * 0.04;
+      this.mesh.rotation.y = elapsed * 0.035;
     }
   }
 
   dispose() {
     if (this.mesh) {
-      this.scene.instance?.remove?.(this.mesh) || this.mesh.parent?.remove(this.mesh);
+      if (this.mesh.parent) {
+        this.mesh.parent.remove(this.mesh);
+      }
       this.geometry?.dispose();
       this.material?.dispose();
+      this.mesh.dispose?.();
       this.mesh = null;
     }
   }
