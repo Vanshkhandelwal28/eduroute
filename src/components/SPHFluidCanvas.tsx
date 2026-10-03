@@ -1,15 +1,15 @@
 /**
  * React wrapper — GPU SPH fluid for EduRoute landing.
- * Exposes morph progress via scroll; mouse push/pull on GPU uniforms only.
+ * Mouse + morph via GPU uniforms only (no lil-gui dependency).
  */
 import { useEffect, useRef, useState } from 'react';
 import { SPHSimulation } from '../webgl/sph/SPHSimulation';
 
 export function SPHFluidCanvas({
   progressRef,
-  showGui = false,
 }: {
   progressRef: React.MutableRefObject<number>;
+  /** @deprecated GUI removed to avoid lil-gui package requirement */
   showGui?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -31,30 +31,10 @@ export function SPHFluidCanvas({
       return;
     }
 
-    let gui: { destroy: () => void } | null = null;
-    if (showGui) {
-      void import('lil-gui')
-        .then(({ default: GUI }) => {
-          const g = new GUI({ title: 'SPH Fluid' });
-          g.add(sph.params, 'particleSize', 2, 20, 0.5).name('Point size');
-          g.add(sph.params, 'smoothingRadius', 0.08, 0.4, 0.01).name('h (radius)');
-          g.add(sph.params, 'restDensity', 1, 30, 0.5).name('Rest density');
-          g.add(sph.params, 'gasConstant', 1, 80, 1).name('Pressure');
-          g.add(sph.params, 'viscosity', 0, 1, 0.01).name('Viscosity');
-          g.add(sph.params, 'damping', 0.9, 1, 0.001).name('Damping');
-          g.add(sph.params, 'mouseForce', -40, 40, 1).name('Mouse force');
-          g.add(sph.params, 'simSpeed', 0.1, 2, 0.05).name('Sim speed');
-          g.add(sph.params.gravity, 'y', -10, 2, 0.1).name('Gravity Y');
-          gui = g;
-        })
-        .catch(() => undefined);
-    }
-
     const onMove = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       const ny = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-      // Map NDC to sim bounds approx
       sph.setMouse(nx * 1.1, ny * 0.9, 0);
     };
     const onLeave = () => sph.setMouse(0, -10, 0);
@@ -80,11 +60,10 @@ export function SPHFluidCanvas({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('mouseleave', onLeave);
-      gui?.destroy();
       sph.dispose();
       sphRef.current = null;
     };
-  }, [progressRef, showGui]);
+  }, [progressRef]);
 
   return (
     <div className="absolute inset-0">
