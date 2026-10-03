@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { getCappedDPR } from './utils/device.js';
 
 /**
- * Renderer — slightly lower exposure to reduce bloom washout.
+ * Renderer for EffectComposer pipeline.
+ * IMPORTANT: toneMapping must be NoToneMapping when OutputPass is used,
+ * otherwise tone mapping is applied twice and the image washes out / clips.
  */
 export default class Renderer {
   constructor({ canvas, sizes }) {
@@ -23,9 +25,9 @@ export default class Renderer {
     this.instance.setSize(this.sizes.width, this.sizes.height);
 
     this.instance.outputColorSpace = THREE.SRGBColorSpace;
-    this.instance.toneMapping = THREE.ACESFilmicToneMapping;
-    // Lower exposure — particles stay defined under bloom
-    this.instance.toneMappingExposure = 0.72;
+    // OutputPass in the composer handles tone mapping — do NOT enable here
+    this.instance.toneMapping = THREE.NoToneMapping;
+    this.instance.toneMappingExposure = 1.0;
   }
 
   resize() {

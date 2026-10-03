@@ -9,7 +9,8 @@ import { GrainShader, VignetteShader } from './shaders.js';
 import { getPostQuality, getCappedDPR } from '../utils/device.js';
 
 /**
- * Post-processing — aggressive anti-washout bloom settings.
+ * Post-processing pipeline.
+ * Tone mapping is applied ONLY here via OutputPass (renderer uses NoToneMapping).
  */
 export default class PostProcessing {
   constructor({ renderer, scene, camera, sizes }) {
@@ -40,26 +41,27 @@ export default class PostProcessing {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
 
-    // Very selective bloom — high threshold, low strength
+    // Selective bloom — high threshold, low strength
     const bloomStrength =
-      this.quality === 'HIGH' ? 0.28 : this.quality === 'MEDIUM' ? 0.2 : 0.15;
+      this.quality === 'HIGH' ? 0.35 : this.quality === 'MEDIUM' ? 0.25 : 0.18;
     const bloomRadius =
-      this.quality === 'HIGH' ? 0.32 : this.quality === 'MEDIUM' ? 0.25 : 0.2;
+      this.quality === 'HIGH' ? 0.35 : this.quality === 'MEDIUM' ? 0.28 : 0.22;
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(w, h),
       bloomStrength,
       bloomRadius,
-      0.92 // only the brightest tips contribute
+      0.9
     );
     this.composer.addPass(this.bloomPass);
 
+    // DOF only on HIGH — Bokeh can wash additive particles
     this.bokehPass = null;
-    if (this.quality !== 'LOW') {
+    if (this.quality === 'HIGH') {
       this.bokehPass = new BokehPass(this.scene, this.camera, {
-        focus: 4.2,
-        aperture: this.quality === 'HIGH' ? 0.008 : 0.005,
-        maxblur: this.quality === 'HIGH' ? 0.003 : 0.002,
+        focus: 4.0,
+        aperture: 0.006,
+        maxblur: 0.0025,
       });
       this.composer.addPass(this.bokehPass);
     }
@@ -71,10 +73,11 @@ export default class PostProcessing {
 
     this.vignettePass = new ShaderPass(VignetteShader);
     this.vignettePass.uniforms.uDarkness.value =
-      this.quality === 'HIGH' ? 0.42 : 0.32;
+      this.quality === 'HIGH' ? 0.4 : 0.3;
     this.vignettePass.uniforms.uOffset.value = 1.15;
     this.composer.addPass(this.vignettePass);
 
+    // OutputPass applies tone mapping + color space once
     this.outputPass = new OutputPass();
     this.composer.addPass(this.outputPass);
   }

@@ -1,5 +1,5 @@
 /* ============================================================
-   EduRoute landing — fixed specificity vs Tailwind
+   EduRoute landing — phase-audit CSS
    ============================================================ */
 
 :root {
@@ -15,12 +15,11 @@
   --dur: 0.45s;
 }
 
-/* Hide global theme toggle while on cinematic landing */
-body.er-on-landing [class*='ThemeToggle'],
-body.er-on-landing [class*='theme-toggle'],
-body.er-on-landing button[aria-label*='theme' i],
-body.er-on-landing button[aria-label*='Theme' i] {
+/* Hide global theme toggle on landing (class is theme-toggle) */
+body.er-on-landing .theme-toggle {
   display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 .er-landing {
@@ -57,7 +56,6 @@ body.er-on-landing button[aria-label*='Theme' i] {
   display: block;
 }
 
-/* Cursor */
 .er-has-cursor,
 .er-has-cursor * {
   cursor: none !important;
@@ -105,7 +103,6 @@ body.er-on-landing button[aria-label*='Theme' i] {
   border: 1px solid #fff;
 }
 
-/* Loader */
 .er-loader {
   position: fixed;
   inset: 0;
@@ -142,7 +139,6 @@ body.er-on-landing button[aria-label*='Theme' i] {
   transform-origin: left center;
 }
 
-/* Nav */
 .er-landing .er-nav {
   position: fixed;
   top: 0;
@@ -218,7 +214,6 @@ body.er-on-landing button[aria-label*='Theme' i] {
   background: rgba(255, 255, 255, 0.06) !important;
 }
 
-/* Main */
 .er-landing .er-main {
   position: relative;
   z-index: 2;
@@ -252,7 +247,6 @@ body.er-on-landing button[aria-label*='Theme' i] {
   }
 }
 
-/* Type */
 .er-landing .er-label {
   font-size: 0.62rem;
   letter-spacing: 0.34em;
@@ -282,7 +276,7 @@ body.er-on-landing button[aria-label*='Theme' i] {
   margin: 1.85rem 0 0;
 }
 
-/* Reveals — hidden until is-ready, then forced visible */
+/* Text reveals */
 .er-landing .er-reveal {
   display: block;
   overflow: hidden;
@@ -294,12 +288,15 @@ body.er-on-landing button[aria-label*='Theme' i] {
   opacity: 0;
 }
 
+/* Hero forced visible after loader */
 .er-landing.is-ready #hero .er-reveal > span {
   transform: translateY(0) !important;
   opacity: 1 !important;
 }
 
-/* Buttons — beat Tailwind rounded styles */
+/* Section titles become visible when scrolled into view via GSAP;
+   fallback: once is-ready, other sections can still animate via GSAP */
+
 .er-landing .er-btn {
   display: inline-flex !important;
   align-items: center;
@@ -350,7 +347,6 @@ body.er-on-landing button[aria-label*='Theme' i] {
   color: #fff !important;
 }
 
-/* Hero */
 .er-landing .er-hero {
   justify-content: flex-end;
   padding-bottom: 5.5rem;
@@ -378,7 +374,6 @@ body.er-on-landing button[aria-label*='Theme' i] {
   color: rgba(255, 255, 255, 0.28);
 }
 
-/* Sections */
 .er-landing .er-manifesto {
   max-width: 58rem;
 }

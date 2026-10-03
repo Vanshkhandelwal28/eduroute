@@ -9,7 +9,7 @@ import MorphSystem from './MorphSystem.js';
 
 /**
  * Particles — InstancedMesh + GPU sim + morph.
- * Tuned triangle size + additive alpha to avoid white-out.
+ * Phase audit: no per-frame Vector3 allocations.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -24,6 +24,7 @@ export default class Particles {
 
     this._rotTarget = { x: 0, y: 0 };
     this._rotCurrent = { x: 0, y: 0 };
+    this._zeroMouse = new THREE.Vector3(0, 0, 0);
 
     this._timelineRotY = 0;
     this._timelineRotX = 0;
@@ -49,7 +50,6 @@ export default class Particles {
     this.morph.setPair('brain', 'bulb');
     this.morph.setProgress(0);
 
-    // Smaller triangles — less fill, more structure readable
     const tri = new THREE.BufferGeometry();
     const s = 0.0065;
     const vertices = new Float32Array([
@@ -66,7 +66,6 @@ export default class Particles {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      // Narrower scale range — fewer oversized bright fragments
       aScale[i] = 0.4 + Math.random() * 1.4;
       aBrightness[i] = 0.25 + Math.random() * 0.55;
       aIndex[i] = i;
@@ -150,7 +149,7 @@ export default class Particles {
         mouse.radius
       );
     } else if (this.simulation) {
-      this.simulation.setMouse(new THREE.Vector3(0, 0, 0), 0);
+      this.simulation.setMouse(this._zeroMouse, 0);
     }
 
     if (this.simulation && this.simulation.ready) {
