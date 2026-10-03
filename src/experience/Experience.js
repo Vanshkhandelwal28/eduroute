@@ -8,6 +8,7 @@ import Particles from './particles/Particles.js';
  * Experience — top-level orchestrator for the WebGL layer.
  * Phase 2: canvas, scene, camera, renderer + animation loop.
  * Phase 3: basic particle object (brain-like InstancedMesh).
+ * Phase 4: GPU particle simulation (position/velocity textures).
  */
 export default class Experience {
   constructor({ canvas }) {
@@ -24,14 +25,18 @@ export default class Experience {
 
     this.clock = new THREE.Clock();
     this.isVisible = true;
+    this._prevTime = 0;
 
     // Core systems
     this.scene = new Scene();
     this.camera = new Camera({ sizes: this.sizes });
     this.renderer = new Renderer({ canvas: this.canvas, sizes: this.sizes });
 
-    // Phase 3 — particle system
-    this.particles = new Particles({ scene: this.scene });
+    // Phase 3 + 4 — particles with GPU simulation
+    this.particles = new Particles({
+      scene: this.scene,
+      renderer: this.renderer.instance,
+    });
 
     // Bind methods
     this.onResize = this.onResize.bind(this);
@@ -58,6 +63,7 @@ export default class Experience {
     this.isVisible = document.visibilityState === 'visible';
     if (this.isVisible) {
       this.clock.start();
+      this._prevTime = this.clock.getElapsedTime();
       this.tick();
     }
   }
@@ -66,12 +72,14 @@ export default class Experience {
     if (!this.isVisible) return;
 
     const elapsed = this.clock.getElapsedTime();
+    const delta = Math.min(elapsed - this._prevTime, 0.05);
+    this._prevTime = elapsed;
 
     this.camera.update();
     this.scene.update();
 
     if (this.particles) {
-      this.particles.update(elapsed);
+      this.particles.update(elapsed, delta);
     }
 
     this.renderer.update(this.scene.instance, this.camera.instance);

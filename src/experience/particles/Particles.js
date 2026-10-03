@@ -4,27 +4,41 @@ import {
   particleVertexShader,
   particleFragmentShader,
 } from '../shaders/particleShaders.js';
+import GPUCompute from './GPUCompute.js';
 
 /**
- * Phase 3 — Basic particle object.
- * InstancedMesh of tiny triangles forming an organic brain-like structure.
- * Custom GLSL shaders, per-particle seed / scale / brightness,
- * subtle breathing & floating motion.
+ * Particles — InstancedMesh rendering + GPU simulation (Phase 3 + 4).
+ * Rendering stays separate from physics.
  */
 export default class Particles {
-  constructor({ scene }) {
+  /**
+   * @param {{ scene: object, renderer: THREE.WebGLRenderer }} opts
+   */
+  constructor({ scene, renderer }) {
     this.scene = scene;
+    this.renderer = renderer;
     this.count = getParticleCount();
     this.mesh = null;
     this.material = null;
     this.geometry = null;
-    this.dummy = new THREE.Object3D();
+    this.simulation = null;
+    this.targets = null;
 
     this._create();
   }
 
   _create() {
-    // --- Tiny triangle geometry (geometric fragment) ---
+    // Brain target positions
+    this.targets = createBrainShape(this.count);
+
+    // --- GPU simulation ---
+    this.simulation = new GPUCompute(
+      this.renderer,
+      this.targets,
+      this.count
+    );
+
+    // --- Tiny triangle geometry ---
     const tri = new THREE.BufferGeometry();
     const s = 0.011;
     const vertices = new Float32Array([
@@ -38,13 +52,13 @@ export default class Particles {
     const aScale = new Float32Array(this.count);
     const aSeed = new Float32Array(this.count);
     const aBrightness = new Float32Array(this.count);
+    const aIndex = new Float32Array(this.count);
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      // Size variation: 0.35x – 2.4x
       aScale[i] = 0.35 + Math.random() * 2.05;
-      // Brightness variation
       aBrightness[i] = 0.3 + Math.random() * 0.7;
+      aIndex[i] = i;
     }
 
     tri.setAttribute('aScale', new THREE.InstancedBufferAttribute(aScale, 1));
@@ -53,17 +67,20 @@ export default class Particles {
       'aBrightness',
       new THREE.InstancedBufferAttribute(aBrightness, 1)
     );
+    tri.setAttribute('aIndex', new THREE.InstancedBufferAttribute(aIndex, 1));
 
     this.geometry = tri;
 
-    // --- Shader material ---
+    // --- Shader material (samples GPU position texture) ---
     this.material = new THREE.ShaderMaterial({
       vertexShader: particleVertexShader,
       fragmentShader: particleFragmentShader,
       uniforms: {
         uTime: { value: 0 },
-        uBreathAmount: { value: 0.032 },
+        uBreathAmount: { value: 0.028 },
         uBreathSpeed: { value: 0.5 },
+        uPositionTexture: { value: null },
+        uTexSize: { value: this.simulation.textureSize },
       },
       transparent: true,
       depthWrite: false,
@@ -71,48 +88,72 @@ export default class Particles {
       side: THREE.DoubleSide,
     });
 
-    // --- Instanced mesh ---
+    // --- Instanced mesh (identity matrices — position comes from GPU texture) ---
     this.mesh = new THREE.InstancedMesh(
       this.geometry,
       this.material,
       this.count
     );
     this.mesh.frustumCulled = false;
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-    // Position instances on the brain shape
-    const targets = createBrainShape(this.count);
+    const dummy = new THREE.Object3D();
     for (let i = 0; i < this.count; i++) {
-      const i3 = i * 3;
-      this.dummy.position.set(
-        targets[i3],
-        targets[i3 + 1],
-        targets[i3 + 2]
-      );
-      this.dummy.rotation.set(0, 0, 0);
-      this.dummy.scale.set(1, 1, 1);
-      this.dummy.updateMatrix();
-      this.mesh.setMatrixAt(i, this.dummy.matrix);
+      dummy.position.set(0, 0, 0);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      this.mesh.setMatrixAt(i, dummy.matrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
 
-    // Store targets for later morph phases
-    this.targets = targets;
-
     this.scene.add(this.mesh);
+
+    // Bind initial position texture
+    if (this.simulation.ready) {
+      this.material.uniforms.uPositionTexture.value =
+        this.simulation.getPositionTexture();
+    }
   }
 
-  update(elapsed) {
+  /**
+   * Exposed controls for later phases.
+   */
+  get controls() {
+    if (!this.simulation) return null;
+    return {
+      simulation: this.simulation,
+      targets: this.targets,
+      springStrength: this.simulation.uniforms.springStrength,
+      damping: this.simulation.uniforms.damping,
+      noiseStrength: this.simulation.uniforms.noiseStrength,
+      time: this.simulation.uniforms.time,
+      setTargets: (t) => this.simulation.setTargets(t),
+    };
+  }
+
+  update(elapsed, delta = 0.016) {
     if (!this.material) return;
+
+    // GPU simulation step
+    if (this.simulation && this.simulation.ready) {
+      this.simulation.compute(elapsed, delta);
+      this.material.uniforms.uPositionTexture.value =
+        this.simulation.getPositionTexture();
+    }
+
     this.material.uniforms.uTime.value = elapsed;
 
-    // Very slow overall rotation so the structure feels alive
+    // Slow overall rotation of the whole field
     if (this.mesh) {
       this.mesh.rotation.y = elapsed * 0.035;
     }
   }
 
   dispose() {
+    if (this.simulation) {
+      this.simulation.dispose();
+      this.simulation = null;
+    }
     if (this.mesh) {
       if (this.mesh.parent) {
         this.mesh.parent.remove(this.mesh);
