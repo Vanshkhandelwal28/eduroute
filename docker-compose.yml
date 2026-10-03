@@ -5,14 +5,11 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - MYSQL_HOST=mysql
-      - MYSQL_PORT=3306
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=eduroute_dev_password
-      - MYSQL_DATABASE=eduroute
+      - DATABASE_URL=postgresql://postgres:eduroute_dev_password@postgres:5432/eduroute?sslmode=disable
       - JWT_SECRET=supersecret
+      - PORT=5000
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
 
   web:
@@ -23,20 +20,21 @@ services:
     environment:
       - VITE_API_URL=http://localhost:5000/api
 
-  mysql:
-    image: mysql:8.4
+  postgres:
+    image: postgres:16-alpine
     environment:
-      MYSQL_ROOT_PASSWORD: eduroute_dev_password
-      MYSQL_DATABASE: eduroute
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: eduroute_dev_password
+      POSTGRES_DB: eduroute
     ports:
-      - "3306:3306"
+      - "5432:5432"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-peduroute_dev_password"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 20
     volumes:
-      - mysql-data:/var/lib/mysql
+      - postgres-data:/var/lib/postgresql/data
 
 volumes:
-  mysql-data:
+  postgres-data:
