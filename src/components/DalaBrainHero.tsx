@@ -1,20 +1,13 @@
 /**
- * Full port of kekkorider/threejs-dala (Dala.ai WebGL module)
- * https://github.com/kekkorider/threejs-dala
- *
- * Vendored sources (shaders, original app, LICENSE):
- *   src/vendor/threejs-dala/
- *
- * brain.glb vertices → InstancedMesh of BoxGeometry(0.004)
- * Vertex shader: distance(uPointer) → scale + rotate (exact GLSL logic)
- * Raycast on brain · camera parallax · Dala palette · wireframe cubes
+ * Full port of kekkorider/threejs-dala
+ * Interactive: raycast brain + continuous pointer field
+ * Background: radial #692a84 → #3c184c (upstream index.scss)
  */
 import { useRef, useMemo, useEffect, useState, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
-/** Upstream static/brain.glb (same file as threejs-dala) */
 const BRAIN_URL =
   'https://cdn.jsdelivr.net/gh/kekkorider/threejs-dala@main/static/brain.glb';
 
@@ -25,7 +18,6 @@ const COLORS = [
   new THREE.Color(0xfeae51),
 ];
 
-/** Exact threejs-dala vertex shader (rotate inlined from shaders/modules/rotate.glsl) */
 const vertexShader = /* glsl */ `
 uniform vec3 uPointer;
 uniform float uHover;
@@ -49,7 +41,7 @@ void main() {
   mvPosition = instanceMatrix * mvPosition;
 
   float d = distance(uPointer, mvPosition.xyz);
-  float c = smoothstep(0.45, 0.1, d);
+  float c = smoothstep(0.55, 0.08, d);
 
   float scale = aSize + c * 8.0 * uHover;
   vec3 pos = position;
@@ -72,10 +64,12 @@ void main() {
 
 function BrainInstances({ ready }: { ready: boolean }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
-  const brainMeshRef = useRef<THREE.Mesh | null>(null);
-  const { camera, size, pointer } = useThree();
+  const hitMeshRef = useRef<THREE.Mesh>(null);
+  const { camera, size, pointer, gl } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const mouse = useMemo(() => new THREE.Vector2(), []);
+  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), []);
+  const planeHit = useMemo(() => new THREE.Vector3(), []);
   const targetPoint = useRef(new THREE.Vector3());
   const smoothPoint = useRef(new THREE.Vector3());
   const hoverRef = useRef(0);
@@ -92,24 +86,19 @@ function BrainInstances({ ready }: { ready: boolean }) {
 
   const gltf = useGLTF(BRAIN_URL);
 
-  useEffect(() => {
-    let found: THREE.Mesh | null = null;
-    gltf.scene.traverse((obj) => {
-      if (!found && (obj as THREE.Mesh).isMesh) found = obj as THREE.Mesh;
-    });
-    if (found) {
-      found.updateMatrixWorld(true);
-      brainMeshRef.current = found;
-    }
-  }, [gltf]);
-
-  const { count, boxGeo } = useMemo(() => {
+  const brainGeo = useMemo(() => {
     let mesh: THREE.Mesh | null = null;
     gltf.scene.traverse((obj) => {
       if (!mesh && (obj as THREE.Mesh).isMesh) mesh = obj as THREE.Mesh;
     });
-    const posAttr = mesh?.geometry?.attributes?.position;
-    const count = posAttr ? posAttr.count : 0;
+    return mesh?.geometry ?? null;
+  }, [gltf]);
+
+  const { count, boxGeo } = useMemo(() => {
+    if (!brainGeo) return { count: 0, boxGeo: new THREE.BoxGeometry(0.004, 0.004, 0.004) };
+
+    const posAttr = brainGeo.attributes.position;
+    const count = posAttr.count;
 
     const boxGeo = new THREE.BoxGeometry(0.004, 0.004, 0.004);
     const aRotation = new Float32Array(count);
@@ -130,7 +119,7 @@ function BrainInstances({ ready }: { ready: boolean }) {
     boxGeo.setAttribute('aColor', new THREE.InstancedBufferAttribute(aColor, 3));
 
     return { count, boxGeo };
-  }, [gltf]);
+  }, [brainGeo]);
 
   const material = useMemo(
     () =>
@@ -143,12 +132,12 @@ function BrainInstances({ ready }: { ready: boolean }) {
     [uniforms],
   );
 
+  // Place cubes on brain vertices
   useEffect(() => {
     const mesh = meshRef.current;
-    const brain = brainMeshRef.current;
-    if (!mesh || !brain || count === 0) return;
+    if (!mesh || !brainGeo || count === 0) return;
 
-    const positions = brain.geometry.attributes.position;
+    const positions = brainGeo.attributes.position;
     const dummy = new THREE.Object3D();
 
     for (let i = 0; i < count; i++) {
@@ -157,12 +146,12 @@ function BrainInstances({ ready }: { ready: boolean }) {
       mesh.setMatrixAt(i, dummy.matrix);
     }
     mesh.instanceMatrix.needsUpdate = true;
-  }, [count, gltf]);
+  }, [count, brainGeo]);
 
   useFrame(() => {
-    const mesh = meshRef.current;
-    if (!mesh || count === 0) return;
+    if (!meshRef.current || count === 0) return;
 
+    // Camera parallax (threejs-dala)
     targetCam.current.x = pointer.x * 0.15;
     targetCam.current.y = pointer.y * 0.1;
     camera.position.x += (targetCam.current.x - camera.position.x) * 0.1;
@@ -173,33 +162,61 @@ function BrainInstances({ ready }: { ready: boolean }) {
     mouse.set(pointer.x, pointer.y);
     raycaster.setFromCamera(mouse, camera);
 
-    const brain = brainMeshRef.current;
-    if (brain) {
-      brain.updateMatrixWorld(true);
-      const hits = raycaster.intersectObject(brain, false);
-      if (hits.length > 0 && hits[0] && ready) {
-        targetHover.current = 1;
+    // 1) Raycast invisible brain mesh (in scene)
+    let hitBrain = false;
+    if (hitMeshRef.current && ready) {
+      const hits = raycaster.intersectObject(hitMeshRef.current, false);
+      if (hits.length > 0 && hits[0]) {
+        hitBrain = true;
         targetPoint.current.copy(hits[0].point);
-      } else {
-        targetHover.current = 0;
+        targetHover.current = 1;
       }
     }
 
-    smoothPoint.current.lerp(targetPoint.current, 0.18);
-    hoverRef.current += (targetHover.current - hoverRef.current) * 0.15;
+    // 2) Fallback: project pointer onto z≈0 plane so particles always react to mouse
+    if (!hitBrain) {
+      raycaster.ray.intersectPlane(plane, planeHit);
+      if (planeHit) {
+        targetPoint.current.lerp(planeHit, 1);
+        // Soft hover when pointer is near the brain volume
+        const distFromCenter = Math.sqrt(
+          planeHit.x * planeHit.x + planeHit.y * planeHit.y,
+        );
+        targetHover.current = ready
+          ? THREE.MathUtils.clamp(1.2 - distFromCenter * 1.4, 0.15, 0.85)
+          : 0;
+      } else {
+        targetHover.current = ready ? 0.2 : 0;
+      }
+    }
+
+    smoothPoint.current.lerp(targetPoint.current, 0.2);
+    hoverRef.current += (targetHover.current - hoverRef.current) * 0.14;
 
     uniforms.uPointer.value.copy(smoothPoint.current);
     uniforms.uHover.value = hoverRef.current;
   });
 
-  if (count === 0) return null;
+  // Keep canvas receiving events
+  useEffect(() => {
+    gl.domElement.style.touchAction = 'none';
+  }, [gl]);
+
+  if (count === 0 || !brainGeo) return null;
 
   return (
-    <instancedMesh
-      ref={meshRef}
-      args={[boxGeo, material, count]}
-      frustumCulled={false}
-    />
+    <>
+      {/* Invisible hit target — must be in the scene for reliable raycast */}
+      <mesh ref={hitMeshRef} geometry={brainGeo} visible={false}>
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      <instancedMesh
+        ref={meshRef}
+        args={[boxGeo, material, count]}
+        frustumCulled={false}
+      />
+    </>
   );
 }
 
@@ -212,6 +229,10 @@ function Scene({ ready }: { ready: boolean }) {
 }
 
 useGLTF.preload(BRAIN_URL);
+
+/** Dala replica background (index.scss) */
+const DALA_BG =
+  'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 55%, #1a0a22 100%)';
 
 export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
   const [webglOk, setWebglOk] = useState(true);
@@ -227,50 +248,35 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
   }, []);
 
   if (!webglOk) {
-    return (
-      <div
-        className="absolute inset-0 z-0"
-        style={{
-          background:
-            'radial-gradient(circle at 50% 40%, #692a84 0%, #3c184c 55%, #0a0a0a 100%)',
-        }}
-      />
-    );
+    return <div className="absolute inset-0 z-0" style={{ background: DALA_BG }} />;
   }
 
   return (
-    <div className="absolute inset-0 z-0">
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 50%, #0a0a0a 100%)',
-        }}
-      />
+    <div className="absolute inset-0 z-0" style={{ background: DALA_BG }}>
       <Canvas
         camera={{ position: [0, 0, 1.2], fov: 75, near: 0.1, far: 100 }}
-        dpr={[
-          1,
-          Math.min(1.5, typeof window !== 'undefined' ? window.devicePixelRatio : 1),
-        ]}
+        dpr={[1, Math.min(1.5, typeof window !== 'undefined' ? window.devicePixelRatio : 1)]}
         gl={{
-          antialias:
-            typeof window !== 'undefined' ? window.devicePixelRatio === 1 : true,
+          antialias: typeof window !== 'undefined' ? window.devicePixelRatio === 1 : true,
           alpha: true,
           powerPreference: 'high-performance',
         }}
-        style={{ background: 'transparent' }}
+        style={{ background: 'transparent', width: '100%', height: '100%' }}
         onCreated={({ gl }) => {
           gl.setClearColor(0x000000, 0);
         }}
+        // Events on full canvas area
+        eventSource={typeof document !== 'undefined' ? document.documentElement : undefined}
+        eventPrefix="client"
       >
         <Scene ready={ready} />
       </Canvas>
+      {/* Soft vignette only — keep purple visible */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse 70% 60% at 50% 42%, transparent 0%, transparent 35%, rgba(0,0,0,0.35) 65%, rgba(0,0,0,0.85) 100%)',
+            'radial-gradient(ellipse 65% 55% at 50% 42%, transparent 0%, transparent 40%, rgba(10,5,15,0.25) 70%, rgba(10,5,15,0.55) 100%)',
         }}
       />
     </div>
