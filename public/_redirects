@@ -1,8 +1,7 @@
-# Force API rewrites (shadow SPA)
 /api/buddy/sync  /.netlify/functions/buddy-sync  200!
+/api/user-data  /.netlify/functions/user-data  200!
+/api/ai-courses  /.netlify/functions/ai-courses  200!
 /api/buddy-progress  /.netlify/functions/buddy-progress  200!
 /api/buddy-chat  /.netlify/functions/buddy-chat  200!
-/api/buddy/conversations  /.netlify/functions/go-api  200!
-/api/ai-courses  /.netlify/functions/go-api  200!
 /api/*  /.netlify/functions/:splat  200!
 /*    /index.html   200

@@ -49,6 +49,24 @@
   force = true
 
 [[redirects]]
+  from = "/api/user-data"
+  to = "/.netlify/functions/user-data"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ai-courses"
+  to = "/.netlify/functions/ai-courses"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ai-courses/*"
+  to = "/.netlify/functions/ai-courses"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/buddy-progress"
   to = "/.netlify/functions/buddy-progress"
   status = 200
@@ -57,12 +75,6 @@
 [[redirects]]
   from = "/api/buddy-chat"
   to = "/.netlify/functions/buddy-chat"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/ai-courses"
-  to = "/.netlify/functions/go-api"
   status = 200
   force = true
 
