@@ -164,7 +164,7 @@ uniform float uDamping;
 uniform vec3 uBoundsMin;
 uniform vec3 uBoundsMax;
 uniform float uRestitution;
-uniform float uWriteMode; // 0.0 = vel, 1.0 = pos
+uniform float uWriteMode;
 
 void main() {
   vec3 p = texture(uPos, vUv).xyz;
@@ -173,7 +173,6 @@ void main() {
   float rho = max(f.w, 0.05);
   vec3 a = f.xyz / rho;
 
-  // Clamp acceleration to avoid explosions
   float aLen = length(a);
   if (aLen > 80.0) a *= 80.0 / aLen;
 
@@ -198,7 +197,7 @@ void main() {
 }
 `;
 
-/** ShaderMaterial (non-raw) — Three injects modelViewMatrix / projectionMatrix */
+/** Dim, discrete particles — Normal blending friendly */
 export const particleVert = /* glsl */ `
 precision highp float;
 precision highp sampler2D;
@@ -209,6 +208,7 @@ uniform float uParticleCount;
 uniform float uPointSize;
 
 varying float vAlpha;
+varying float vDepth;
 
 void main() {
   float id = float(gl_VertexID);
@@ -216,6 +216,7 @@ void main() {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     gl_PointSize = 0.0;
     vAlpha = 0.0;
+    vDepth = 0.0;
     return;
   }
   float ts = uTexSize;
@@ -227,9 +228,11 @@ void main() {
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
   gl_Position = projectionMatrix * mvPosition;
 
-  float dist = max(0.4, -mvPosition.z);
-  gl_PointSize = clamp(uPointSize * (180.0 / dist), 2.0, 64.0);
+  float dist = max(0.5, -mvPosition.z);
+  // Smaller points — was up to 64px and blown out
+  gl_PointSize = clamp(uPointSize * (90.0 / dist), 1.5, 18.0);
   vAlpha = 1.0;
+  vDepth = dist;
 }
 `;
 
@@ -237,6 +240,7 @@ export const particleFrag = /* glsl */ `
 precision highp float;
 
 varying float vAlpha;
+varying float vDepth;
 uniform vec3 uColor;
 uniform vec3 uAccent;
 
@@ -244,9 +248,13 @@ void main() {
   vec2 c = gl_PointCoord - vec2(0.5);
   float d = length(c);
   if (d > 0.5) discard;
-  float soft = 1.0 - smoothstep(0.15, 0.5, d);
-  float core = 1.0 - smoothstep(0.0, 0.2, d);
-  vec3 col = mix(uColor, uAccent, core * 0.55);
-  gl_FragColor = vec4(col, soft * soft * vAlpha * 0.9);
+
+  // Soft disk, low alpha so overlaps don't wash to white
+  float edge = 1.0 - smoothstep(0.2, 0.5, d);
+  float core = 1.0 - smoothstep(0.0, 0.22, d);
+  vec3 col = mix(uColor, uAccent, core * 0.35);
+  // Depth fade slightly + keep alpha modest
+  float alpha = edge * edge * vAlpha * 0.45;
+  gl_FragColor = vec4(col, alpha);
 }
 `;
