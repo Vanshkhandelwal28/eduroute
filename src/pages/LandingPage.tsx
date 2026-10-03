@@ -4,7 +4,7 @@ import { AuthModal } from '../components/AuthModal';
 import { DalaBrainHero } from '../components/DalaBrainHero';
 
 /* ================================================================
-   EDUROUTE landing — threejs-dala brain + Dala editorial UI
+   EDUROUTE landing — Dala-matched brain + editorial UI
    ================================================================ */
 
 const NAV = [
@@ -42,6 +42,10 @@ const MANIFESTO = [
   'Platforms teach or list jobs — almost never both, and almost never with a personal path.',
   'They fail to understand what you need from the noise created every day.',
 ];
+
+/** Upstream Dala hero bg */
+const DALA_PURPLE =
+  'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%)';
 
 function useReducedMotion() {
   const [r, setR] = useState(false);
@@ -132,12 +136,12 @@ export const LandingPage = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0a0610] text-white antialiased selection:bg-[#963CBD]/40">
+    <div className="min-h-screen bg-[#12081a] text-white antialiased selection:bg-[#963CBD]/40">
       <AuthModal isOpen={auth} onClose={() => setAuth(false)} />
 
       <header
         className={`fixed inset-x-0 top-0 z-50 flex items-center justify-between px-5 py-4 sm:px-10 sm:py-5 ${
-          scrolled ? 'bg-[#0a0610]/80 backdrop-blur-md' : ''
+          scrolled ? 'bg-[#12081a]/80 backdrop-blur-md' : ''
         }`}
       >
         <a href="#home" className="text-[12px] font-medium tracking-[0.22em] uppercase">
@@ -182,19 +186,15 @@ export const LandingPage = () => {
         </button>
       </header>
 
-      {/* Hero: purple Dala bg + interactive brain. Text is pointer-events-none so canvas gets mouse. */}
       <section
         id="home"
         className="relative flex h-[100svh] min-h-[620px] flex-col items-center justify-center overflow-hidden"
-        style={{
-          background:
-            'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 50%, #0a0610 100%)',
-        }}
+        style={{ background: DALA_PURPLE }}
       >
         <DalaBrainHero ready={phase === 'ready'} />
 
         {phase === 'loading' && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0610]">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black">
             <div className="mb-12 flex gap-3">
               {[0, 1, 2, 3].map((i) => (
                 <span
