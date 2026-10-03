@@ -2,6 +2,7 @@ import { pushUserData, pullUserData } from './userDataStore';
 
 /**
  * Student CV builder — localStorage + Neon.
+ * Always normalize so remote partial payloads never leave arrays undefined.
  */
 
 export type CvTemplateId = 'classic' | 'modern' | 'minimal' | 'professional';
@@ -16,6 +17,9 @@ export type CvEducation = {
   start: string;
   end: string;
   details: string;
+  /** UI aliases used by CvBuilder */
+  year?: string;
+  location?: string;
 };
 
 export type CvExperience = {
@@ -25,6 +29,11 @@ export type CvExperience = {
   start: string;
   end: string;
   details: string;
+  /** UI aliases used by CvBuilder */
+  role?: string;
+  duration?: string;
+  description?: string;
+  location?: string;
 };
 
 export type CvProject = {
@@ -32,6 +41,9 @@ export type CvProject = {
   name: string;
   link: string;
   details: string;
+  /** UI aliases */
+  tech?: string;
+  description?: string;
 };
 
 export type CvData = {
@@ -48,6 +60,11 @@ export type CvData = {
   projects: CvProject[];
   accent: CvAccentId;
   templateId: CvTemplateId;
+  /** UI aliases */
+  title?: string;
+  city?: string;
+  linkedin?: string;
+  template?: CvTemplateId;
   updatedAt?: string;
 };
 
@@ -88,23 +105,100 @@ export function emptyProject(): CvProject {
   return { id: rid(), name: '', link: '', details: '' };
 }
 
-export function defaultCvData(partial?: Partial<CvData>): CvData {
+function asStringArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map((x) => String(x ?? '').trim()).filter(Boolean);
+  if (typeof v === 'string') {
+    return v.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeEducation(raw: any): CvEducation {
   return {
-    fullName: '',
-    email: '',
-    phone: '',
-    location: '',
-    summary: '',
-    skills: [],
-    certificates: [],
-    languages: [],
-    education: [emptyEducation()],
-    experience: [emptyExperience()],
-    projects: [emptyProject()],
-    accent: 'indigo',
-    templateId: 'classic',
-    ...partial,
+    id: String(raw?.id || rid()),
+    school: String(raw?.school || ''),
+    degree: String(raw?.degree || ''),
+    field: String(raw?.field || ''),
+    start: String(raw?.start || ''),
+    end: String(raw?.end || raw?.year || ''),
+    details: String(raw?.details || ''),
+    year: String(raw?.year || raw?.end || ''),
+    location: String(raw?.location || ''),
   };
+}
+
+function normalizeExperience(raw: any): CvExperience {
+  const title = String(raw?.title || raw?.role || '');
+  const details = String(raw?.details || raw?.description || '');
+  const duration = String(raw?.duration || [raw?.start, raw?.end].filter(Boolean).join(' – ') || '');
+  return {
+    id: String(raw?.id || rid()),
+    company: String(raw?.company || ''),
+    title,
+    start: String(raw?.start || ''),
+    end: String(raw?.end || ''),
+    details,
+    role: String(raw?.role || title),
+    duration,
+    description: String(raw?.description || details),
+    location: String(raw?.location || ''),
+  };
+}
+
+function normalizeProject(raw: any): CvProject {
+  const details = String(raw?.details || raw?.description || '');
+  return {
+    id: String(raw?.id || rid()),
+    name: String(raw?.name || ''),
+    link: String(raw?.link || ''),
+    details,
+    tech: String(raw?.tech || ''),
+    description: String(raw?.description || details),
+  };
+}
+
+/** Guarantee every array/field CvBuilder expects so .map never crashes */
+export function normalizeCvData(partial?: Partial<CvData> | null): CvData {
+  const p = (partial && typeof partial === 'object' ? partial : {}) as any;
+  const education = Array.isArray(p.education) && p.education.length
+    ? p.education.map(normalizeEducation)
+    : [emptyEducation()];
+  const experience = Array.isArray(p.experience) && p.experience.length
+    ? p.experience.map(normalizeExperience)
+    : [emptyExperience()];
+  const projects = Array.isArray(p.projects) && p.projects.length
+    ? p.projects.map(normalizeProject)
+    : [emptyProject()];
+
+  const templateId = (p.templateId || p.template || 'classic') as CvTemplateId;
+  const validTemplate = CV_TEMPLATES.some((t) => t.id === templateId) ? templateId : 'classic';
+  const accent = (p.accent || 'indigo') as CvAccentId;
+  const validAccent = ACCENT_COLORS[accent] ? accent : 'indigo';
+
+  return {
+    fullName: String(p.fullName || ''),
+    email: String(p.email || ''),
+    phone: String(p.phone || ''),
+    location: String(p.location || p.city || ''),
+    summary: String(p.summary || ''),
+    skills: asStringArray(p.skills),
+    certificates: asStringArray(p.certificates),
+    languages: asStringArray(p.languages),
+    education,
+    experience,
+    projects,
+    accent: validAccent,
+    templateId: validTemplate,
+    title: String(p.title || ''),
+    city: String(p.city || p.location || ''),
+    linkedin: String(p.linkedin || ''),
+    template: validTemplate,
+    updatedAt: p.updatedAt ? String(p.updatedAt) : undefined,
+  };
+}
+
+export function defaultCvData(partial?: Partial<CvData>): CvData {
+  return normalizeCvData(partial);
 }
 
 export function readCvData(): CvData {
@@ -116,7 +210,7 @@ export function readCvData(): CvData {
       window.localStorage.getItem('eduroute:cv-builder-v1');
     if (!raw) return defaultCvData();
     const parsed = JSON.parse(raw);
-    return defaultCvData(parsed);
+    return normalizeCvData(parsed);
   } catch {
     return defaultCvData();
   }
@@ -125,7 +219,7 @@ export function readCvData(): CvData {
 export function saveCvData(data: CvData): void {
   if (typeof window === 'undefined') return;
   try {
-    const next = { ...data, updatedAt: new Date().toISOString() };
+    const next = normalizeCvData({ ...data, updatedAt: new Date().toISOString() });
     window.localStorage.setItem(KEY, JSON.stringify(next));
     void pushUserData('cv', next);
   } catch {
@@ -172,7 +266,12 @@ export const SUGGESTED_CERTIFICATES = [
 export const SUGGESTED_LANGUAGES = ['English', 'French', 'Hindi', 'Spanish', 'Mandarin'];
 
 export async function syncCvFromServer(): Promise<void> {
-  const remote = await pullUserData<CvData>('cv');
-  if (!remote || typeof remote !== 'object') return;
-  saveCvData({ ...readCvData(), ...remote });
+  try {
+    const remote = await pullUserData<CvData>('cv');
+    if (!remote || typeof remote !== 'object') return;
+    // Merge + normalize so partial Neon payloads cannot wipe arrays
+    saveCvData(normalizeCvData({ ...readCvData(), ...remote }));
+  } catch {
+    /* offline ok */
+  }
 }
