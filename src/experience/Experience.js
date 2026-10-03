@@ -15,7 +15,7 @@ import {
 
 /**
  * Experience — Lenis + GPU particles + timeline.
- * Exposes ready promise for progress loader.
+ * Hero opens on brain, centered (Dala-matched).
  */
 export default class Experience {
   constructor({ canvas, onProgress } = {}) {
@@ -65,8 +65,9 @@ export default class Experience {
       renderer: this.renderer.instance,
     });
 
+    // Center the brain on hero (was offset to the right)
     if (this.particles.mesh) {
-      this.particles.mesh.position.set(1.15, 0.05, 0);
+      this.particles.mesh.position.set(0.35, 0.05, 0);
     }
     this.onProgress(0.55);
 

@@ -3,8 +3,7 @@ import { getCappedDPR } from './utils/device.js';
 
 /**
  * Renderer for EffectComposer pipeline.
- * IMPORTANT: toneMapping must be NoToneMapping when OutputPass is used,
- * otherwise tone mapping is applied twice and the image washes out / clips.
+ * Clear color matches Dala purple so the canvas never flashes black.
  */
 export default class Renderer {
   constructor({ canvas, sizes }) {
@@ -20,7 +19,8 @@ export default class Renderer {
       depth: true,
     });
 
-    this.instance.setClearColor(0x000000, 1);
+    // Dala deep purple — same as Scene background
+    this.instance.setClearColor(0x3c184c, 1);
     this.instance.setPixelRatio(getCappedDPR());
     this.instance.setSize(this.sizes.width, this.sizes.height);
 

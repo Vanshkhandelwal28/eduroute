@@ -1,6 +1,6 @@
 /**
- * Particle shaders — locked mid balance.
- * Visible structure, soft glow, text stays legible.
+ * Particle shaders — Dala-matched multi-color palette.
+ * Purple / magenta / coral / amber — brighter and more saturated.
  */
 
 export const particleVertexShader = /* glsl */ `
@@ -58,15 +58,23 @@ varying float vBrightness;
 varying float vSeed;
 
 void main() {
-  vec3 base = vec3(0.78, 0.76, 0.88);
-  vec3 accent = vec3(0.48, 0.34, 0.90);
-  float tint = fract(vSeed * 7.13);
-  vec3 col = mix(base, accent, tint * 0.18);
+  // Dala palette (exact-ish): purple, coral, magenta, amber
+  vec3 c0 = vec3(0.588, 0.235, 0.741); // #963cbd
+  vec3 c1 = vec3(1.000, 0.435, 0.380); // #ff6f61
+  vec3 c2 = vec3(0.773, 0.161, 0.608); // #c5299b
+  vec3 c3 = vec3(0.996, 0.682, 0.318); // #feae51
 
-  // Locked luminance — structure without white-out
-  col *= (0.36 + vBrightness * 0.30);
+  float t = fract(vSeed * 7.13);
+  vec3 col;
+  if (t < 0.25) col = mix(c0, c2, t * 4.0);
+  else if (t < 0.50) col = mix(c2, c1, (t - 0.25) * 4.0);
+  else if (t < 0.75) col = mix(c1, c3, (t - 0.50) * 4.0);
+  else col = mix(c3, c0, (t - 0.75) * 4.0);
 
-  float alpha = 0.40 * uOpacity;
+  // Brighter than before so structure reads on purple bg
+  col *= (0.55 + vBrightness * 0.55);
+
+  float alpha = 0.72 * uOpacity;
 
   gl_FragColor = vec4(col, alpha);
 }

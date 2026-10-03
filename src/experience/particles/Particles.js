@@ -8,7 +8,7 @@ import GPUCompute from './GPUCompute.js';
 import MorphSystem from './MorphSystem.js';
 
 /**
- * Particles — initial shape is bulb (hero starts bulb→brain).
+ * Particles — hero opens on BRAIN (Dala-matched), then morphs on scroll.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -39,15 +39,15 @@ export default class Particles {
 
     this.morph = new MorphSystem(this.count, texSize);
 
-    // Boot simulation on bulb positions (hero opens on bulb)
+    // Boot on brain positions — Dala hero opens on the brain
     this.simulation = new GPUCompute(
       this.renderer,
-      this.morph.shapes.bulb,
+      this.morph.shapes.brain,
       this.count
     );
 
     this.simulation.bindMorph(this.morph);
-    this.morph.setPair('bulb', 'brain');
+    this.morph.setPair('brain', 'bulb');
     this.morph.setProgress(0);
 
     const tri = new THREE.BufferGeometry();
@@ -107,7 +107,7 @@ export default class Particles {
       this.count
     );
     this.mesh.frustumCulled = false;
-    this.mesh.scale.setScalar(1.05);
+    this.mesh.scale.setScalar(1.15);
 
     const dummy = new THREE.Object3D();
     for (let i = 0; i < this.count; i++) {
