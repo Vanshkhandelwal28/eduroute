@@ -9,7 +9,7 @@ import { GrainShader, VignetteShader } from './shaders.js';
 import { getPostQuality, getCappedDPR } from '../utils/device.js';
 
 /**
- * Post-processing pipeline with quality tiers.
+ * Post-processing — Phase 11: slightly softer bloom for polish.
  */
 export default class PostProcessing {
   constructor({ renderer, scene, camera, sizes }) {
@@ -29,7 +29,6 @@ export default class PostProcessing {
     const h = this.sizes.height;
     const pixelRatio = getCappedDPR();
 
-    // Further reduce composer resolution on lower tiers
     let composerDpr = pixelRatio;
     if (this.quality === 'MEDIUM') composerDpr = Math.min(pixelRatio, 1.15);
     if (this.quality === 'LOW') composerDpr = Math.min(pixelRatio, 1.0);
@@ -41,16 +40,17 @@ export default class PostProcessing {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
 
+    // Softened bloom — avoid washing out particles
     const bloomStrength =
-      this.quality === 'HIGH' ? 0.7 : this.quality === 'MEDIUM' ? 0.55 : 0.4;
+      this.quality === 'HIGH' ? 0.55 : this.quality === 'MEDIUM' ? 0.42 : 0.32;
     const bloomRadius =
-      this.quality === 'HIGH' ? 0.45 : this.quality === 'MEDIUM' ? 0.35 : 0.3;
+      this.quality === 'HIGH' ? 0.38 : this.quality === 'MEDIUM' ? 0.3 : 0.25;
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(w, h),
       bloomStrength,
       bloomRadius,
-      0.82
+      0.85
     );
     this.composer.addPass(this.bloomPass);
 
@@ -58,20 +58,20 @@ export default class PostProcessing {
     if (this.quality !== 'LOW') {
       this.bokehPass = new BokehPass(this.scene, this.camera, {
         focus: 4.2,
-        aperture: this.quality === 'HIGH' ? 0.012 : 0.008,
-        maxblur: this.quality === 'HIGH' ? 0.005 : 0.003,
+        aperture: this.quality === 'HIGH' ? 0.01 : 0.007,
+        maxblur: this.quality === 'HIGH' ? 0.004 : 0.0025,
       });
       this.composer.addPass(this.bokehPass);
     }
 
     this.grainPass = new ShaderPass(GrainShader);
     this.grainPass.uniforms.uIntensity.value =
-      this.quality === 'HIGH' ? 0.032 : 0.022;
+      this.quality === 'HIGH' ? 0.028 : 0.018;
     this.composer.addPass(this.grainPass);
 
     this.vignettePass = new ShaderPass(VignetteShader);
     this.vignettePass.uniforms.uDarkness.value =
-      this.quality === 'HIGH' ? 0.4 : 0.3;
+      this.quality === 'HIGH' ? 0.38 : 0.28;
     this.vignettePass.uniforms.uOffset.value = 1.2;
     this.composer.addPass(this.vignettePass);
 

@@ -1,11 +1,12 @@
 /**
- * EduRoute Landing — cinematic redesign.
- * WebGL Experience + DOM sections. TimelineController owns scroll choreography.
+ * EduRoute Landing — cinematic redesign (Phase 11 polish).
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthModal } from '../components/AuthModal';
 import Experience from '../experience/Experience.js';
+import Cursor from '../experience/ui/Cursor.js';
+import Loader from '../experience/ui/Loader.js';
 import '../experience/styles/landing.css';
 
 export const LandingPage = () => {
@@ -16,10 +17,22 @@ export const LandingPage = () => {
   useEffect(() => {
     if (!canvasRef.current) return;
 
+    const loader = new Loader();
+    const cursor = new Cursor();
+
+    // Mount WebGL after a short beat so loader is visible
     const experience = new Experience({ canvas: canvasRef.current });
     experienceRef.current = experience;
 
+    // Dismiss loader once first frames are likely ready
+    const t = window.setTimeout(() => {
+      loader.dismiss();
+    }, 900);
+
     return () => {
+      window.clearTimeout(t);
+      loader.dispose();
+      cursor.dispose();
       experience.destroy();
       experienceRef.current = null;
     };
@@ -66,9 +79,15 @@ export const LandingPage = () => {
           <div className="er-hero__actions er-interactive">
             <button type="button" className="er-btn er-btn--primary" onClick={() => setAuth(true)}>
               Start your journey
+              <span className="er-btn__arrow" aria-hidden="true">
+                →
+              </span>
             </button>
             <a href="#manifesto" className="er-btn er-btn--ghost">
               Scroll to explore
+              <span className="er-btn__arrow" aria-hidden="true">
+                →
+              </span>
             </a>
           </div>
           <p className="er-scroll-hint">Scroll</p>
@@ -182,9 +201,15 @@ export const LandingPage = () => {
           <div className="er-cta__actions er-interactive">
             <button type="button" className="er-btn er-btn--primary" onClick={() => setAuth(true)}>
               Create account
+              <span className="er-btn__arrow" aria-hidden="true">
+                →
+              </span>
             </button>
             <Link to="/roadmaps" className="er-btn er-btn--ghost">
               Explore roadmaps
+              <span className="er-btn__arrow" aria-hidden="true">
+                →
+              </span>
             </Link>
           </div>
         </section>

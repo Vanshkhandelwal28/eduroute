@@ -1,15 +1,10 @@
 import gsap from 'gsap';
 
 /**
- * Reusable text reveal helpers for TimelineController.
- * Expects structure: .er-reveal > span  (overflow hidden wrapper)
+ * Line reveals — consistent timing for major headings.
+ * Structure: .er-reveal > span
  */
 
-/**
- * Reveal lines inside overflow-hidden wrappers.
- * @param {Element|NodeList|string} targets
- * @param {object} opts  gsap tween overrides
- */
 export function revealText(targets, opts = {}) {
   const els =
     typeof targets === 'string'
@@ -22,34 +17,51 @@ export function revealText(targets, opts = {}) {
     {
       yPercent: 0,
       opacity: 1,
-      duration: 1.1,
+      duration: 1.15,
       ease: 'power3.out',
-      stagger: 0.08,
+      stagger: 0.1,
       ...opts,
     }
   );
 }
 
-/**
- * Reveal each direct child span of .er-reveal wrappers in a section.
- */
 export function revealLines(sectionSelector, opts = {}) {
   const section = document.querySelector(sectionSelector);
   if (!section) return gsap.timeline();
 
   const spans = section.querySelectorAll('.er-reveal > span');
-  return revealText(spans, opts);
+  const body = section.querySelector('.er-body');
+  const label = section.querySelector('.er-label');
+
+  const tl = gsap.timeline();
+
+  if (label) {
+    tl.fromTo(
+      label,
+      { opacity: 0, y: 12 },
+      { opacity: 1, y: 0, duration: 0.7, ease: 'power2.out' },
+      0
+    );
+  }
+
+  tl.add(revealText(spans, opts), label ? 0.12 : 0);
+
+  if (body) {
+    tl.fromTo(
+      body,
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.85, ease: 'power2.out' },
+      '-=0.55'
+    );
+  }
+
+  return tl;
 }
 
-/**
- * Split text into words (if not already) and reveal.
- * Safe no-op if already structured with .er-reveal.
- */
 export function revealWords(selector, opts = {}) {
   const el = document.querySelector(selector);
   if (!el) return gsap.timeline();
 
-  // If already using er-reveal structure, delegate
   const existing = el.querySelectorAll('.er-reveal > span');
   if (existing.length) return revealText(existing, opts);
 
@@ -63,5 +75,5 @@ export function revealWords(selector, opts = {}) {
     .join('');
 
   const spans = el.querySelectorAll('.er-reveal > span');
-  return revealText(spans, { stagger: 0.04, ...opts });
+  return revealText(spans, { stagger: 0.045, ...opts });
 }
