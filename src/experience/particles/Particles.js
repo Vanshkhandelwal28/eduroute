@@ -1,19 +1,17 @@
 import * as THREE from 'three';
-import { createBrainShape, getParticleCount } from './brainShape.js';
+import { getParticleCount } from './ShapeGenerator.js';
 import {
   particleVertexShader,
   particleFragmentShader,
 } from '../shaders/particleShaders.js';
 import GPUCompute from './GPUCompute.js';
+import MorphSystem from './MorphSystem.js';
 
 /**
- * Particles — InstancedMesh rendering + GPU simulation.
- * Phase 5: accepts mouse world position for GPU repulsion + gentle rotation.
+ * Particles — InstancedMesh + GPU sim + morph system.
+ * Phase 3–6.
  */
 export default class Particles {
-  /**
-   * @param {{ scene: object, renderer: THREE.WebGLRenderer }} opts
-   */
   constructor({ scene, renderer }) {
     this.scene = scene;
     this.renderer = renderer;
@@ -22,9 +20,8 @@ export default class Particles {
     this.material = null;
     this.geometry = null;
     this.simulation = null;
-    this.targets = null;
+    this.morph = null;
 
-    // Target rotation from mouse (smoothed in update)
     this._rotTarget = { x: 0, y: 0 };
     this._rotCurrent = { x: 0, y: 0 };
 
@@ -32,14 +29,28 @@ export default class Particles {
   }
 
   _create() {
-    this.targets = createBrainShape(this.count);
+    // Morph system first (generates all shapes)
+    // texSize computed same way as GPUCompute
+    let texSize = Math.ceil(Math.sqrt(this.count));
+    texSize = Math.pow(2, Math.ceil(Math.log2(texSize)));
 
+    this.morph = new MorphSystem(this.count, texSize);
+
+    // GPU sim initialized with brain shape
     this.simulation = new GPUCompute(
       this.renderer,
-      this.targets,
+      this.morph.shapes.brain,
       this.count
     );
 
+    // Bind dual morph textures
+    this.simulation.bindMorph(this.morph);
+
+    // Default pair: brain → bulb at progress 0 (shows brain)
+    this.morph.setPair('brain', 'bulb');
+    this.morph.setProgress(0);
+
+    // --- Geometry ---
     const tri = new THREE.BufferGeometry();
     const s = 0.011;
     const vertices = new Float32Array([
@@ -97,8 +108,6 @@ export default class Particles {
     const dummy = new THREE.Object3D();
     for (let i = 0; i < this.count; i++) {
       dummy.position.set(0, 0, 0);
-      dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(1, 1, 1);
       dummy.updateMatrix();
       this.mesh.setMatrixAt(i, dummy.matrix);
     }
@@ -112,30 +121,60 @@ export default class Particles {
     }
   }
 
+  /**
+   * Public API for GSAP / later phases.
+   */
   get controls() {
-    if (!this.simulation) return null;
     return {
+      morph: this.morph,
       simulation: this.simulation,
-      targets: this.targets,
-      springStrength: this.simulation.uniforms.springStrength,
-      damping: this.simulation.uniforms.damping,
-      noiseStrength: this.simulation.uniforms.noiseStrength,
-      time: this.simulation.uniforms.time,
-      mouse: this.simulation.uniforms.mouse,
-      mouseStrength: this.simulation.uniforms.mouseStrength,
-      setTargets: (t) => this.simulation.setTargets(t),
+      params: this.morph?.params,
+      setPair: (a, b) => this.morph?.setPair(a, b),
+      setProgress: (t) => this.morph?.setProgress(t),
+      shapes: this.morph?.shapes,
     };
   }
 
   /**
-   * @param {number} elapsed
-   * @param {number} delta
-   * @param {{ world: THREE.Vector3, strengthValue: number, radius: number, rotationOffset: {x:number,y:number} } | null} mouse
+   * Test helper — cycle morph progress for manual verification.
+   * Not used in production; available on window for debugging.
    */
+  testMorph(from, to, duration = 3) {
+    this.morph.setPair(from, to);
+    this.morph.setProgress(0);
+    this.morph.params.scatter = 0.35;
+    this._testMorph = {
+      start: performance.now(),
+      duration: duration * 1000,
+      from,
+      to,
+    };
+  }
+
   update(elapsed, delta = 0.016, mouse = null) {
     if (!this.material) return;
 
-    // Feed mouse into GPU before compute
+    // Dev test morph auto-progress
+    if (this._testMorph) {
+      const t =
+        (performance.now() - this._testMorph.start) / this._testMorph.duration;
+      if (t >= 1) {
+        this.morph.setProgress(1);
+        this.morph.params.scatter = 0;
+        this._testMorph = null;
+      } else {
+        // Ease in-out
+        const e = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        this.morph.setProgress(e);
+        // Scatter peaks mid-transition
+        this.morph.params.scatter = Math.sin(e * Math.PI) * 0.4;
+      }
+    }
+
+    if (this.morph) {
+      this.morph.update(delta);
+    }
+
     if (this.simulation && mouse) {
       this.simulation.setMouse(
         mouse.world,
@@ -154,7 +193,6 @@ export default class Particles {
 
     this.material.uniforms.uTime.value = elapsed;
 
-    // Gentle rotation: base spin + mouse influence
     if (this.mesh) {
       if (mouse && mouse.rotationOffset) {
         this._rotTarget.x = mouse.rotationOffset.x;
@@ -176,14 +214,14 @@ export default class Particles {
   }
 
   dispose() {
+    this.morph?.dispose();
+    this.morph = null;
     if (this.simulation) {
       this.simulation.dispose();
       this.simulation = null;
     }
     if (this.mesh) {
-      if (this.mesh.parent) {
-        this.mesh.parent.remove(this.mesh);
-      }
+      if (this.mesh.parent) this.mesh.parent.remove(this.mesh);
       this.geometry?.dispose();
       this.material?.dispose();
       this.mesh.dispose?.();

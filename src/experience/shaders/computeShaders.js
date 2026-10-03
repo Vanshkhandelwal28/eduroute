@@ -1,7 +1,7 @@
 /**
- * GPU compute shaders for particle simulation.
- * Phase 4: spring, noise, damping.
- * Phase 5: subtle mouse repulsion field.
+ * GPU compute shaders.
+ * Phase 4–5: spring, noise, damping, mouse.
+ * Phase 6: dual-target morph with seed delay + scatter + turbulence.
  */
 
 export const velocityFragmentShader = /* glsl */ `
@@ -10,9 +10,15 @@ uniform float uDelta;
 uniform float uDamping;
 uniform float uSpringStrength;
 uniform float uNoiseStrength;
-uniform sampler2D uTarget;
 
-// Phase 5 — mouse
+// Dual morph targets
+uniform sampler2D uTargetA;
+uniform sampler2D uTargetB;
+uniform float uMorphProgress;
+uniform float uScatter;
+uniform float uTurbulence;
+
+// Mouse
 uniform vec3 uMouse;
 uniform float uMouseStrength;
 uniform float uMouseRadius;
@@ -36,6 +42,11 @@ vec3 noise3(vec3 p) {
   );
 }
 
+// Smoothstep ease
+float easeInOut(float t) {
+  return t * t * (3.0 - 2.0 * t);
+}
+
 void main() {
   vec2 uv = gl_FragCoord.xy / resolution.xy;
 
@@ -45,34 +56,54 @@ void main() {
   vec3 vel = velData.xyz;
   float seed = posData.w;
 
-  vec3 target = texture2D(uTarget, uv).xyz;
+  vec3 shapeA = texture2D(uTargetA, uv).xyz;
+  vec3 shapeB = texture2D(uTargetB, uv).xyz;
 
-  // --- Spring force toward target (return home) ---
+  // --- Per-particle delayed morph progress ---
+  // seed 0..1 → delay offset so particles don't move in lockstep
+  float delay = seed * 0.35; // up to 35% lag
+  float rawT = (uMorphProgress - delay) / max(1.0 - delay, 0.001);
+  float t = clamp(rawT, 0.0, 1.0);
+  t = easeInOut(t);
+
+  // Small overshoot near the middle of the transition
+  float overshoot = sin(t * 3.14159) * 0.08 * (1.0 - abs(uMorphProgress - 0.5) * 2.0);
+  float tMorph = clamp(t + overshoot, 0.0, 1.0);
+
+  // Base blended target
+  vec3 target = mix(shapeA, shapeB, tMorph);
+
+  // Scatter — push outward during mid-morph
+  float scatterWave = sin(uMorphProgress * 3.14159); // peaks at 0.5
+  vec3 scatterDir = normalize(shapeA + vec3(0.001));
+  // Alternate outward from A or B based on seed
+  if (seed > 0.5) scatterDir = normalize(shapeB + vec3(0.001));
+  target += scatterDir * uScatter * scatterWave * (0.5 + seed * 0.5);
+
+  // Turbulence offset on target during transition
+  vec3 turb = noise3(pos * 2.5 + vec3(uTime * 0.3, seed * 4.0, uTime * 0.2));
+  target += turb * uTurbulence * scatterWave;
+
+  // --- Spring toward morphing target ---
   vec3 toTarget = target - pos;
   vec3 springForce = toTarget * uSpringStrength;
 
-  // --- Subtle noise force ---
+  // --- Ambient noise ---
   vec3 noiseCoord = pos * 1.8 + vec3(uTime * 0.15, uTime * 0.11, uTime * 0.09);
   vec3 noiseForce = noise3(noiseCoord) * uNoiseStrength;
   float phase = seed * 6.2831853;
   noiseForce *= (0.7 + 0.3 * sin(uTime * 0.4 + phase));
 
-  // --- Mouse repulsion (cinematic, soft falloff) ---
+  // --- Mouse repulsion ---
   vec3 mouseForce = vec3(0.0);
   if (uMouseStrength > 0.001) {
     vec3 toMouse = pos - uMouse;
     float dist = length(toMouse);
     float radius = max(uMouseRadius, 0.15);
-
-    // Smooth soft-knee falloff — strong near cursor, zero past radius
     float influence = 1.0 - smoothstep(0.0, radius, dist);
-    influence = influence * influence; // ease
-
-    // Softened inverse-distance so it never explodes at center
+    influence *= influence;
     float soft = 1.0 / (dist * dist + 0.12);
     vec3 dir = dist > 0.0001 ? toMouse / dist : vec3(0.0, 1.0, 0.0);
-
-    // Cap magnitude
     mouseForce = dir * soft * influence * uMouseStrength * 0.35;
     float mLen = length(mouseForce);
     if (mLen > 3.0) mouseForce *= 3.0 / mLen;
@@ -84,7 +115,6 @@ void main() {
   vel += mouseForce * uDelta;
   vel *= uDamping;
 
-  // Soft velocity clamp
   float speed = length(vel);
   if (speed > 2.5) {
     vel *= 2.5 / speed;
