@@ -1,642 +1,450 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  ArrowRight,
-  BookOpen,
-  Briefcase,
-  ClipboardCheck,
-  Code2,
-  Instagram,
-  Mail,
-  Map,
-  MessageCircle,
-  Route,
-  Trophy,
-  Users,
-} from 'lucide-react';
 import { AuthModal } from '../components/AuthModal';
-import { OfferStackSection } from '../components/OfferStackSection';
+import { DalaBrainHero } from '../components/DalaBrainHero';
 
-const HERO_VIDEO_CDN =
-  'https://videos.pexels.com/video-files/2278095/2278095-hd_1920_1080_30fps.mp4';
-const HERO_VIDEO_LOCAL = '/videos/hero-coding.mp4';
+/* ================================================================
+   EDUROUTE × Dala
+   Black canvas · light type · particle brain hero · scroll manifesto
+   ================================================================ */
 
-/** Real nav links */
 const NAV = [
-  { label: 'Home', href: '#home' },
-  { label: 'How it works', href: '#how-it-works' },
+  { label: 'Manifesto', href: '#manifesto' },
+  { label: 'Product', href: '#product' },
   { label: 'Roadmaps', href: '/roadmaps' },
-  { label: 'Internships', href: '/internships' },
-  { label: 'Journey', href: '#journey' },
+  { label: 'Request access', href: '#get-started', cta: true as const },
 ];
 
 const STATS = [
-  { target: 45, suffix: 'K+', label: 'Active Learners', icon: Users, color: 'bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300' },
-  { target: 80, suffix: '+', label: 'Roadmaps', icon: Map, color: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300' },
-  { target: 500, suffix: '+', label: 'Job & Internship Opportunities', icon: Briefcase, color: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300' },
-  { target: 120, suffix: '+', label: 'Upcoming Hackathons', icon: Trophy, color: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300' },
+  { n: '45K+', l: 'Learners' },
+  { n: '80+', l: 'Roadmaps' },
+  { n: '500+', l: 'Roles' },
+  { n: '120+', l: 'Hackathons' },
 ];
 
-const HOW_STEPS = [
+const STEPS = [
+  { n: '01', t: 'Sign up', b: 'Create a free account and choose the track you care about.' },
+  { n: '02', t: 'Skill quiz', b: 'A short quiz maps your gaps with clarity — no fluff.' },
+  { n: '03', t: 'Your path', b: 'Follow a personal roadmap, practice, and apply with confidence.' },
+];
+
+const FEATURES = [
   {
-    step: '1',
-    title: 'Sign up',
-    body: 'Create a free account and pick the track you care about.',
-    icon: Users,
+    t: 'Skill assessment',
+    b: 'Industry-aligned tests. See strengths, gaps, and what to learn next.',
   },
   {
-    step: '2',
-    title: 'Skill quiz',
-    body: 'Answer a short yes/no quiz so we map your skill gaps.',
-    icon: ClipboardCheck,
+    t: 'Personal roadmaps',
+    b: 'AI-shaped paths and curated resources from beginner to hire-ready.',
   },
   {
-    step: '3',
-    title: 'Get your path',
-    body: 'Follow a personal roadmap, practice, and apply with confidence.',
-    icon: Route,
+    t: 'Internships & jobs',
+    b: 'Verified openings. Apply and track progress in one place.',
+  },
+  {
+    t: 'Hackathons',
+    b: 'Compete, ship, and build a portfolio hiring managers notice.',
   },
 ];
 
-const JOURNEY = [
-  { title: 'Learn', desc: 'Explore curated roadmaps', icon: BookOpen, color: 'bg-violet-600' },
-  { title: 'Build', desc: 'Work on real projects and practice', icon: Code2, color: 'bg-emerald-500' },
-  { title: 'Compete', desc: 'Join hackathons and challenges', icon: Trophy, color: 'bg-pink-500' },
-  { title: 'Get Hired', desc: 'Land internships and full-time roles', icon: Briefcase, color: 'bg-blue-500' },
+const MANIFESTO = [
+  'This is learning today. Fragments of guidance scattered across courses, threads, and outdated roadmaps.',
+  'Hours vanish organising what to learn next — and whether it even matters for the role you want.',
+  'Making sense of the chaos leaves people overwhelmed and stuck.',
+  'The anxiety of asking again. Applying with incomplete context. Half-built portfolios.',
+  'Platforms teach or list jobs — almost never both, and almost never with a personal path.',
+  'They fail to understand what you need from the noise created every day.',
 ];
 
-const QUICK_LINKS = [
-  { label: 'Home', href: '#home' },
-  { label: 'How it works', href: '#how-it-works' },
-  { label: 'Roadmaps', href: '/roadmaps' },
-  { label: 'Internships', href: '/internships' },
-  { label: 'Journey', href: '#journey' },
-];
-
-const COMPANY_LINKS = [
-  { label: 'About Us', href: '#contact' },
-  { label: 'Our Mission', href: '#features' },
-  { label: 'Contact Us', href: '#contact' },
-  { label: 'Privacy Policy', href: '#contact' },
-  { label: 'Terms & Conditions', href: '#contact' },
-];
-
-/** Split text into letter spans with staggered reveal (CodeSandbox-style). */
-function StaggerText({
-  text,
-  className = '',
-  letterClassName = '',
-  baseDelay = 0,
-  step = 0.028,
-}: {
-  text: string;
-  className?: string;
-  letterClassName?: string;
-  baseDelay?: number;
-  step?: number;
-}) {
-  return (
-    <span className={className} aria-label={text}>
-      {text.split('').map((char, i) =>
-        char === ' ' ? (
-          <span key={i} className="hero-letter-space" aria-hidden>
-            {' '}
-          </span>
-        ) : (
-          <span
-            key={i}
-            className={`hero-letter ${letterClassName}`}
-            style={{ animationDelay: `${baseDelay + i * step}s` }}
-            aria-hidden
-          >
-            {char}
-          </span>
-        ),
-      )}
-    </span>
-  );
-}
-
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
+function useReducedMotion() {
+  const [r, setR] = useState(false);
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
+    if (!window.matchMedia) return;
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const apply = () => setReduced(mq.matches);
-    apply();
-    mq.addEventListener?.('change', apply);
-    return () => mq.removeEventListener?.('change', apply);
+    const fn = () => setR(mq.matches);
+    fn();
+    mq.addEventListener?.('change', fn);
+    return () => mq.removeEventListener?.('change', fn);
   }, []);
-  return reduced;
+  return r;
 }
 
-function useCountUp(target: number, active: boolean, duration = 1400) {
-  const [value, setValue] = useState(0);
-  const reduced = usePrefersReducedMotion();
+function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [on, setOn] = useState(false);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
-    if (!active) return;
     if (reduced) {
-      setValue(target);
+      setOn(true);
       return;
     }
-    let raf = 0;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setValue(Math.round(target * eased));
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [active, target, duration, reduced]);
-
-  return value;
-}
-
-function StatItem({
-  target,
-  suffix,
-  label,
-  icon: Icon,
-  color,
-  active,
-}: {
-  target: number;
-  suffix: string;
-  label: string;
-  icon: typeof Users;
-  color: string;
-  active: boolean;
-}) {
-  const value = useCountUp(target, active);
-  return (
-    <div className="flex items-center gap-3 px-2 py-2">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
-        <div className="text-lg font-extrabold tabular-nums text-slate-900 dark:text-white">
-          {value}
-          {suffix}
-        </div>
-        <div className="text-[11px] font-medium leading-tight text-slate-500 dark:text-slate-400">{label}</div>
-      </div>
-    </div>
-  );
-}
-
-function NavItem({
-  item,
-  onClick,
-  className,
-}: {
-  item: { label: string; href: string };
-  onClick?: () => void;
-  className: string;
-}) {
-  if (item.href.startsWith('/')) {
-    return (
-      <Link to={item.href} onClick={onClick} className={className}>
-        {item.label}
-      </Link>
+    const el = ref.current;
+    if (!el || !('IntersectionObserver' in window)) {
+      setOn(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e?.isIntersecting) {
+          setOn(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.15, rootMargin: '0px 0px -6% 0px' },
     );
-  }
+    io.observe(el);
+    return () => io.disconnect();
+  }, [reduced]);
+
   return (
-    <a href={item.href} onClick={onClick} className={className}>
-      {item.label}
-    </a>
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        opacity: on ? 1 : 0,
+        transform: on ? 'none' : 'translate3d(0, 32px, 0)',
+        transition: reduced
+          ? 'none'
+          : `opacity 1s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 1s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
 export const LandingPage = () => {
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [newsletterEmail, setNewsletterEmail] = useState('');
-  const [heroVideoSrc, setHeroVideoSrc] = useState(HERO_VIDEO_CDN);
-  const [statsActive, setStatsActive] = useState(false);
+  const [auth, setAuth] = useState(false);
+  const [phase, setPhase] = useState<'loading' | 'ready'>('loading');
+  const [heroIn, setHeroIn] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const reduced = useReducedMotion();
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const statsRef = useRef<HTMLDivElement>(null);
-
-  const instagramUrl = 'https://www.instagram.com/vanshkhandelwal28/';
-  const whatsappUrl = 'https://wa.link/9mfubu';
-  const supportEmail = 'vanshkhandelwal777@gmail.com';
-
-  // Pause hero video when off-screen (better performance)
   useEffect(() => {
-    const el = videoRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry) return;
-        if (entry.isIntersecting) {
-          void el.play().catch(() => undefined);
-        } else {
-          el.pause();
-        }
-      },
-      { threshold: 0.15 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [heroVideoSrc]);
+    const a = setTimeout(() => setPhase('ready'), reduced ? 100 : 1700);
+    const b = setTimeout(() => setHeroIn(true), reduced ? 150 : 2100);
+    return () => {
+      clearTimeout(a);
+      clearTimeout(b);
+    };
+  }, [reduced]);
 
-  // Stats count-up when scrolled into view
   useEffect(() => {
-    const el = statsRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setStatsActive(true);
-          io.disconnect();
-        }
-      },
-      { threshold: 0.35 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   return (
-    <div id="home" className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+    <div className="min-h-screen bg-black text-white antialiased selection:bg-[#963CBD]/40">
+      <AuthModal isOpen={auth} onClose={() => setAuth(false)} />
 
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/90">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
-          <a href="#home" className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-black text-white shadow-md shadow-violet-200/50 dark:shadow-violet-900/40">
-              E
-            </span>
-            <span className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
-              EDU<span className="text-violet-600 dark:text-violet-400">ROUTE</span>
-            </span>
-          </a>
-
-          <nav className="hidden items-center gap-1 lg:flex">
-            {NAV.map((item) => (
-              <NavItem
+      <header
+        className={`fixed inset-x-0 top-0 z-50 flex items-center justify-between px-5 py-4 sm:px-10 sm:py-5 ${
+          scrolled ? 'bg-black/75 backdrop-blur-md' : ''
+        }`}
+      >
+        <a href="#home" className="text-[12px] font-medium tracking-[0.22em] uppercase">
+          EDUROUTE
+        </a>
+        <nav className="hidden items-center gap-9 md:flex">
+          {NAV.map((item) =>
+            item.cta ? (
+              <button
                 key={item.label}
-                item={item}
-                className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-              />
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <a
-              href="#contact"
-              className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 sm:inline"
-            >
-              Contact
-            </a>
-            <button
-              type="button"
-              onClick={() => setIsAuthOpen(true)}
-              className="rounded-full bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700"
-            >
-              Get Started
-            </button>
-            <button
-              type="button"
-              className="rounded-lg p-2 text-slate-600 lg:hidden dark:text-slate-300"
-              aria-label="Menu"
-              onClick={() => setMobileOpen((v) => !v)}
-            >
-              <span className="block h-0.5 w-5 bg-current" />
-              <span className="mt-1.5 block h-0.5 w-5 bg-current" />
-              <span className="mt-1.5 block h-0.5 w-5 bg-current" />
-            </button>
-          </div>
-        </div>
-
-        {mobileOpen && (
-          <div className="border-t border-slate-100 bg-white px-4 py-3 lg:hidden dark:border-slate-800 dark:bg-slate-950">
-            {NAV.map((item) => (
-              <NavItem
+                type="button"
+                onClick={() => setAuth(true)}
+                className="border border-white/25 px-3.5 py-1.5 text-[10px] tracking-[0.16em] uppercase transition hover:bg-white hover:text-black"
+              >
+                {item.label}
+              </button>
+            ) : item.href.startsWith('/') ? (
+              <Link
                 key={item.label}
-                item={item}
-                onClick={() => setMobileOpen(false)}
-                className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200"
-              />
-            ))}
-            <a
-              href="#contact"
-              onClick={() => setMobileOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200"
-            >
-              Contact Us
-            </a>
-          </div>
-        )}
+                to={item.href}
+                className="text-[10px] tracking-[0.16em] uppercase text-white/45 transition hover:text-white"
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <a
+                key={item.label}
+                href={item.href}
+                className="text-[10px] tracking-[0.16em] uppercase text-white/45 transition hover:text-white"
+              >
+                {item.label}
+              </a>
+            ),
+          )}
+        </nav>
+        <button
+          type="button"
+          onClick={() => setAuth(true)}
+          className="border border-white/25 px-2.5 py-1 text-[10px] tracking-[0.14em] uppercase md:hidden"
+        >
+          Access
+        </button>
       </header>
 
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <video
-            ref={videoRef}
-            className="h-full w-full scale-105 object-cover"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            src={heroVideoSrc}
-            onError={() => setHeroVideoSrc(HERO_VIDEO_LOCAL)}
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-white from-0% via-white/75 via-35% to-white/15 to-100% dark:from-slate-950 dark:from-0% dark:via-slate-950/80 dark:via-40% dark:to-slate-950/25 dark:to-100%" />
-          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white/90 to-transparent dark:from-slate-950/90 dark:to-transparent" />
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/50 to-transparent dark:from-slate-950/40 dark:to-transparent" />
-        </div>
+      {/* HERO */}
+      <section id="home" className="relative flex h-[100svh] min-h-[620px] flex-col items-center justify-center overflow-hidden">
+        {/* Soft purple depth like Dala replica bg */}
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            background:
+              'radial-gradient(ellipse 80% 70% at 50% 40%, rgba(105,42,132,0.22) 0%, rgba(60,24,76,0.08) 40%, transparent 70%)',
+          }}
+        />
+        <DalaBrainHero ready={phase === 'ready'} />
 
-        <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-12 lg:px-8 lg:py-24">
-          <div className="max-w-xl">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-white/80 px-3.5 py-1.5 text-xs font-bold tracking-wide text-violet-700 shadow-sm backdrop-blur dark:border-violet-500/30 dark:bg-slate-900/70 dark:text-violet-300">
-              <span className="text-sm leading-none">⚡</span>
-              Your Growth Partner in Tech
+        {phase === 'loading' && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black">
+            <div className="mb-12 flex gap-3">
+              {[0, 1, 2, 3].map((i) => (
+                <span
+                  key={i}
+                  className="h-1 w-1 bg-white"
+                  style={{
+                    animation: reduced ? undefined : `dalaDot 1.35s ease-in-out ${i * 0.16}s infinite`,
+                  }}
+                />
+              ))}
             </div>
-
-            <h1 className="text-5xl font-black leading-[0.95] tracking-tight drop-shadow-sm sm:text-6xl lg:text-7xl">
-              <StaggerText
-                text="Build Skills."
-                className="block"
-                letterClassName="text-slate-900 dark:text-white"
-                baseDelay={0.1}
-                step={0.06}
-              />
-              <StaggerText
-                text="Get Hired."
-                className="block"
-                letterClassName="text-violet-600 dark:text-violet-400"
-                baseDelay={0.84}
-                step={0.06}
-              />
-            </h1>
-
-            <p className="mt-6 max-w-md text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-[17px] sm:leading-7">
-              EDUROUTE helps you find the right roadmap, get internships and job
-              opportunities, participate in hackathons and build the skills you
-              need to grow in tech — all in one place.
+            <p className="max-w-[280px] text-center text-[15px] font-light leading-[1.55] text-white/75">
+              Your workplace has the answer.
+              <br />
+              Ask EDUROUTE to find it.
             </p>
-
-            <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link
-                to="/roadmaps"
-                className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-6 py-3.5 text-sm font-bold text-white shadow-md shadow-violet-200/60 transition hover:bg-violet-700 dark:shadow-violet-900/40"
-              >
-                <ArrowRight className="h-4 w-4" /> Explore Roadmaps
-              </Link>
-              <Link
-                to="/internships"
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-6 py-3.5 text-sm font-bold text-slate-800 backdrop-blur transition hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:border-violet-500"
-              >
-                Find Opportunities
-              </Link>
-            </div>
+            <p className="mt-10 text-[9px] tracking-[0.35em] uppercase text-white/25">Loading</p>
           </div>
-          <div className="hidden min-h-[280px] lg:block" aria-hidden />
+        )}
+
+        <div
+          className={`relative z-10 mx-auto max-w-2xl px-6 text-center transition-all duration-[1100ms] ease-out ${
+            heroIn ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
+          }`}
+        >
+          <p className="mb-5 text-[10px] tracking-[0.32em] uppercase text-white/40">Unlock collective growth</p>
+          <h1 className="text-[clamp(2.8rem,9.5vw,5.75rem)] font-light leading-[0.98] tracking-[-0.04em]">
+            Build skills.
+            <br />
+            Get hired.
+          </h1>
+          <p className="mx-auto mt-7 max-w-sm text-[14px] font-light leading-[1.65] text-white/45">
+            Stop managing your career like a second job. Start using a path that
+            connects learning, practice, and real opportunities.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setAuth(true)}
+              className="bg-white px-6 py-2.5 text-[10px] font-medium tracking-[0.16em] uppercase text-black transition hover:bg-white/90"
+            >
+              Request access
+            </button>
+            <Link
+              to="/roadmaps"
+              className="border border-white/20 px-6 py-2.5 text-[10px] tracking-[0.16em] uppercase text-white/80 transition hover:border-white/50"
+            >
+              Explore roadmaps
+            </Link>
+          </div>
         </div>
 
-        {/* Stats bar — count-up on scroll */}
-        <div className="relative z-10 mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
-          <div
-            ref={statsRef}
-            className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-lg shadow-slate-200/40 backdrop-blur-md sm:grid-cols-4 dark:border-slate-700 dark:bg-slate-900/80 dark:shadow-black/30"
-          >
-            {STATS.map((s) => (
-              <StatItem key={s.label} {...s} active={statsActive} />
-            ))}
-          </div>
-        </div>
+        <p
+          className={`absolute bottom-7 left-1/2 z-10 -translate-x-1/2 text-[9px] tracking-[0.3em] uppercase text-white/25 transition-opacity duration-1000 ${
+            heroIn ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          Scroll
+        </p>
       </section>
 
-      {/* How it works */}
-      <section id="how-it-works" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-black text-slate-900 dark:text-white">How it works</h2>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-            Sign up → Skill quiz → Get your path — in three clear steps.
-          </p>
-        </div>
-        <div className="mt-10 grid gap-6 sm:grid-cols-3">
-          {HOW_STEPS.map((s, i) => (
-            <div
-              key={s.step}
-              className="relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-            >
-              {i < HOW_STEPS.length - 1 && (
-                <div className="absolute right-0 top-1/2 hidden h-px w-6 translate-x-full border-t border-dashed border-slate-300 sm:block dark:border-slate-600" />
-              )}
-              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">
-                {s.step}
-              </div>
-              <div className="mb-2 flex items-center gap-2">
-                <s.icon className="h-4 w-4 text-violet-500" />
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">{s.title}</h3>
-              </div>
-              <p className="text-sm leading-6 text-slate-600 dark:text-slate-400">{s.body}</p>
-            </div>
+      {/* STATS */}
+      <section className="border-t border-white/[0.06] px-6 py-16 sm:px-10">
+        <div className="mx-auto grid max-w-4xl grid-cols-2 gap-8 sm:grid-cols-4 sm:gap-6">
+          {STATS.map((s, i) => (
+            <Reveal key={s.l} delay={i * 70}>
+              <p className="text-[1.75rem] font-light tracking-tight sm:text-[2rem]">{s.n}</p>
+              <p className="mt-1 text-[10px] tracking-[0.12em] uppercase text-white/35">{s.l}</p>
+            </Reveal>
           ))}
         </div>
       </section>
 
-      <OfferStackSection onExploreAll={() => setIsAuthOpen(true)} />
+      {/* INTRO */}
+      <section className="px-6 py-28 sm:px-10 sm:py-36">
+        <div className="mx-auto max-w-4xl">
+          <Reveal>
+            <h2 className="max-w-xl text-[clamp(2rem,5.5vw,3.6rem)] font-light leading-[1.08] tracking-[-0.03em]">
+              Make decisions
+              <br />
+              with confidence
+            </h2>
+          </Reveal>
+          <Reveal delay={100}>
+            <p className="mt-8 max-w-md text-[15px] font-light leading-[1.7] text-white/45">
+              EDUROUTE extracts clarity from the noise — skills you have, skills
+              you need, and where to apply — so growth stops feeling like guesswork.
+            </p>
+          </Reveal>
+        </div>
+      </section>
 
-      {/* Journey */}
-      <section id="journey" className="py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm sm:p-8 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950">
-            <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr] lg:items-center">
-              <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400">Your Journey</p>
-                <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl dark:text-white">From Learning to Landing</h2>
-                <p className="mt-3 max-w-sm text-sm leading-6 text-slate-500 dark:text-slate-400">Follow a clear path, build real skills, and turn your effort into opportunities.</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                {JOURNEY.map((step, i) => (
-                  <div key={step.title} className="relative text-center">
-                    {i < JOURNEY.length - 1 && (
-                      <div className="absolute left-[60%] top-5 hidden h-px w-[80%] border-t border-dashed border-slate-300 sm:block dark:border-slate-600" />
-                    )}
-                    <div className={`relative z-10 mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full text-white shadow-md ${step.color}`}>
-                      <step.icon className="h-5 w-5" />
-                    </div>
-                    <div className="text-sm font-bold text-slate-900 dark:text-white">{step.title}</div>
-                    <div className="mt-1 text-[11px] leading-4 text-slate-500 dark:text-slate-400">{step.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+      {/* MANIFESTO */}
+      <section id="manifesto" className="px-6 py-16 sm:px-10 sm:py-24">
+        <div className="mx-auto max-w-2xl">
+          {MANIFESTO.map((line, i) => (
+            <Reveal key={i} delay={Math.min(i * 50, 200)} className="mb-12 last:mb-0 sm:mb-14">
+              <p className="text-[clamp(1.15rem,2.6vw,1.55rem)] font-light leading-[1.5] tracking-[-0.02em] text-white/50">
+                {line}
+              </p>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* SOLUTION */}
+      <section className="px-6 py-28 sm:px-10 sm:py-36">
+        <div className="mx-auto max-w-4xl">
+          <Reveal>
+            <h2 className="max-w-xl text-[clamp(2rem,5.5vw,3.6rem)] font-light leading-[1.08] tracking-[-0.03em]">
+              Spark lightbulb
+              <br />
+              moments
+            </h2>
+          </Reveal>
+          <Reveal delay={90}>
+            <p className="mt-8 max-w-md text-[15px] font-light leading-[1.7] text-white/45">
+              Assessment, learning, and opportunity — connected. One contextual
+              view of the next step that actually advances your work.
+            </p>
+          </Reveal>
+          <Reveal delay={140}>
+            <p className="mt-5 max-w-md text-[15px] font-light leading-[1.7] text-white/45">
+              Ask EDUROUTE. Move with conviction.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* PRODUCT / HOW */}
+      <section id="product" className="border-t border-white/[0.06] px-6 py-28 sm:px-10 sm:py-32">
+        <div className="mx-auto max-w-4xl">
+          <Reveal>
+            <p className="mb-2 text-[10px] tracking-[0.28em] uppercase text-white/30">How it works</p>
+            <h2 className="text-[clamp(1.75rem,4vw,2.6rem)] font-light tracking-[-0.025em]">Three clear steps</h2>
+          </Reveal>
+          <div className="mt-16 grid gap-12 sm:grid-cols-3 sm:gap-10">
+            {STEPS.map((s, i) => (
+              <Reveal key={s.n} delay={i * 80}>
+                <p className="mb-4 text-[10px] tracking-[0.22em] text-white/30">{s.n}</p>
+                <h3 className="text-[17px] font-normal tracking-tight">{s.t}</h3>
+                <p className="mt-3 text-[13px] font-light leading-relaxed text-white/40">{s.b}</p>
+              </Reveal>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-700 px-6 py-12 text-center text-white shadow-xl shadow-violet-200/40 sm:px-12 dark:shadow-violet-900/30">
-          <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Ready to build skills that get you hired?</h2>
-          <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-violet-100">Join thousands of learners using EDUROUTE roadmaps, practice sheets, and AI Buddy to grow faster.</p>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <button type="button" onClick={() => setIsAuthOpen(true)} className="rounded-full bg-white px-6 py-3 text-sm font-bold text-violet-700 shadow-sm transition hover:bg-violet-50">Create free account</button>
-            <Link to="/roadmaps" className="rounded-full border border-white/40 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/10">Browse roadmaps</Link>
+      {/* FEATURES */}
+      <section className="border-t border-white/[0.06] px-6 py-28 sm:px-10 sm:py-32">
+        <div className="mx-auto max-w-4xl">
+          <Reveal>
+            <p className="mb-2 text-[10px] tracking-[0.28em] uppercase text-white/30">Platform</p>
+            <h2 className="text-[clamp(1.75rem,4vw,2.6rem)] font-light tracking-[-0.025em]">
+              Everything you need to grow
+            </h2>
+          </Reveal>
+          <div className="mt-16 grid gap-12 sm:grid-cols-2 sm:gap-x-16 sm:gap-y-14">
+            {FEATURES.map((f, i) => (
+              <Reveal key={f.t} delay={i * 60}>
+                <h3 className="text-[17px] font-normal tracking-tight">{f.t}</h3>
+                <p className="mt-3 text-[13px] font-light leading-relaxed text-white/40">{f.b}</p>
+              </Reveal>
+            ))}
           </div>
         </div>
       </section>
 
-      <footer
-        id="contact"
-        className="border-t border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-[#0a0a0f]"
-      >
-        <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8">
-          <div className="select-none overflow-hidden text-center" aria-hidden>
-            <span
-              className="inline-block whitespace-nowrap text-[16vw] font-black leading-none tracking-tight sm:text-[12vw] lg:text-[9.5rem]"
-              style={{
-                color: 'transparent',
-                WebkitTextStroke: '2px rgba(109, 40, 217, 0.55)',
-              }}
+      {/* MISSION */}
+      <section className="px-6 py-28 sm:px-10 sm:py-36">
+        <div className="mx-auto max-w-4xl">
+          <Reveal>
+            <h2 className="max-w-xl text-[clamp(2rem,5.5vw,3.6rem)] font-light leading-[1.08] tracking-[-0.03em]">
+              Build a better path
+              <br />
+              into tech
+            </h2>
+          </Reveal>
+          <Reveal delay={100}>
+            <p className="mt-8 max-w-md text-[15px] font-light leading-[1.7] text-white/45">
+              We reframe growth from “figure it out alone” to a coherent partner —
+              so your best moments are shipping, learning, and landing roles that matter.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section id="get-started" className="border-y border-white/[0.06] px-6 py-24 text-center sm:px-10">
+        <Reveal>
+          <h2 className="text-[clamp(1.6rem,4vw,2.5rem)] font-light leading-[1.15] tracking-[-0.025em]">
+            Your career has the answer.
+            <br />
+            Start here.
+          </h2>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setAuth(true)}
+              className="bg-white px-7 py-3 text-[10px] font-medium tracking-[0.16em] uppercase text-black transition hover:bg-white/90"
             >
-              <span className="dark:hidden">EDUROUTE</span>
-            </span>
-            <span
-              className="hidden whitespace-nowrap text-[16vw] font-black leading-none tracking-tight dark:inline-block sm:text-[12vw] lg:text-[9.5rem]"
-              style={{
-                color: 'transparent',
-                WebkitTextStroke: '2px rgba(167, 139, 250, 0.55)',
-              }}
+              Request access
+            </button>
+            <Link
+              to="/roadmaps"
+              className="border border-white/25 px-7 py-3 text-[10px] tracking-[0.16em] uppercase transition hover:border-white/60"
             >
-              EDUROUTE
-            </span>
+              Explore roadmaps
+            </Link>
           </div>
+        </Reveal>
+      </section>
 
-          <div className="mt-6 grid gap-10 pb-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-black text-white shadow-md">
-                  E
-                </span>
-                <span className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
-                  EDU<span className="text-violet-600 dark:text-violet-400">ROUTE</span>
-                </span>
-              </div>
-              <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-100">
-                Learn. Build. Compete. Get Hired.
-              </p>
-              <p className="mt-2 max-w-xs text-xs leading-5 text-slate-500 dark:text-slate-400">
-                Your one stop platform to build skills, explore opportunities and grow your career in tech.
-              </p>
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <a
-                  href={instagramUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Instagram"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-pink-300 hover:text-pink-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-pink-500/50 dark:hover:text-pink-400"
-                >
-                  <Instagram className="h-4 w-4" />
-                </a>
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="WhatsApp"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-emerald-300 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-emerald-500/50 dark:hover:text-emerald-400"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                </a>
-                <a
-                  href={`mailto:${supportEmail}`}
-                  aria-label="Email"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-violet-500/50 dark:hover:text-violet-300"
-                >
-                  <Mail className="h-4 w-4" />
-                </a>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-900 dark:text-white">
-                Quick Links
-              </h3>
-              <ul className="space-y-2.5">
-                {QUICK_LINKS.map((l) => (
-                  <li key={l.label}>
-                    {l.href.startsWith('/') ? (
-                      <Link
-                        to={l.href}
-                        className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-300"
-                      >
-                        {l.label}
-                      </Link>
-                    ) : (
-                      <a
-                        href={l.href}
-                        className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-300"
-                      >
-                        {l.label}
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-900 dark:text-white">
-                Company
-              </h3>
-              <ul className="space-y-2.5">
-                {COMPANY_LINKS.map((l) => (
-                  <li key={l.label}>
-                    <a
-                      href={l.href}
-                      className="text-sm text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-300"
-                    >
-                      {l.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-900 dark:text-white">
-                Stay Updated
-              </h3>
-              <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                Get the latest roadmaps, opportunities and tips in your inbox.
-              </p>
-              <form
-                className="flex flex-col gap-2 sm:flex-row"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setNewsletterEmail('');
-                }}
-              >
-                <input
-                  type="email"
-                  value={newsletterEmail}
-                  onChange={(e) => setNewsletterEmail(e.target.value)}
-                  placeholder="Your email"
-                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-violet-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-violet-700"
-                >
-                  Subscribe
-                </button>
-              </form>
-            </div>
+      <footer className="px-6 py-14 sm:px-10">
+        <div className="mx-auto flex max-w-4xl flex-col gap-10 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[11px] font-medium tracking-[0.2em] uppercase">EDUROUTE</p>
+            <p className="mt-3 max-w-[200px] text-[12px] font-light leading-relaxed text-white/35">
+              Learn. Build. Compete. Get hired.
+            </p>
           </div>
-
-          <div className="border-t border-slate-200 py-5 text-center text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
-            © {new Date().getFullYear()} EDUROUTE. All rights reserved.
+          <div className="flex flex-wrap gap-x-10 gap-y-3 text-[12px] font-light text-white/40">
+            <a href="#manifesto" className="hover:text-white">Manifesto</a>
+            <a href="#product" className="hover:text-white">Product</a>
+            <Link to="/roadmaps" className="hover:text-white">Roadmaps</Link>
+            <Link to="/internships" className="hover:text-white">Internships</Link>
+            <button type="button" onClick={() => setAuth(true)} className="hover:text-white">
+              Access
+            </button>
           </div>
+        </div>
+        <div className="mx-auto mt-12 max-w-4xl border-t border-white/[0.06] pt-6 text-[10px] text-white/25">
+          © 2026 EDUROUTE
         </div>
       </footer>
+
+      <style>{`
+        @keyframes dalaDot {
+          0%, 100% { opacity: 0.15; transform: scale(0.7); }
+          50% { opacity: 1; transform: scale(1.25); }
+        }
+      `}</style>
     </div>
   );
 };
+
+export default LandingPage;
