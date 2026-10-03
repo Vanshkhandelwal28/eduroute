@@ -8,7 +8,7 @@ import GPUCompute from './GPUCompute.js';
 import MorphSystem from './MorphSystem.js';
 
 /**
- * Particles — hero opens on BRAIN (Dala-matched), then morphs on scroll.
+ * GPU particle field — hero opens held on brain, then morphs with scroll.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -39,7 +39,7 @@ export default class Particles {
 
     this.morph = new MorphSystem(this.count, texSize);
 
-    // Boot on brain positions — Dala hero opens on the brain
+    // Boot simulation on brain positions
     this.simulation = new GPUCompute(
       this.renderer,
       this.morph.shapes.brain,
@@ -47,7 +47,8 @@ export default class Particles {
     );
 
     this.simulation.bindMorph(this.morph);
-    this.morph.setPair('brain', 'bulb');
+    // Hold pure brain until scroll timeline advances
+    this.morph.setPair('brain', 'brain');
     this.morph.setProgress(0);
 
     const tri = new THREE.BufferGeometry();
@@ -107,7 +108,7 @@ export default class Particles {
       this.count
     );
     this.mesh.frustumCulled = false;
-    this.mesh.scale.setScalar(1.15);
+    this.mesh.scale.setScalar(1.12);
 
     const dummy = new THREE.Object3D();
     for (let i = 0; i < this.count; i++) {
@@ -180,9 +181,10 @@ export default class Particles {
       this._rotCurrent.y +=
         (this._rotTarget.y - this._rotCurrent.y) * rotLerp;
 
+      // Slow continuous spin + timeline + mouse parallax
       this.mesh.rotation.x = this._rotCurrent.x + this._timelineRotX;
       this.mesh.rotation.y =
-        elapsed * 0.018 + this._rotCurrent.y + this._timelineRotY;
+        elapsed * 0.014 + this._rotCurrent.y + this._timelineRotY;
     }
   }
 
