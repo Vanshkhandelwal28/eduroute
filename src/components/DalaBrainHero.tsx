@@ -1,6 +1,9 @@
 /**
- * threejs-dala brain — interactive via explicit window mouse/touch listeners
- * (same approach as upstream _onMousemove)
+ * Dala-matched brain (kekkorider/threejs-dala)
+ * - exact smoothstep(0.45, 0.1, d) + scale * 8 * uHover
+ * - hit-only hover (raycast brain mesh)
+ * - window mouse/touch → NDC
+ * - purple radial bg, transparent canvas, load fade-in
  */
 import { useRef, useMemo, useEffect, useState, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -17,6 +20,7 @@ const COLORS = [
   new THREE.Color(0xfeae51),
 ];
 
+/** Exact upstream brain.vertex.glsl (rotate inlined) */
 const vertexShader = /* glsl */ `
 uniform vec3 uPointer;
 uniform float uHover;
@@ -40,7 +44,7 @@ void main() {
   mvPosition = instanceMatrix * mvPosition;
 
   float d = distance(uPointer, mvPosition.xyz);
-  float c = smoothstep(0.5, 0.05, d);
+  float c = smoothstep(0.45, 0.1, d);
 
   float scale = aSize + c * 8.0 * uHover;
   vec3 pos = position;
@@ -61,32 +65,28 @@ void main() {
 }
 `;
 
-/** Shared NDC mouse written by window listeners */
-type MouseState = {
-  x: number;
-  y: number;
-  active: boolean;
-};
+type MouseState = { x: number; y: number; active: boolean };
 
 function BrainInstances({
   ready,
   mouseRef,
+  onModelReady,
 }: {
   ready: boolean;
   mouseRef: React.MutableRefObject<MouseState>;
+  onModelReady: () => void;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const hitMeshRef = useRef<THREE.Mesh>(null);
   const { camera, size } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const ndc = useMemo(() => new THREE.Vector2(), []);
-  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), []);
-  const planeHit = useMemo(() => new THREE.Vector3(), []);
   const targetPoint = useRef(new THREE.Vector3());
   const smoothPoint = useRef(new THREE.Vector3());
   const hoverRef = useRef(0);
   const targetHover = useRef(0);
   const camTarget = useRef({ x: 0, y: 0 });
+  const notified = useRef(false);
 
   const uniforms = useMemo(
     () => ({
@@ -155,58 +155,49 @@ function BrainInstances({
       mesh.setMatrixAt(i, dummy.matrix);
     }
     mesh.instanceMatrix.needsUpdate = true;
-  }, [count, brainGeo]);
+    if (!notified.current) {
+      notified.current = true;
+      onModelReady();
+    }
+  }, [count, brainGeo, onModelReady]);
 
   useFrame(() => {
     if (!meshRef.current || count === 0) return;
 
     const { x, y, active } = mouseRef.current;
 
-    // Camera parallax — gsap equivalent
+    // Camera parallax — threejs-dala (gsap ~0.5s ≈ lerp 0.08–0.1)
     camTarget.current.x = x * 0.15;
     camTarget.current.y = y * 0.1;
-    camera.position.x += (camTarget.current.x - camera.position.x) * 0.08;
-    camera.position.y += (camTarget.current.y - camera.position.y) * 0.08;
+    camera.position.x += (camTarget.current.x - camera.position.x) * 0.1;
+    camera.position.y += (camTarget.current.y - camera.position.y) * 0.1;
     camera.position.z = size.width < 767 ? 2.3 : 1.2;
     camera.lookAt(0, 0, 0);
 
-    if (!ready || !active) {
-      targetHover.current = 0;
-      hoverRef.current += (0 - hoverRef.current) * 0.08;
-      uniforms.uHover.value = hoverRef.current;
-      uniforms.uPointer.value.copy(smoothPoint.current);
-      return;
-    }
+    // Hit-only hover (upstream): uHover 1 on brain ray hit, else 0
+    if (ready && active) {
+      ndc.set(x, y);
+      raycaster.setFromCamera(ndc, camera);
 
-    // NDC from our window listener (not R3F pointer)
-    ndc.set(x, y);
-    raycaster.setFromCamera(ndc, camera);
-
-    let hit = false;
-    if (hitMeshRef.current) {
-      hitMeshRef.current.updateMatrixWorld(true);
-      const hits = raycaster.intersectObject(hitMeshRef.current, false);
-      if (hits.length > 0 && hits[0]) {
-        hit = true;
-        targetPoint.current.copy(hits[0].point);
-        targetHover.current = 1;
-      }
-    }
-
-    if (!hit) {
-      const ok = raycaster.ray.intersectPlane(plane, planeHit);
-      if (ok) {
-        targetPoint.current.copy(planeHit);
-        const r = Math.hypot(planeHit.x, planeHit.y);
-        // Soft field across the whole hero so motion is always visible
-        targetHover.current = THREE.MathUtils.clamp(1.15 - r * 1.2, 0.35, 1);
+      if (hitMeshRef.current) {
+        hitMeshRef.current.updateMatrixWorld(true);
+        const hits = raycaster.intersectObject(hitMeshRef.current, false);
+        if (hits.length > 0 && hits[0]) {
+          targetHover.current = 1;
+          targetPoint.current.copy(hits[0].point);
+        } else {
+          targetHover.current = 0;
+        }
       } else {
-        targetHover.current = 0.35;
+        targetHover.current = 0;
       }
+    } else {
+      targetHover.current = 0;
     }
 
-    smoothPoint.current.lerp(targetPoint.current, 0.22);
-    hoverRef.current += (targetHover.current - hoverRef.current) * 0.16;
+    // Smooth like GSAP duration 0.25–0.3
+    smoothPoint.current.lerp(targetPoint.current, 0.18);
+    hoverRef.current += (targetHover.current - hoverRef.current) * 0.14;
 
     uniforms.uPointer.value.copy(smoothPoint.current);
     uniforms.uHover.value = hoverRef.current;
@@ -231,24 +222,28 @@ function BrainInstances({
 function Scene({
   ready,
   mouseRef,
+  onModelReady,
 }: {
   ready: boolean;
   mouseRef: React.MutableRefObject<MouseState>;
+  onModelReady: () => void;
 }) {
   return (
     <Suspense fallback={null}>
-      <BrainInstances ready={ready} mouseRef={mouseRef} />
+      <BrainInstances ready={ready} mouseRef={mouseRef} onModelReady={onModelReady} />
     </Suspense>
   );
 }
 
 useGLTF.preload(BRAIN_URL);
 
+/** Upstream index.scss — no heavy black edge */
 const DALA_BG =
-  'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 55%, #1a0a22 100%)';
+  'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%)';
 
 export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
   const [webglOk, setWebglOk] = useState(true);
+  const [modelReady, setModelReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseRef = useRef<MouseState>({ x: 0, y: 0, active: false });
 
@@ -262,11 +257,7 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
     }
   }, []);
 
-  /**
-   * Explicit mouse / touch listeners (threejs-dala style).
-   * NDC: x = clientX / width * 2 - 1, y = -(clientY / height * 2 - 1)
-   * Relative to the hero container so parallax matches the canvas.
-   */
+  // Window mouse/touch — NDC relative to hero (threejs-dala _onMousemove)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -276,35 +267,29 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
       if (rect.width <= 0 || rect.height <= 0) return;
       const x = ((clientX - rect.left) / rect.width) * 2 - 1;
       const y = -(((clientY - rect.top) / rect.height) * 2 - 1);
-      mouseRef.current.x = THREE.MathUtils.clamp(x, -1.5, 1.5);
-      mouseRef.current.y = THREE.MathUtils.clamp(y, -1.5, 1.5);
+      mouseRef.current.x = THREE.MathUtils.clamp(x, -1.2, 1.2);
+      mouseRef.current.y = THREE.MathUtils.clamp(y, -1.2, 1.2);
       mouseRef.current.active = true;
     };
 
-    const onMouseMove = (e: MouseEvent) => {
-      updateFromClient(e.clientX, e.clientY);
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
+    const onMouseMove = (e: MouseEvent) => updateFromClient(e.clientX, e.clientY);
+    const onTouch = (e: TouchEvent) => {
       const t = e.touches[0];
       if (t) updateFromClient(t.clientX, t.clientY);
     };
-
     const onLeave = () => {
-      // Keep last position but fade hover gently via useFrame when far
       mouseRef.current.active = false;
     };
 
-    // Window-level so overlays (text) cannot block the listener
     window.addEventListener('mousemove', onMouseMove, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    window.addEventListener('touchstart', onTouchMove, { passive: true });
+    window.addEventListener('touchmove', onTouch, { passive: true });
+    window.addEventListener('touchstart', onTouch, { passive: true });
     el.addEventListener('mouseleave', onLeave);
 
     return () => {
       window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchstart', onTouchMove);
+      window.removeEventListener('touchmove', onTouch);
+      window.removeEventListener('touchstart', onTouch);
       el.removeEventListener('mouseleave', onLeave);
     };
   }, []);
@@ -313,34 +298,46 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
     return <div className="absolute inset-0 z-0" style={{ background: DALA_BG }} />;
   }
 
+  const showCanvas = modelReady && ready;
+
   return (
     <div
       ref={containerRef}
       className="absolute inset-0 z-0"
       style={{ background: DALA_BG }}
     >
-      <Canvas
-        camera={{ position: [0, 0, 1.2], fov: 75, near: 0.1, far: 100 }}
-        dpr={[1, Math.min(1.5, typeof window !== 'undefined' ? window.devicePixelRatio : 1)]}
-        gl={{
-          antialias: typeof window !== 'undefined' ? window.devicePixelRatio === 1 : true,
-          alpha: true,
-          powerPreference: 'high-performance',
-        }}
-        style={{ background: 'transparent', width: '100%', height: '100%' }}
-        onCreated={({ gl }) => {
-          gl.setClearColor(0x000000, 0);
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          opacity: showCanvas ? 1 : 0,
+          transition: 'opacity 1s ease',
         }}
       >
-        <Scene ready={ready} mouseRef={mouseRef} />
-      </Canvas>
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 65% 55% at 50% 42%, transparent 0%, transparent 40%, rgba(10,5,15,0.25) 70%, rgba(10,5,15,0.55) 100%)',
-        }}
-      />
+        <Canvas
+          camera={{ position: [0, 0, 1.2], fov: 75, near: 0.1, far: 100 }}
+          dpr={[
+            1,
+            Math.min(1.5, typeof window !== 'undefined' ? window.devicePixelRatio : 1),
+          ]}
+          gl={{
+            antialias:
+              typeof window !== 'undefined' ? window.devicePixelRatio === 1 : true,
+            alpha: true,
+            powerPreference: 'high-performance',
+          }}
+          style={{ background: 'transparent', width: '100%', height: '100%' }}
+          onCreated={({ gl }) => {
+            gl.setClearColor(0x000000, 0);
+          }}
+        >
+          <Scene
+            ready={ready}
+            mouseRef={mouseRef}
+            onModelReady={() => setModelReady(true)}
+          />
+        </Canvas>
+      </div>
     </div>
   );
 }
