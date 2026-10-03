@@ -215,3 +215,24 @@ export function updateCourseTopics(id: string, topics: CourseTopic[]): AiDesigne
   void pushCourseToServer(next);
   return next;
 }
+
+export const INTEREST_PRESETS = [
+  'DSA',
+  'React',
+  'Node.js',
+  'Golang',
+  'Backend',
+  'Frontend',
+  'Python',
+  'TypeScript',
+  'System Design',
+  'SQL / Databases',
+  'DevOps',
+  'Cybersecurity',
+  'Data Analytics',
+  'Machine Learning',
+  'Mobile (Flutter)',
+  'Cloud (AWS)',
+] as const;
+
+export const DURATION_PRESETS = [3, 15, 30, 60, 90] as const;
