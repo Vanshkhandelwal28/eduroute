@@ -8,8 +8,7 @@ import GPUCompute from './GPUCompute.js';
 import MorphSystem from './MorphSystem.js';
 
 /**
- * Particles — mid-balance visibility.
- * Triangle size and scale tuned so form reads without covering hero type.
+ * Particles — volumetric structure, core brighter tips.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -50,9 +49,8 @@ export default class Particles {
     this.morph.setPair('brain', 'bulb');
     this.morph.setProgress(0);
 
-    // Moderate triangle size — structure without solid fill
     const tri = new THREE.BufferGeometry();
-    const s = 0.0085;
+    const s = 0.008;
     const vertices = new Float32Array([
       0.0, s * 1.25, 0.0,
       -s, -s * 0.7, 0.0,
@@ -67,8 +65,10 @@ export default class Particles {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      aScale[i] = 0.5 + Math.random() * 1.3;
-      aBrightness[i] = 0.4 + Math.random() * 0.5;
+      // Soft distribution + occasional core bright particles
+      const core = Math.random() > 0.92;
+      aScale[i] = core ? 1.4 + Math.random() * 0.8 : 0.45 + Math.random() * 1.2;
+      aBrightness[i] = core ? 0.85 + Math.random() * 0.15 : 0.35 + Math.random() * 0.45;
       aIndex[i] = i;
     }
 
