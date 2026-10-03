@@ -64,7 +64,6 @@ body.er-on-landing .theme-toggle {
   display: block;
 }
 
-/* Cursor */
 .er-has-cursor,
 .er-has-cursor * {
   cursor: none !important;
@@ -112,7 +111,6 @@ body.er-on-landing .theme-toggle {
   border: 1px solid #fff;
 }
 
-/* Loader */
 .er-loader {
   position: fixed;
   inset: 0;
@@ -158,7 +156,6 @@ body.er-on-landing .theme-toggle {
   font-variant-numeric: tabular-nums;
 }
 
-/* Vertical progress ticks */
 .er-progress {
   position: fixed;
   right: 1.25rem;
@@ -189,7 +186,6 @@ body.er-on-landing .theme-toggle {
   background: rgba(255, 255, 255, 0.85);
 }
 
-/* Scroll to top */
 .er-landing .er-to-top {
   position: fixed;
   bottom: 1.75rem;
@@ -239,7 +235,6 @@ body.er-on-landing .theme-toggle {
   transform: translateY(-2px);
 }
 
-/* Nav */
 .er-landing .er-nav {
   position: fixed;
   top: 0;
@@ -327,7 +322,6 @@ body.er-on-landing .theme-toggle {
   background: rgba(255, 255, 255, 0.06) !important;
 }
 
-/* Main */
 .er-landing .er-main {
   position: relative;
   z-index: 2;
@@ -358,6 +352,17 @@ body.er-on-landing .theme-toggle {
 @media (min-width: 1200px) {
   .er-landing .er-section {
     padding: 11rem 8rem;
+  }
+}
+
+/* Extra scroll room for the long brain→bulb morph */
+.er-landing .er-feature--tall {
+  min-height: 140svh;
+}
+
+@media (min-width: 768px) {
+  .er-landing .er-feature--tall {
+    min-height: 160svh;
   }
 }
 
@@ -421,7 +426,6 @@ body.er-on-landing .theme-toggle {
   opacity: 1 !important;
 }
 
-/* Buttons */
 .er-landing .er-btn {
   display: inline-flex !important;
   align-items: center;
@@ -472,7 +476,6 @@ body.er-on-landing .theme-toggle {
   color: #fff !important;
 }
 
-/* Hero — more negative space */
 .er-landing .er-hero {
   justify-content: flex-end;
   padding-bottom: 6rem;
@@ -489,12 +492,10 @@ body.er-on-landing .theme-toggle {
   margin-top: 3rem;
 }
 
-/* Manifesto */
 .er-landing .er-manifesto {
   max-width: 60rem;
 }
 
-/* Features */
 .er-landing .er-feature {
   max-width: 42rem;
 }
@@ -512,7 +513,6 @@ body.er-on-landing .theme-toggle {
   text-align: right;
 }
 
-/* Team */
 .er-landing .er-team__grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -528,16 +528,31 @@ body.er-on-landing .theme-toggle {
 }
 
 .er-landing .er-team__avatar {
-  width: 48px;
-  height: 48px;
+  width: 72px;
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  font-size: 0.65rem;
-  letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 1.1rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 1.25rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.er-landing .er-team__avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.12), transparent 55%);
+  pointer-events: none;
+}
+
+.er-landing .er-team__avatar span {
+  position: relative;
+  z-index: 1;
 }
 
 .er-landing .er-team__member {
@@ -564,7 +579,6 @@ body.er-on-landing .theme-toggle {
   margin: 0;
 }
 
-/* Partners */
 .er-landing .er-partners {
   min-height: auto;
   padding-top: 4rem;
@@ -587,7 +601,6 @@ body.er-on-landing .theme-toggle {
   color: rgba(255, 255, 255, 0.28);
 }
 
-/* CTA */
 .er-landing .er-cta {
   text-align: center;
   align-items: center;
@@ -612,7 +625,6 @@ body.er-on-landing .theme-toggle {
   margin-top: 3rem;
 }
 
-/* Footer */
 .er-landing .er-footer {
   min-height: auto;
   padding: 3.5rem 1.5rem 4.5rem;
