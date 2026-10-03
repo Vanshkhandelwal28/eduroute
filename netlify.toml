@@ -1,4 +1,4 @@
-# EDUROUTE Netlify — Render (Neon) + Supabase only. No MongoDB required.
+# EDUROUTE Netlify — Render (Neon) + Supabase only.
 [build]
   command = "npm run build"
   publish = "dist"
@@ -12,7 +12,6 @@
   node_bundler = "esbuild"
   external_node_modules = ["mysql2", "bcryptjs", "nodemailer"]
 
-# Auth
 [[redirects]]
   from = "/api/auth/register"
   to = "/.netlify/functions/auth-register"
@@ -43,7 +42,13 @@
   status = 200
   force = true
 
-# Neon via Go (Render) — set GO_API_URL=https://eduroute-api-nho4.onrender.com
+# Neon via Go — set GO_API_URL=https://eduroute-api-nho4.onrender.com
+[[redirects]]
+  from = "/api/buddy/sync"
+  to = "/.netlify/functions/go-api?path=/api/buddy/sync"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/api/ai-courses"
   to = "/.netlify/functions/go-api?path=/api/ai-courses"
@@ -86,14 +91,12 @@
   status = 200
   force = true
 
-# Other API → Netlify functions
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
   force = true
 
-# SPA
 [[redirects]]
   from = "/*"
   to = "/index.html"

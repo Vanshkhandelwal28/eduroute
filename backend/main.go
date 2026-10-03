@@ -49,6 +49,9 @@ func main() {
 	if err := ensureSchema(db.DB); err != nil {
 		log.Fatal(err)
 	}
+	if err := ensureBuddySyncTable(db.DB); err != nil {
+		log.Printf("buddy_sync_store init: %v", err)
+	}
 	if err := server.ensureDefaultAdmin(); err != nil {
 		log.Printf("default admin initialization failed: %v", err)
 	}
@@ -119,7 +122,7 @@ func cors(next http.Handler) http.Handler {
 			origin = "*"
 		}
 		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -371,8 +374,14 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		s.buddyProgress(w, r)
 	case path == "buddy-chat" && r.Method == "POST":
 		s.buddyChatFunction(w, r)
+	case path == "buddy/sync":
+		s.buddySync(w, r)
 	case path == "buddy/conversations":
 		s.buddyConversations(w, r)
+	case strings.HasPrefix(path, "buddy/conversations/") && strings.HasSuffix(path, "/messages"):
+		cid := strings.TrimSuffix(strings.TrimPrefix(path, "buddy/conversations/"), "/messages")
+		cid = strings.Trim(cid, "/")
+		s.buddyMessages(w, r, cid)
 	case path == "ai-courses":
 		s.aiCourses(w, r)
 	case strings.HasPrefix(path, "ai-courses/"):
