@@ -103,7 +103,9 @@ export function getCourseAchievement(courseId: string): CourseAchievement | null
 export function getAllEarnedCourseSkills(): string[] {
   const set = new Set<string>();
   for (const a of listCourseAchievements()) {
-    a.skills.forEach((s) => set.add(s));
+    (a.skills || []).forEach((s) => {
+      if (s) set.add(String(s));
+    });
   }
   return Array.from(set);
 }

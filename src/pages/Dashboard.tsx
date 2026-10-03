@@ -56,7 +56,9 @@ export const Dashboard = () => {
     nextPlan.kind === 'gaps' ? nextPlan.gapCount : onboarding.missingSkills?.length || 0;
   const hasSkillProfile = Boolean(onboarding.completedAt);
   const [applications, setApplications] = useState<InternshipApplication[]>(() => readApplications());
-  const earnedSkills = useMemo(() => getAllEarnedCourseSkills(), []);
+  const earnedSkills = useMemo(() => {
+    try { return getAllEarnedCourseSkills() || []; } catch { return []; }
+  }, []);
   const [skillAnalyze, setSkillAnalyze] = useState(() => readDashboardSkillAnalyze());
 
   useEffect(() => {
@@ -325,7 +327,7 @@ export const Dashboard = () => {
         ) : nextPlan.kind === 'quiz' ? (
           <Link
             to="/onboarding"
-            className="er-card er-card-hover group flex flex-col gap-4 border-indigo-200/80 bg-gradient-to-r from-indigo-50 to-violet-50 p-5 transition-all dark:border-indigo-500/30 dark:from-indigo-950/30 dark:to-violet-950/20 sm:flex-row sm:items-center sm:justify-between"
+            className="er-card er-card-hover group flex flex-col gap-4 border-indigo-200/80 bg-gradient-to-r from-indigo-50 to-violet-50 p-5 transition-all dark:border-indigo-500/30 dark:from-indigo-950/20 dark:to-violet-950/20 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md">
@@ -384,24 +386,33 @@ export const Dashboard = () => {
                 <Link
                   key={course.id}
                   to={courseHref(course)}
-                  className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition hover:shadow-md"
+                  className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition-all hover:shadow-md"
                 >
-                  <div className="relative h-28 overflow-hidden bg-slate-200 dark:bg-slate-800">
-                    <img src={course.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                  <div className="relative aspect-video overflow-hidden bg-slate-100 dark:bg-slate-800">
+                    <img
+                      src={course.thumbnail}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
+                    <span className="absolute left-2 top-2 rounded-full bg-indigo-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
+                      {pct}% done
+                    </span>
                     {boost > 0 && (
-                      <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
-                        High chance +{boost}%
+                      <span className="absolute right-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
+                        +{boost}% chance
                       </span>
                     )}
                   </div>
                   <div className="flex flex-1 flex-col gap-1 p-3">
-                    <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">{course.title}</p>
-                    <div className="mt-auto">
+                    <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">
+                      {course.title}
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)]">{course.category}</p>
+                    <div className="mt-auto pt-1">
                       <div className="er-progress h-1.5">
-                        <div className="er-progress-bar" style={{ width: `${Math.max(4, pct)}%` }} />
+                        <div className="er-progress-bar" style={{ width: `${Math.max(2, pct)}%` }} />
                       </div>
-                      <p className="mt-1 text-[11px] text-[var(--text-muted)]">{pct}% complete</p>
                     </div>
                   </div>
                 </Link>
@@ -413,8 +424,8 @@ export const Dashboard = () => {
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">Recommended for placement</h2>
-          <Link to="/browse" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">Recommended for you</h2>
+          <Link to="/courses" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
             Browse all
           </Link>
         </div>
@@ -423,10 +434,14 @@ export const Dashboard = () => {
             <Link
               key={course.id}
               to={courseHref(course)}
-              className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition hover:shadow-md"
+              className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition-all hover:shadow-md"
             >
-              <div className="relative h-28 overflow-hidden bg-slate-200 dark:bg-slate-800">
-                <img src={course.thumbnail} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+              <div className="relative aspect-video overflow-hidden bg-slate-100 dark:bg-slate-800">
+                <img
+                  src={course.thumbnail}
+                  alt=""
+                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
                 <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
                   High chance +{boost}%
