@@ -1,6 +1,5 @@
 /**
  * React wrapper — GPU SPH fluid for EduRoute landing.
- * Applies rendering fixes: layout-safe resize, stable counts, cleanup.
  */
 import { useEffect, useRef, useState } from 'react';
 import { SPHSimulation } from '../webgl/sph/SPHSimulation';
@@ -19,7 +18,6 @@ export function SPHFluidCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Ensure canvas has layout size before WebGL init
     const parent = canvas.parentElement;
     if (parent) {
       const w = parent.clientWidth || window.innerWidth;
@@ -36,7 +34,7 @@ export function SPHFluidCanvas({
       sph = new SPHSimulation(canvas, {
         particleCount: isMobile ? 900 : 1600,
         neighborStride: isMobile ? 3 : 2,
-        particleSize: isMobile ? 14 : 11,
+        particleSize: isMobile ? 6 : 5,
       });
     } catch (err) {
       setFallback(err instanceof Error ? err.message : 'Failed to init WebGL');
@@ -49,7 +47,6 @@ export function SPHFluidCanvas({
       return;
     }
 
-    // Resize after paint so parent absolute inset-0 has real dimensions
     const resize = () => sph.onResize();
     resize();
     const t1 = window.setTimeout(resize, 50);
