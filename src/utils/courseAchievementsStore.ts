@@ -1,6 +1,6 @@
+import { pushUserData, pullUserData } from './userDataStore';
 /**
  * Course achievements after final assessment pass.
- * Skills + certificate metadata + score badge for Profile & Portfolio.
  */
 
 import type { AiDesignedCourse } from './aiCourseStore';
@@ -23,22 +23,19 @@ export type CourseAchievement = {
 
 const KEY = 'eduroute:course-achievements-v1';
 
-/** Badge from assessment percent (pass is ≥60%). */
 export function badgeFromPercent(percent: number): CertBadge {
   if (percent >= 85) return 'gold';
   if (percent >= 75) return 'silver';
-  return 'bronze'; // 60–74
+  return 'bronze';
 }
 
 export function badgeLabel(badge: CertBadge): string {
-  if (badge === 'gold') return 'GOLD';
-  if (badge === 'silver') return 'SILVER';
-  return 'BRONZE';
+  return badge === 'gold' ? 'Gold' : badge === 'silver' ? 'Silver' : 'Bronze';
 }
 
 export function badgeRangeLabel(badge: CertBadge): string {
-  if (badge === 'gold') return '85–100%';
-  if (badge === 'silver') return '75–85%';
+  if (badge === 'gold') return '85%+';
+  if (badge === 'silver') return '75–84%';
   return '60–74%';
 }
 
@@ -58,52 +55,37 @@ function writeAll(map: Record<string, CourseAchievement>) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(KEY, JSON.stringify(map));
-    window.dispatchEvent(
-      new CustomEvent('eduroute:course-achievements-updated', { detail: map }),
-    );
+    void pushUserData('course-achievements', map);
+    window.dispatchEvent(new CustomEvent('eduroute:course-achievements-updated'));
   } catch {
     /* ignore */
   }
 }
 
-/** Unique skills from interests + topic.skills */
 export function skillsFromCourse(course: AiDesignedCourse): string[] {
-  const set = new Set<string>();
-  for (const s of course.interests || []) {
-    if (s?.trim()) set.add(s.trim());
-  }
-  for (const t of course.topics || []) {
-    for (const s of t.skills || []) {
-      if (s?.trim()) set.add(s.trim());
-    }
-  }
-  return Array.from(set);
+  const fromInterests = course.interests || [];
+  const fromTopics = (course.topics || []).flatMap((t) => t.skills || []);
+  return Array.from(new Set([...fromInterests, ...fromTopics])).slice(0, 12);
 }
 
 export function recordCourseAchievement(
   course: AiDesignedCourse,
   percent: number,
-  minWatchLabel?: string,
 ): CourseAchievement {
   const map = readAll();
-  const prev = map[course.id];
-  const skills = skillsFromCourse(course);
+  const badge = badgeFromPercent(percent);
   const level = levelFromDurationDays(course.durationDays);
-  const durationLabel = minWatchLabel
-    ? `${course.durationDays} days`
-    : `${course.durationDays} days`;
-  const bestPercent = Math.max(percent, prev?.percent || 0);
   const next: CourseAchievement = {
     courseId: course.id,
     courseTitle: course.title,
-    skills: skills.length ? skills : prev?.skills || [],
+    skills: skillsFromCourse(course),
     level,
     durationDays: course.durationDays,
-    durationLabel,
-    certId: prev?.certId || makeCertId(),
-    completedAt: prev?.completedAt || formatCertDate(),
-    percent: bestPercent,
-    badge: badgeFromPercent(bestPercent),
+    durationLabel: `${course.durationDays} days`,
+    certId: map[course.id]?.certId || makeCertId(),
+    completedAt: new Date().toISOString(),
+    percent,
+    badge,
   };
   map[course.id] = next;
   writeAll(map);
@@ -111,20 +93,30 @@ export function recordCourseAchievement(
 }
 
 export function listCourseAchievements(): CourseAchievement[] {
-  return Object.values(readAll()).sort((a, b) =>
-    (b.completedAt || '').localeCompare(a.completedAt || ''),
-  );
+  return Object.values(readAll()).sort((a, b) => b.completedAt.localeCompare(a.completedAt));
 }
 
 export function getCourseAchievement(courseId: string): CourseAchievement | null {
   return readAll()[courseId] || null;
 }
 
-/** All unique skills earned across passed courses */
 export function getAllEarnedCourseSkills(): string[] {
   const set = new Set<string>();
   for (const a of listCourseAchievements()) {
-    for (const s of a.skills) set.add(s);
+    a.skills.forEach((s) => set.add(s));
   }
   return Array.from(set);
+}
+
+export async function syncAchievementsFromServer(): Promise<void> {
+  const remote = await pullUserData<Record<string, CourseAchievement>>('course-achievements');
+  if (!remote || typeof remote !== 'object') return;
+  try {
+    const local = readAll();
+    const merged = { ...local, ...remote };
+    localStorage.setItem(KEY, JSON.stringify(merged));
+    window.dispatchEvent(new CustomEvent('eduroute:course-achievements-updated'));
+  } catch {
+    /* ignore */
+  }
 }
