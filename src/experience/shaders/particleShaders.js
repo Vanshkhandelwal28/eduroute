@@ -1,5 +1,5 @@
 /**
- * Particle render shaders — balanced visibility (readable structure, no white-out).
+ * Particle shaders — high readability on black background.
  */
 
 export const particleVertexShader = /* glsl */ `
@@ -32,7 +32,7 @@ void main() {
 
   vec3 local = position * aScale;
 
-  float angle = aSeed * 6.2831853 + uTime * 0.04;
+  float angle = aSeed * 6.2831853 + uTime * 0.03;
   float c = cos(angle);
   float s = sin(angle);
   mat2 rot = mat2(c, -s, s, c);
@@ -41,7 +41,7 @@ void main() {
   vec3 worldPos = simPos + local;
 
   float phase = aSeed * 6.2831853;
-  float breath = sin(uTime * uBreathSpeed + phase) * uBreathAmount * 0.4;
+  float breath = sin(uTime * uBreathSpeed + phase) * uBreathAmount * 0.35;
   vec3 dir = normalize(simPos + vec3(0.0001));
   worldPos += dir * breath;
 
@@ -57,16 +57,16 @@ varying float vBrightness;
 varying float vSeed;
 
 void main() {
-  // Cool white base + soft violet tint
-  vec3 base = vec3(0.88, 0.86, 0.94);
-  vec3 accent = vec3(0.55, 0.38, 0.95);
+  // Bright cool-white with soft violet variation
+  vec3 base = vec3(0.95, 0.94, 1.0);
+  vec3 accent = vec3(0.65, 0.48, 1.0);
   float tint = fract(vSeed * 7.13);
-  vec3 col = mix(base, accent, tint * 0.25);
+  vec3 col = mix(base, accent, tint * 0.22);
 
-  // Visible but not blown-out — mid luminance for selective bloom
-  col *= (0.45 + vBrightness * 0.50);
+  // Strong mid-to-high luminance so structure reads on pure black
+  col *= (0.7 + vBrightness * 0.35);
 
-  float alpha = 0.55 * uOpacity;
+  float alpha = 0.78 * uOpacity;
 
   gl_FragColor = vec4(col, alpha);
 }

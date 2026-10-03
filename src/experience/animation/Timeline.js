@@ -5,7 +5,8 @@ import { revealLines } from './textReveal.js';
 gsap.registerPlugin(ScrollTrigger);
 
 /**
- * TimelineController — scroll choreography + reliable hero text reveal.
+ * TimelineController — scroll choreography.
+ * Base particle scale 1.15 is preserved when applying timeline scale.
  */
 export default class TimelineController {
   constructor({ experience }) {
@@ -80,7 +81,6 @@ export default class TimelineController {
     this._camT = t;
   }
 
-  /** Force hero text visible even if GSAP race fails. */
   _revealHero() {
     if (this._heroRevealed) return;
     this._heroRevealed = true;
@@ -88,7 +88,6 @@ export default class TimelineController {
     const hero = document.querySelector('#hero');
     if (!hero) return;
 
-    // Ensure spans are visible as a safety net
     const spans = hero.querySelectorAll('.er-reveal > span');
     spans.forEach((el) => {
       el.style.transform = 'translateY(0)';
@@ -113,9 +112,7 @@ export default class TimelineController {
     this.morph?.setProgress(0);
     this.camera?.setState('HERO');
 
-    // Hero reveal after loader (~1s) + DOM ready
     gsap.delayedCall(1.1, () => this._revealHero());
-    // Safety fallback
     gsap.delayedCall(2.2, () => this._revealHero());
 
     const heroTl = gsap.timeline({
@@ -409,7 +406,8 @@ export default class TimelineController {
     const s = this.state;
     if (this.particles) {
       if (this.particles.mesh) {
-        this.particles.mesh.scale.setScalar(s.scale);
+        // Base 1.15 * timeline scale so structure stays large
+        this.particles.mesh.scale.setScalar(1.15 * s.scale);
       }
       this.particles._timelineRotY = s.rotY;
       this.particles._timelineRotX = s.rotX;

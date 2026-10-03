@@ -8,8 +8,7 @@ import GPUCompute from './GPUCompute.js';
 import MorphSystem from './MorphSystem.js';
 
 /**
- * Particles — InstancedMesh + GPU sim + morph.
- * Tuned for visible structure without white-out.
+ * Particles — visible organic structure on black.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -50,13 +49,13 @@ export default class Particles {
     this.morph.setPair('brain', 'bulb');
     this.morph.setProgress(0);
 
-    // Readable triangle size
+    // Larger triangles for clear silhouette
     const tri = new THREE.BufferGeometry();
-    const s = 0.009;
+    const s = 0.014;
     const vertices = new Float32Array([
-      0.0, s * 1.25, 0.0,
-      -s, -s * 0.7, 0.0,
-      s, -s * 0.7, 0.0,
+      0.0, s * 1.3, 0.0,
+      -s, -s * 0.65, 0.0,
+      s, -s * 0.65, 0.0,
     ]);
     tri.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 
@@ -67,8 +66,8 @@ export default class Particles {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      aScale[i] = 0.55 + Math.random() * 1.6;
-      aBrightness[i] = 0.4 + Math.random() * 0.55;
+      aScale[i] = 0.7 + Math.random() * 1.5;
+      aBrightness[i] = 0.55 + Math.random() * 0.45;
       aIndex[i] = i;
     }
 
@@ -87,8 +86,8 @@ export default class Particles {
       fragmentShader: particleFragmentShader,
       uniforms: {
         uTime: { value: 0 },
-        uBreathAmount: { value: 0.025 },
-        uBreathSpeed: { value: 0.45 },
+        uBreathAmount: { value: 0.02 },
+        uBreathSpeed: { value: 0.4 },
         uPositionTexture: { value: null },
         uTexSize: { value: this.simulation.textureSize },
         uOpacity: { value: 1 },
@@ -105,6 +104,8 @@ export default class Particles {
       this.count
     );
     this.mesh.frustumCulled = false;
+    // Slightly larger overall structure in the frame
+    this.mesh.scale.setScalar(1.15);
 
     const dummy = new THREE.Object3D();
     for (let i = 0; i < this.count; i++) {
@@ -177,9 +178,14 @@ export default class Particles {
       this._rotCurrent.y +=
         (this._rotTarget.y - this._rotCurrent.y) * rotLerp;
 
+      // Timeline scale is applied on top of base 1.15
+      const baseScale = 1.15;
+      // scale from timeline is stored on mesh via TimelineController setScalar
+      // we only set rotation here; Timeline sets scale each frame
+
       this.mesh.rotation.x = this._rotCurrent.x + this._timelineRotX;
       this.mesh.rotation.y =
-        elapsed * 0.02 + this._rotCurrent.y + this._timelineRotY;
+        elapsed * 0.018 + this._rotCurrent.y + this._timelineRotY;
     }
   }
 
