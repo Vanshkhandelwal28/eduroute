@@ -106,7 +106,6 @@ export const MainLayout = () => {
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
-  // Latest useful change: pull all feature data from Neon/Render on shell load
   useEffect(() => {
     void syncAllFeatureData().catch(() => undefined);
   }, []);
@@ -186,13 +185,16 @@ export const MainLayout = () => {
 
   const renderNavLink = (item: NavItem, onClick?: () => void) => {
     const active = isActive(item.path);
+    const navClass = active
+      ? 'er-nav-item active' + (collapsed ? ' !justify-center !px-0' : '')
+      : 'er-nav-item' + (collapsed ? ' !justify-center !px-0' : '');
     return (
       <Link
         key={item.path}
         to={item.path}
         title={item.name}
         onClick={onClick}
-        className={`er-nav-item ${active ? 'active' : ''} ${collapsed ? '!justify-center !px-0' : ''}`}
+        className={navClass}
       >
         <item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={active ? 2.25 : 1.75} />
         {!collapsed && item.name}
@@ -200,15 +202,24 @@ export const MainLayout = () => {
     );
   };
 
+  const sidebarWidthClass = collapsed ? 'er-sidebar !hidden lg:!flex shrink-0 transition-[width] duration-300 ease-out !w-[72px]' : 'er-sidebar !hidden lg:!flex shrink-0 transition-[width] duration-300 ease-out';
+  const logoRowClass = collapsed ? 'flex items-center px-3 py-5 justify-center' : 'flex items-center px-3 py-5 gap-2 px-5';
+  const navClass = collapsed ? 'flex-1 overflow-y-auto py-2 px-2 space-y-0.5' : 'flex-1 overflow-y-auto py-2 px-3 space-y-3';
+  const footerClass = collapsed ? 'mt-auto border-t border-[var(--border-default)] space-y-1 p-2' : 'mt-auto border-t border-[var(--border-default)] space-y-1 p-3';
+  const profileLinkClass = collapsed
+    ? 'flex items-center rounded-2xl hover:bg-[var(--accent-soft)] transition-colors justify-center p-2'
+    : 'flex items-center rounded-2xl hover:bg-[var(--accent-soft)] transition-colors gap-3 px-3 py-2.5';
+  const logoutClass = collapsed
+    ? 'er-nav-item w-full text-left hover:!bg-red-500/10 hover:!text-red-500 !justify-center !px-0'
+    : 'er-nav-item w-full text-left hover:!bg-red-500/10 hover:!text-red-500';
+
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <aside
-        className={`er-sidebar !hidden lg:!flex shrink-0 transition-[width] duration-300 ease-out ${
-          collapsed ? '!w-[72px]' : ''
-        }`}
+        className={sidebarWidthClass}
         style={collapsed ? { width: 72 } : undefined}
       >
-        <div className={`flex items-center px-3 py-5 ${collapsed ? 'justify-center' : 'gap-2 px-5'}`}>
+        <div className={logoRowClass}>
           <button
             type="button"
             onClick={toggleCollapsed}
@@ -236,7 +247,7 @@ export const MainLayout = () => {
           )}
         </div>
 
-        <nav className={`flex-1 overflow-y-auto py-2 ${collapsed ? 'px-2 space-y-0.5' : 'px-3 space-y-3'}`}>
+        <nav className={navClass}>
           {collapsed
             ? FLAT_NAV.map((item) => renderNavLink(item))
             : NAV_GROUPS.map((group) => (
@@ -249,14 +260,8 @@ export const MainLayout = () => {
               ))}
         </nav>
 
-        <div className={`mt-auto border-t border-[var(--border-default)] space-y-1 ${collapsed ? 'p-2' : 'p-3'`}>
-          <Link
-            to="/profile"
-            title={profileIdentity.name}
-            className={`flex items-center rounded-2xl hover:bg-[var(--accent-soft)] transition-colors ${
-              collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2.5'
-            }`}
-          >
+        <div className={footerClass}>
+          <Link to="/profile" title={profileIdentity.name} className={profileLinkClass}>
             <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent)] text-sm font-bold text-white">
               {profileIdentity.photo ? (
                 <img src={profileIdentity.photo} alt="" className="h-full w-full object-cover" />
@@ -275,18 +280,19 @@ export const MainLayout = () => {
             )}
           </Link>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            title="Logout"
-            className={`er-nav-item w-full text-left hover:!bg-red-500/10 hover:!text-red-500 ${collapsed ? '!justify-center !px-0' : ''}`}
-          >
+          <button type="button" onClick={handleLogout} title="Logout" className={logoutClass}>
             <LogOut className="h-[18px] w-[18px]" strokeWidth={1.75} />
             {!collapsed && 'Logout'}
           </button>
 
           {collapsed && (
-            <button type="button" onClick={toggleCollapsed} className="er-nav-item !justify-center !px-0 w-full" title="Expand sidebar" aria-label="Expand sidebar">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className="er-nav-item !justify-center !px-0 w-full"
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >
               <PanelLeftOpen className="h-[18px] w-[18px]" />
             </button>
           )}
@@ -333,7 +339,7 @@ export const MainLayout = () => {
                     <div>
                       <p className="text-sm font-bold text-[var(--text-primary)]">Notifications</p>
                       <p className="text-[11px] text-[var(--text-muted)]">
-                        {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                        {unreadCount > 0 ? unreadCount + ' unread' : 'All caught up'}
                       </p>
                     </div>
                     {unreadCount > 0 && (
@@ -357,9 +363,11 @@ export const MainLayout = () => {
                             );
                             setNotifOpen(false);
                           }}
-                          className={`block border-b border-[var(--border-default)] px-4 py-3 transition last:border-b-0 hover:bg-[var(--accent-soft)] ${
-                            n.unread ? 'bg-[var(--accent-soft)]/40' : ''
-                          }`}
+                          className={
+                            n.unread
+                              ? 'block border-b border-[var(--border-default)] px-4 py-3 transition last:border-b-0 hover:bg-[var(--accent-soft)] bg-[var(--accent-soft)]/40'
+                              : 'block border-b border-[var(--border-default)] px-4 py-3 transition last:border-b-0 hover:bg-[var(--accent-soft)]'
+                          }
                           role="menuitem"
                         >
                           <div className="flex items-start gap-2">
@@ -402,14 +410,22 @@ export const MainLayout = () => {
 
       {isMobileMenuOpen && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} aria-hidden />
+          <div
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+            aria-hidden
+          />
           <aside className="fixed inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col bg-[var(--bg-sidebar)] shadow-2xl er-safe-pt lg:hidden">
             <div className="flex items-center justify-between px-4 py-4">
               <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2">
                 <EduRouteLogo size={32} className="rounded-lg shadow-sm" />
                 <span className="font-bold">EDUROUTE</span>
               </Link>
-              <button type="button" onClick={() => setIsMobileMenuOpen(false)} className="p-2 rounded-xl hover:bg-[var(--accent-soft)]">
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2 rounded-xl hover:bg-[var(--accent-soft)]"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -428,7 +444,7 @@ export const MainLayout = () => {
                         key={item.path}
                         to={item.path}
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className={`er-nav-item ${isActive(item.path) ? 'active' : ''}`}
+                        className={isActive(item.path) ? 'er-nav-item active' : 'er-nav-item'}
                       >
                         <item.icon className="h-[18px] w-[18px]" />
                         {item.name}
