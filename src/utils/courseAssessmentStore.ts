@@ -1,7 +1,9 @@
 /**
- * Final assessment results — localStorage.
- * Certificate unlock requires passed === true (score >= 60%).
+ * Course final assessments — localStorage + Neon (Render).
  */
+
+import { currentUserId } from './apiClient';
+import { pullUserData, pushUserData } from './userDataStore';
 
 export type AssessmentRecord = {
   courseId: string;
@@ -14,12 +16,13 @@ export type AssessmentRecord = {
   attempts: number;
 };
 
-const KEY = 'eduroute:course-assessments-v1';
+const DATA_KEY = 'course-assessments';
+const KEY = () => `eduroute:course-assessments-v1:${currentUserId()}`;
 
 function readAll(): Record<string, AssessmentRecord> {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY()) || localStorage.getItem('eduroute:course-assessments-v1');
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? parsed : {};
@@ -31,13 +34,13 @@ function readAll(): Record<string, AssessmentRecord> {
 function writeAll(map: Record<string, AssessmentRecord>) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(map));
-    window.dispatchEvent(
-      new CustomEvent('eduroute:course-assessment-updated', { detail: map }),
-    );
+    localStorage.setItem(KEY(), JSON.stringify(map));
+    localStorage.setItem('eduroute:course-assessments-v1', JSON.stringify(map));
+    window.dispatchEvent(new CustomEvent('eduroute:course-assessment-updated', { detail: map }));
   } catch {
     /* ignore */
   }
+  void pushUserData(DATA_KEY, map);
 }
 
 export function getAssessment(courseId: string): AssessmentRecord | null {
@@ -58,21 +61,47 @@ export function saveAssessmentResult(
     gapTopics: string[];
   },
 ): AssessmentRecord {
-  const map = readAll();
-  const prev = map[courseId];
-  const next: AssessmentRecord = {
+  const all = readAll();
+  const prev = all[courseId];
+  const record: AssessmentRecord = {
     courseId,
-    passed: result.passed || Boolean(prev?.passed),
+    passed: result.passed,
     percent: result.percent,
     score: result.score,
     total: result.total,
-    gapTopics: result.gapTopics,
+    gapTopics: result.gapTopics || [],
     completedAt: new Date().toISOString(),
     attempts: (prev?.attempts || 0) + 1,
   };
-  // Keep best pass: once passed, stay passed even if later attempt fails
-  if (prev?.passed) next.passed = true;
-  map[courseId] = next;
-  writeAll(map);
-  return next;
+  all[courseId] = record;
+  writeAll(all);
+  return record;
+}
+
+export async function syncAssessmentsFromServer(): Promise<void> {
+  const remote = await pullUserData<Record<string, AssessmentRecord>>(DATA_KEY);
+  if (!remote || typeof remote !== 'object') return;
+  const local = readAll();
+  let changed = false;
+  for (const [id, rec] of Object.entries(remote)) {
+    const lp = local[id];
+    if (!lp || (rec.attempts || 0) >= (lp.attempts || 0)) {
+      local[id] = rec;
+      changed = true;
+    }
+  }
+  if (changed) {
+    try {
+      localStorage.setItem(KEY(), JSON.stringify(local));
+      window.dispatchEvent(new CustomEvent('eduroute:course-assessment-updated', { detail: local }));
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.setTimeout(() => {
+    void syncAssessmentsFromServer().catch(() => undefined);
+  }, 700);
 }
