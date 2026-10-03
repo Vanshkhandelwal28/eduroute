@@ -1,7 +1,6 @@
 /**
- * EduRoute Landing — Redesign (Phase 1 + 2)
- * Vanilla JS WebGL Experience mounted from React shell.
- * Structure + canvas only. Particles / morph / post-processing come later.
+ * EduRoute Landing — cinematic redesign.
+ * WebGL Experience + DOM sections. TimelineController owns scroll choreography.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -17,7 +16,6 @@ export const LandingPage = () => {
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    // Phase 2: mount Three.js experience
     const experience = new Experience({ canvas: canvasRef.current });
     experienceRef.current = experience;
 
@@ -31,10 +29,8 @@ export const LandingPage = () => {
     <div className="er-landing">
       <AuthModal isOpen={auth} onClose={() => setAuth(false)} />
 
-      {/* Fixed full-screen WebGL canvas */}
       <canvas id="webgl-canvas" ref={canvasRef} />
 
-      {/* Navigation */}
       <nav className="er-nav">
         <a href="#hero" className="er-nav__logo">
           EduRoute
@@ -51,7 +47,6 @@ export const LandingPage = () => {
       </nav>
 
       <main className="er-main">
-        {/* 1. Hero */}
         <section id="hero" className="er-section er-hero">
           <p className="er-label">EduRoute</p>
           <h1 className="er-title">
@@ -79,7 +74,6 @@ export const LandingPage = () => {
           <p className="er-scroll-hint">Scroll</p>
         </section>
 
-        {/* 2. Manifesto */}
         <section id="manifesto" className="er-section er-manifesto">
           <p className="er-label">01 — Manifesto</p>
           <h2 className="er-title">
@@ -101,7 +95,6 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        {/* 3. Feature 01 */}
         <section id="feature-01" className="er-section er-feature">
           <p className="er-label">02 — Discover</p>
           <h2 className="er-title">
@@ -117,7 +110,6 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        {/* 4. Feature 02 */}
         <section id="feature-02" className="er-section er-feature er-feature--right">
           <p className="er-label">03 — Connect</p>
           <h2 className="er-title">
@@ -133,7 +125,6 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        {/* 5. Feature 03 */}
         <section id="feature-03" className="er-section er-feature">
           <p className="er-label">04 — Evolve</p>
           <h2 className="er-title">
@@ -149,7 +140,6 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        {/* 6. Team */}
         <section id="team" className="er-section">
           <p className="er-label">05 — Team</p>
           <h2 className="er-title">
@@ -176,7 +166,6 @@ export const LandingPage = () => {
           </div>
         </section>
 
-        {/* 7. CTA */}
         <section id="cta" className="er-section er-cta">
           <p className="er-label">06 — Begin</p>
           <h2 className="er-title">
@@ -200,7 +189,6 @@ export const LandingPage = () => {
           </div>
         </section>
 
-        {/* 8. Footer */}
         <footer className="er-footer">
           <p className="er-footer__brand">EduRoute</p>
           <div className="er-footer__links er-interactive">
@@ -209,7 +197,7 @@ export const LandingPage = () => {
             <Link to="/buddy">AI Buddy</Link>
             <a href="#manifesto">Manifesto</a>
           </div>
-          <p className="er-footer__copy">© 2026 EduRoute · Phase 1–2 foundation</p>
+          <p className="er-footer__copy">© 2026 EduRoute</p>
         </footer>
       </main>
     </div>

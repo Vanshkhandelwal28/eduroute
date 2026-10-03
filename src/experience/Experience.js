@@ -4,11 +4,12 @@ import Camera from './Camera.js';
 import Renderer from './Renderer.js';
 import Particles from './particles/Particles.js';
 import MouseInteraction from './interaction/MouseInteraction.js';
+import TimelineController from './animation/Timeline.js';
 
 /**
- * Experience — top-level orchestrator for the WebGL layer.
- * Phase 2–4: scene, particles, GPU sim.
- * Phase 5: mouse interaction.
+ * Experience — orchestrator.
+ * Phase 2–6: scene, particles, GPU, mouse, morph.
+ * Phase 7: TimelineController (GSAP ScrollTrigger).
  */
 export default class Experience {
   constructor({ canvas }) {
@@ -27,33 +28,34 @@ export default class Experience {
     this.isVisible = true;
     this._prevTime = 0;
 
-    // Core systems
     this.scene = new Scene();
     this.camera = new Camera({ sizes: this.sizes });
     this.renderer = new Renderer({ canvas: this.canvas, sizes: this.sizes });
 
-    // Phase 3 + 4 — particles with GPU simulation
     this.particles = new Particles({
       scene: this.scene,
       renderer: this.renderer.instance,
     });
 
-    // Phase 5 — mouse interaction
     this.mouse = new MouseInteraction({
       camera: this.camera.instance,
       sizes: this.sizes,
     });
 
-    // Bind methods
+    // Phase 7 — central scroll timeline (after DOM sections exist)
+    // Delay one frame so React has committed section elements
+    this.timeline = null;
+    requestAnimationFrame(() => {
+      this.timeline = new TimelineController({ experience: this });
+    });
+
     this.onResize = this.onResize.bind(this);
     this.onVisibilityChange = this.onVisibilityChange.bind(this);
     this.tick = this.tick.bind(this);
 
-    // Events
     window.addEventListener('resize', this.onResize);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
 
-    // Start loop
     this.tick();
   }
 
@@ -63,6 +65,13 @@ export default class Experience {
 
     this.camera.resize();
     this.renderer.resize();
+
+    // Refresh ScrollTrigger after resize
+    if (this.timeline) {
+      import('gsap/ScrollTrigger').then(({ ScrollTrigger }) => {
+        ScrollTrigger.refresh();
+      });
+    }
   }
 
   onVisibilityChange() {
@@ -81,10 +90,14 @@ export default class Experience {
     const delta = Math.min(elapsed - this._prevTime, 0.05);
     this._prevTime = elapsed;
 
+    // Timeline drives camera + morph params
+    if (this.timeline) {
+      this.timeline.update();
+    }
+
     this.camera.update();
     this.scene.update();
 
-    // Mouse → smooth → world
     if (this.mouse) {
       this.mouse.update(delta);
     }
@@ -104,6 +117,11 @@ export default class Experience {
 
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
+    }
+
+    if (this.timeline) {
+      this.timeline.destroy();
+      this.timeline = null;
     }
 
     if (this.mouse) {

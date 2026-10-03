@@ -8,8 +8,8 @@ import GPUCompute from './GPUCompute.js';
 import MorphSystem from './MorphSystem.js';
 
 /**
- * Particles — InstancedMesh + GPU sim + morph system.
- * Phase 3–6.
+ * Particles — InstancedMesh + GPU sim + morph.
+ * Phase 7: accepts timeline rotation / opacity / gather overrides.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -25,32 +25,31 @@ export default class Particles {
     this._rotTarget = { x: 0, y: 0 };
     this._rotCurrent = { x: 0, y: 0 };
 
+    // Timeline-driven (set by TimelineController)
+    this._timelineRotY = 0;
+    this._timelineRotX = 0;
+    this._timelineOpacity = 1;
+    this._timelineGather = 0;
+
     this._create();
   }
 
   _create() {
-    // Morph system first (generates all shapes)
-    // texSize computed same way as GPUCompute
     let texSize = Math.ceil(Math.sqrt(this.count));
     texSize = Math.pow(2, Math.ceil(Math.log2(texSize)));
 
     this.morph = new MorphSystem(this.count, texSize);
 
-    // GPU sim initialized with brain shape
     this.simulation = new GPUCompute(
       this.renderer,
       this.morph.shapes.brain,
       this.count
     );
 
-    // Bind dual morph textures
     this.simulation.bindMorph(this.morph);
-
-    // Default pair: brain → bulb at progress 0 (shows brain)
     this.morph.setPair('brain', 'bulb');
     this.morph.setProgress(0);
 
-    // --- Geometry ---
     const tri = new THREE.BufferGeometry();
     const s = 0.011;
     const vertices = new Float32Array([
@@ -91,6 +90,7 @@ export default class Particles {
         uBreathSpeed: { value: 0.5 },
         uPositionTexture: { value: null },
         uTexSize: { value: this.simulation.textureSize },
+        uOpacity: { value: 1 },
       },
       transparent: true,
       depthWrite: false,
@@ -121,9 +121,6 @@ export default class Particles {
     }
   }
 
-  /**
-   * Public API for GSAP / later phases.
-   */
   get controls() {
     return {
       morph: this.morph,
@@ -135,44 +132,16 @@ export default class Particles {
     };
   }
 
-  /**
-   * Test helper — cycle morph progress for manual verification.
-   * Not used in production; available on window for debugging.
-   */
-  testMorph(from, to, duration = 3) {
-    this.morph.setPair(from, to);
-    this.morph.setProgress(0);
-    this.morph.params.scatter = 0.35;
-    this._testMorph = {
-      start: performance.now(),
-      duration: duration * 1000,
-      from,
-      to,
-    };
-  }
-
   update(elapsed, delta = 0.016, mouse = null) {
     if (!this.material) return;
 
-    // Dev test morph auto-progress
-    if (this._testMorph) {
-      const t =
-        (performance.now() - this._testMorph.start) / this._testMorph.duration;
-      if (t >= 1) {
-        this.morph.setProgress(1);
-        this.morph.params.scatter = 0;
-        this._testMorph = null;
-      } else {
-        // Ease in-out
-        const e = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-        this.morph.setProgress(e);
-        // Scatter peaks mid-transition
-        this.morph.params.scatter = Math.sin(e * Math.PI) * 0.4;
-      }
-    }
-
-    if (this.morph) {
-      this.morph.update(delta);
+    // CTA gather: pull targets slightly toward origin + boost spring
+    if (this._timelineGather > 0.01 && this.morph) {
+      // Soften ambient motion while gathering
+      this.morph.params.noiseStrength = Math.min(
+        this.morph.params.noiseStrength,
+        0.04
+      );
     }
 
     if (this.simulation && mouse) {
@@ -192,6 +161,7 @@ export default class Particles {
     }
 
     this.material.uniforms.uTime.value = elapsed;
+    this.material.uniforms.uOpacity.value = this._timelineOpacity;
 
     if (this.mesh) {
       if (mouse && mouse.rotationOffset) {
@@ -208,8 +178,10 @@ export default class Particles {
       this._rotCurrent.y +=
         (this._rotTarget.y - this._rotCurrent.y) * rotLerp;
 
-      this.mesh.rotation.x = this._rotCurrent.x;
-      this.mesh.rotation.y = elapsed * 0.035 + this._rotCurrent.y;
+      // Combine mouse tilt + timeline rotation + slow base spin
+      this.mesh.rotation.x = this._rotCurrent.x + this._timelineRotX;
+      this.mesh.rotation.y =
+        elapsed * 0.02 + this._rotCurrent.y + this._timelineRotY;
     }
   }
 
