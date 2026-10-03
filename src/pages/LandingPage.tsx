@@ -4,9 +4,7 @@ import { AuthModal } from '../components/AuthModal';
 import { DalaBrainHero } from '../components/DalaBrainHero';
 
 /* ================================================================
-   EDUROUTE landing — full threejs-dala brain + Dala editorial UI
-   Port of https://github.com/kekkorider/threejs-dala
-   Visual language from https://dala.craftedbygc.com/
+   EDUROUTE landing — threejs-dala brain + Dala editorial UI
    ================================================================ */
 
 const NAV = [
@@ -119,8 +117,8 @@ export const LandingPage = () => {
   const reduced = useReducedMotion();
 
   useEffect(() => {
-    const a = setTimeout(() => setPhase('ready'), reduced ? 100 : 1800);
-    const b = setTimeout(() => setHeroIn(true), reduced ? 150 : 2200);
+    const a = setTimeout(() => setPhase('ready'), reduced ? 100 : 1600);
+    const b = setTimeout(() => setHeroIn(true), reduced ? 150 : 2000);
     return () => {
       clearTimeout(a);
       clearTimeout(b);
@@ -134,12 +132,12 @@ export const LandingPage = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white antialiased selection:bg-[#963CBD]/40">
+    <div className="min-h-screen bg-[#0a0610] text-white antialiased selection:bg-[#963CBD]/40">
       <AuthModal isOpen={auth} onClose={() => setAuth(false)} />
 
       <header
         className={`fixed inset-x-0 top-0 z-50 flex items-center justify-between px-5 py-4 sm:px-10 sm:py-5 ${
-          scrolled ? 'bg-black/75 backdrop-blur-md' : ''
+          scrolled ? 'bg-[#0a0610]/80 backdrop-blur-md' : ''
         }`}
       >
         <a href="#home" className="text-[12px] font-medium tracking-[0.22em] uppercase">
@@ -184,14 +182,19 @@ export const LandingPage = () => {
         </button>
       </header>
 
+      {/* Hero: purple Dala bg + interactive brain. Text is pointer-events-none so canvas gets mouse. */}
       <section
         id="home"
         className="relative flex h-[100svh] min-h-[620px] flex-col items-center justify-center overflow-hidden"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 50%, #0a0610 100%)',
+        }}
       >
         <DalaBrainHero ready={phase === 'ready'} />
 
         {phase === 'loading' && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0610]">
             <div className="mb-12 flex gap-3">
               {[0, 1, 2, 3].map((i) => (
                 <span
@@ -215,7 +218,7 @@ export const LandingPage = () => {
         )}
 
         <div
-          className={`relative z-10 mx-auto max-w-2xl px-6 text-center transition-all duration-[1100ms] ease-out ${
+          className={`pointer-events-none relative z-10 mx-auto max-w-2xl px-6 text-center transition-all duration-[1100ms] ease-out ${
             heroIn ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
           }`}
         >
@@ -235,13 +238,13 @@ export const LandingPage = () => {
             <button
               type="button"
               onClick={() => setAuth(true)}
-              className="bg-white px-6 py-2.5 text-[10px] font-medium tracking-[0.16em] uppercase text-black transition hover:bg-white/90"
+              className="pointer-events-auto bg-white px-6 py-2.5 text-[10px] font-medium tracking-[0.16em] uppercase text-black transition hover:bg-white/90"
             >
               Request access
             </button>
             <Link
               to="/roadmaps"
-              className="border border-white/20 px-6 py-2.5 text-[10px] tracking-[0.16em] uppercase text-white/80 transition hover:border-white/50"
+              className="pointer-events-auto border border-white/20 px-6 py-2.5 text-[10px] tracking-[0.16em] uppercase text-white/80 transition hover:border-white/50"
             >
               Explore roadmaps
             </Link>
@@ -249,7 +252,7 @@ export const LandingPage = () => {
         </div>
 
         <p
-          className={`absolute bottom-7 left-1/2 z-10 -translate-x-1/2 text-[9px] tracking-[0.3em] uppercase text-white/25 transition-opacity duration-1000 ${
+          className={`pointer-events-none absolute bottom-7 left-1/2 z-10 -translate-x-1/2 text-[9px] tracking-[0.3em] uppercase text-white/25 transition-opacity duration-1000 ${
             heroIn ? 'opacity-100' : 'opacity-0'
           }`}
         >
