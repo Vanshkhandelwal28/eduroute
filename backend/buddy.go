@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -97,7 +96,6 @@ func (s *Server) buddyConversations(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		// List conversations for this user
 		rows, err := s.queryMaps(
 			"SELECT id, user_id AS userId, title, created_at AS createdAt, updated_at AS updatedAt FROM buddy_conversations WHERE user_id = ? ORDER BY updated_at DESC",
 			userID)
@@ -111,7 +109,6 @@ func (s *Server) buddyConversations(w http.ResponseWriter, r *http.Request) {
 		success(w, 200, rows)
 
 	case "POST":
-		// Create a new conversation
 		var body struct {
 			Title string `json:"title"`
 		}
@@ -137,13 +134,11 @@ func (s *Server) buddyConversations(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case "PATCH":
-		// Update conversation title
 		conversationID := r.URL.Query().Get("id")
 		if conversationID == "" {
 			failure(w, 400, "Conversation ID required")
 			return
 		}
-		// Verify ownership
 		var owner string
 		if err := s.db.QueryRow("SELECT user_id FROM buddy_conversations WHERE id = ?", conversationID).Scan(&owner); err != nil {
 			failure(w, 404, "Conversation not found")
@@ -177,13 +172,11 @@ func (s *Server) buddyConversations(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case "DELETE":
-		// Delete conversation
 		conversationID := r.URL.Query().Get("id")
 		if conversationID == "" {
 			failure(w, 400, "Conversation ID required")
 			return
 		}
-		// Verify ownership
 		var owner string
 		if err := s.db.QueryRow("SELECT user_id FROM buddy_conversations WHERE id = ?", conversationID).Scan(&owner); err != nil {
 			failure(w, 404, "Conversation not found")
@@ -194,7 +187,6 @@ func (s *Server) buddyConversations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Delete conversation and its messages
 		_, _ = s.db.Exec("DELETE FROM buddy_messages WHERE conversation_id = ?", conversationID)
 		_, _ = s.db.Exec("DELETE FROM buddy_conversations WHERE id = ?", conversationID)
 		success(w, 200, map[string]any{"message": "Conversation deleted"})
@@ -211,7 +203,6 @@ func (s *Server) buddyMessages(w http.ResponseWriter, r *http.Request, conversat
 	}
 	userID := claims.ID
 
-	// Verify user owns this conversation
 	var owner string
 	if err := s.db.QueryRow("SELECT user_id FROM buddy_conversations WHERE id = ?", conversationID).Scan(&owner); err != nil {
 		failure(w, 404, "Conversation not found")
@@ -224,7 +215,6 @@ func (s *Server) buddyMessages(w http.ResponseWriter, r *http.Request, conversat
 
 	switch r.Method {
 	case "GET":
-		// Get all messages in conversation
 		rows, err := s.queryMaps(
 			"SELECT id, conversation_id AS conversationId, role, content, created_at AS createdAt FROM buddy_messages WHERE conversation_id = ? ORDER BY created_at ASC",
 			conversationID)
@@ -238,14 +228,12 @@ func (s *Server) buddyMessages(w http.ResponseWriter, r *http.Request, conversat
 		success(w, 200, rows)
 
 	case "POST":
-		// Send a new message
 		var body ChatRequest
 		if decodeBody(r, &body) != nil || strings.TrimSpace(body.Message) == "" {
 			failure(w, 400, "Message is required")
 			return
 		}
 
-		// Save user message
 		userMsgID := randID()
 		now := time.Now()
 		_, err := s.db.Exec(
@@ -256,7 +244,6 @@ func (s *Server) buddyMessages(w http.ResponseWriter, r *http.Request, conversat
 			return
 		}
 
-		// Get conversation history for context
 		rows, err := s.queryMaps(
 			"SELECT role, content FROM buddy_messages WHERE conversation_id = ? ORDER BY created_at ASC",
 			conversationID)
@@ -265,18 +252,15 @@ func (s *Server) buddyMessages(w http.ResponseWriter, r *http.Request, conversat
 			return
 		}
 
-		// Get user context
 		var userName, userEmail string
 		_ = s.db.QueryRow("SELECT name, email FROM users WHERE id = ?", userID).Scan(&userName, &userEmail)
 
-		// Call Gemini AI
 		aiResponse, err := s.callGeminiAI(body.Message, rows, userName)
 		if err != nil {
 			failure(w, 500, "Failed to get AI response: "+err.Error())
 			return
 		}
 
-		// Save AI response
 		aiMsgID := randID()
 		_, err = s.db.Exec(
 			"INSERT INTO buddy_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -286,10 +270,8 @@ func (s *Server) buddyMessages(w http.ResponseWriter, r *http.Request, conversat
 			return
 		}
 
-		// Update conversation updated_at
 		_, _ = s.db.Exec("UPDATE buddy_conversations SET updated_at = ? WHERE id = ?", now, conversationID)
 
-		// Return the AI response
 		success(w, 201, map[string]any{
 			"id":             aiMsgID,
 			"conversationId": conversationID,
@@ -314,7 +296,6 @@ func (s *Server) callGeminiAI(message string, history []map[string]any, userName
 		model = "gemini-1.5-flash"
 	}
 
-	// Build conversation history for Gemini
 	contents := []GeminiContent{
 		{
 			Role: "user",
@@ -330,7 +311,6 @@ func (s *Server) callGeminiAI(message string, history []map[string]any, userName
 		},
 	}
 
-	// Add conversation history
 	for _, msg := range history {
 		role := "user"
 		if msg["role"] == "assistant" {
@@ -344,7 +324,6 @@ func (s *Server) callGeminiAI(message string, history []map[string]any, userName
 		})
 	}
 
-	// Add current message
 	contents = append(contents, GeminiContent{
 		Role: "user",
 		Parts: []GeminiPart{
@@ -380,6 +359,5 @@ func (s *Server) callGeminiAI(message string, history []map[string]any, userName
 }
 
 func randID() string {
-	// Generate a simple ID for messages and conversations
 	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), time.Now().UnixNano()%1000)
 }
