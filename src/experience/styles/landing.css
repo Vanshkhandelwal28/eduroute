@@ -1,0 +1,377 @@
+/* ============================================================
+   EduRoute Redesign — Phase 1
+   Cinematic, minimal, dark, large type, negative space
+   ============================================================ */
+
+:root {
+  --bg: #000000;
+  --text: #ffffff;
+  --text-secondary: #999999;
+  --accent-1: #8052ff;
+  --accent-2: #ecd6ff;
+  --accent-3: #ffb829;
+  --accent-4: #15846e;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+}
+
+/* Reset / base */
+.er-landing {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+.er-landing *,
+.er-landing *::before,
+.er-landing *::after {
+  box-sizing: border-box;
+}
+
+/* Fixed WebGL canvas behind everything */
+#webgl-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none; /* enable later for mouse interaction */
+  display: block;
+}
+
+/* Main content scrolls over the canvas */
+.er-main {
+  position: relative;
+  z-index: 1;
+  pointer-events: none; /* sections re-enable pointer-events where needed */
+}
+
+.er-main a,
+.er-main button,
+.er-main nav,
+.er-main .er-interactive {
+  pointer-events: auto;
+}
+
+/* ---------- Navigation ---------- */
+.er-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 2rem;
+  mix-blend-mode: difference;
+}
+
+.er-nav__logo {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.er-nav__links {
+  display: none;
+  gap: 2.5rem;
+}
+
+@media (min-width: 768px) {
+  .er-nav__links {
+    display: flex;
+  }
+}
+
+.er-nav__links a {
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.er-nav__links a:hover {
+  color: var(--text);
+}
+
+.er-nav__cta {
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.er-nav__cta:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* ---------- Shared section utilities ---------- */
+.er-section {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6rem 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .er-section {
+    padding: 8rem 4rem;
+  }
+}
+
+@media (min-width: 1200px) {
+  .er-section {
+    padding: 10rem 6rem;
+  }
+}
+
+.er-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.er-title {
+  font-size: clamp(2.75rem, 9vw, 7rem);
+  font-weight: 500;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+.er-title span {
+  display: block;
+}
+
+.er-body {
+  max-width: 28rem;
+  font-size: 0.95rem;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin-top: 1.75rem;
+}
+
+/* Text reveal (clip mask) — used by GSAP later */
+.er-reveal {
+  overflow: hidden;
+}
+
+.er-reveal > span {
+  display: block;
+  transform: translateY(110%);
+}
+
+/* ---------- Hero ---------- */
+.er-hero {
+  justify-content: flex-end;
+  padding-bottom: 5rem;
+}
+
+.er-hero .er-title {
+  max-width: 14ch;
+}
+
+.er-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2.5rem;
+}
+
+.er-btn {
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 0.85rem 1.5rem;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.3s ease, background 0.3s ease, color 0.3s ease;
+}
+
+.er-btn--primary {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.er-btn--primary:hover {
+  opacity: 0.9;
+}
+
+.er-btn--ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.er-btn--ghost:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.er-scroll-hint {
+  position: absolute;
+  bottom: 1.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* ---------- Manifesto ---------- */
+.er-manifesto {
+  max-width: 60rem;
+}
+
+.er-manifesto .er-title {
+  font-size: clamp(2rem, 6vw, 4.5rem);
+  max-width: 18ch;
+}
+
+/* ---------- Features ---------- */
+.er-feature {
+  max-width: 48rem;
+}
+
+.er-feature--right {
+  margin-left: auto;
+  text-align: right;
+}
+
+.er-feature--right .er-body {
+  margin-left: auto;
+}
+
+/* ---------- Team ---------- */
+.er-team__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3rem;
+  margin-top: 4rem;
+  max-width: 56rem;
+}
+
+@media (min-width: 700px) {
+  .er-team__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.er-team__member {
+  pointer-events: auto;
+}
+
+.er-team__name {
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.35rem;
+}
+
+.er-team__role {
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* ---------- CTA ---------- */
+.er-cta {
+  text-align: center;
+  align-items: center;
+}
+
+.er-cta .er-title {
+  max-width: 16ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.er-cta .er-body {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.er-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 2.5rem;
+}
+
+/* ---------- Footer ---------- */
+.er-footer {
+  min-height: auto;
+  padding: 3rem 1.5rem 4rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+@media (min-width: 768px) {
+  .er-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3rem 4rem 4rem;
+  }
+}
+
+.er-footer__brand {
+  font-size: 0.7rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+
+.er-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.75rem;
+}
+
+.er-footer__links a {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.er-footer__links a:hover {
+  color: var(--text);
+}
+
+.er-footer__copy {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.25);
+  margin-top: 1rem;
+}
+
+@media (min-width: 768px) {
+  .er-footer__copy {
+    margin-top: 0;
+    width: 100%;
+    text-align: center;
+    order: 3;
+  }
+}
