@@ -9,61 +9,207 @@ import (
 
 func ensureSchema(db *sql.DB) error {
 	statements := []string{
-		`CREATE TABLE IF NOT EXISTS users (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(160) NOT NULL, email VARCHAR(255) NOT NULL UNIQUE, password VARCHAR(255) NOT NULL, role ENUM('student','admin') NOT NULL DEFAULT 'student', is_verified BOOLEAN NOT NULL DEFAULT FALSE, college_verified ENUM('none','pending','verified','rejected') NOT NULL DEFAULT 'none', points INT NOT NULL DEFAULT 0, language_preference ENUM('en','hi','hinglish') NOT NULL DEFAULT 'en', avatar VARCHAR(500) NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS otps (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255) NOT NULL, code_hash VARCHAR(255) NOT NULL, expires_at DATETIME NOT NULL, attempt_count INT NOT NULL DEFAULT 0, last_sent_at DATETIME NOT NULL, locked_until DATETIME NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_otps_email_created (email, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS college_verifications (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL, doc_url VARCHAR(1000) NOT NULL, file_name VARCHAR(255) NOT NULL, mime_type VARCHAR(100) NOT NULL, file_size BIGINT UNSIGNED NOT NULL, doc_data LONGBLOB NOT NULL, status ENUM('pending','verified','rejected') NOT NULL DEFAULT 'pending', remarks TEXT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS roadmaps (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(160) NOT NULL, slug VARCHAR(160) NOT NULL UNIQUE, description TEXT NULL, icon VARCHAR(255) NULL, modules_json JSON NOT NULL, updated_by VARCHAR(160) NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS user_roadmap_progress (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL, roadmap_id INT UNSIGNED NOT NULL, completed_tasks JSON NOT NULL, points_earned INT NOT NULL DEFAULT 0, UNIQUE KEY uq_user_roadmap (user_id, roadmap_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS assessments (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255) NOT NULL, category VARCHAR(160) NOT NULL, questions_json JSON NOT NULL, points INT NOT NULL DEFAULT 100, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS attempts (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL, assessment_id INT UNSIGNED NOT NULL, score INT NOT NULL, total_questions INT NOT NULL, answers_json JSON NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS user_problem_submissions (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL, problem_key VARCHAR(160) NOT NULL, problem_name VARCHAR(255) NOT NULL, difficulty ENUM('Easy','Medium','Hard') NOT NULL, status ENUM('Accepted','Attempted') NOT NULL, score INT NOT NULL DEFAULT 0, submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_user_problem (user_id, problem_key), INDEX idx_problem_activity (user_id, submitted_at), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS companies (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, description TEXT NULL, logo VARCHAR(500) NULL, culture_video_urls JSON NOT NULL, website VARCHAR(500) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS internships (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, role VARCHAR(255) NOT NULL, company_id INT UNSIGNED NOT NULL, location VARCHAR(255) NULL, stipend VARCHAR(160) NULL, duration VARCHAR(160) NULL, tags JSON NOT NULL, is_verified BOOLEAN NOT NULL DEFAULT FALSE, FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS events (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255) NOT NULL, description TEXT NULL, city VARCHAR(160) NULL, event_date DATETIME NULL, month_tag VARCHAR(32) NULL, image VARCHAR(1000) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS rewards (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255) NOT NULL, description TEXT NULL, points_required INT NOT NULL, partner VARCHAR(255) NULL, category VARCHAR(160) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS soft_skill_lessons (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255) NOT NULL, content TEXT NULL, video_url VARCHAR(1000) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS soft_skill_attempts (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL, lesson_id INT UNSIGNED NOT NULL, completed BOOLEAN NOT NULL DEFAULT FALSE, UNIQUE KEY uq_user_lesson (user_id, lesson_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (lesson_id) REFERENCES soft_skill_lessons(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS courses (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255) NOT NULL, description TEXT NOT NULL, category VARCHAR(160) NOT NULL, level ENUM('Beginner','Intermediate','Advanced') NOT NULL DEFAULT 'Beginner', duration VARCHAR(160) NOT NULL, instructor VARCHAR(255) NOT NULL, thumbnail VARCHAR(1000) NULL, playlist_url VARCHAR(1000) NULL, youtube_url VARCHAR(1000) NULL, resource_url VARCHAR(1000) NULL, published BOOLEAN NOT NULL DEFAULT TRUE, created_by INT UNSIGNED NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, FOREIGN KEY (created_by) REFERENCES users(id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS user_course_progress (user_id INT UNSIGNED NOT NULL, course_id INT UNSIGNED NOT NULL, progress_percent TINYINT UNSIGNED NOT NULL DEFAULT 0, completed_at DATETIME NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (user_id, course_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS buddy_progress (user_id VARCHAR(160) PRIMARY KEY, points INT NOT NULL DEFAULT 0, level INT NOT NULL DEFAULT 1, achievements JSON NOT NULL, missing_skills JSON NOT NULL, weekly_challenges JSON NOT NULL, preferred_language VARCHAR(32) NOT NULL DEFAULT 'english', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE IF NOT EXISTS buddy_chat_messages (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id VARCHAR(160) NOT NULL, message_role ENUM('user','assistant','system') NOT NULL, text TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_buddy_messages (user_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		`CREATE TABLE IF NOT EXISTS users (
+			id SERIAL PRIMARY KEY,
+			name VARCHAR(160) NOT NULL,
+			email VARCHAR(255) NOT NULL UNIQUE,
+			password VARCHAR(255) NOT NULL,
+			role VARCHAR(32) NOT NULL DEFAULT 'student',
+			is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+			college_verified VARCHAR(32) NOT NULL DEFAULT 'none',
+			points INT NOT NULL DEFAULT 0,
+			language_preference VARCHAR(32) NOT NULL DEFAULT 'en',
+			avatar VARCHAR(500) NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS otps (
+			id BIGSERIAL PRIMARY KEY,
+			email VARCHAR(255) NOT NULL,
+			code_hash VARCHAR(255) NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			attempt_count INT NOT NULL DEFAULT 0,
+			last_sent_at TIMESTAMPTZ NOT NULL,
+			locked_until TIMESTAMPTZ NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_otps_email_created ON otps (email, created_at)`,
+		`CREATE TABLE IF NOT EXISTS college_verifications (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			doc_url VARCHAR(1000) NOT NULL,
+			file_name VARCHAR(255) NOT NULL DEFAULT '',
+			mime_type VARCHAR(100) NOT NULL DEFAULT 'application/octet-stream',
+			file_size BIGINT NOT NULL DEFAULT 0,
+			doc_data BYTEA NULL,
+			status VARCHAR(32) NOT NULL DEFAULT 'pending',
+			remarks TEXT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS roadmaps (
+			id SERIAL PRIMARY KEY,
+			name VARCHAR(160) NOT NULL,
+			slug VARCHAR(160) NOT NULL UNIQUE,
+			description TEXT NULL,
+			icon VARCHAR(255) NULL,
+			modules_json JSONB NOT NULL DEFAULT '[]',
+			updated_by VARCHAR(160) NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_roadmap_progress (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			roadmap_id INT NOT NULL REFERENCES roadmaps(id) ON DELETE CASCADE,
+			completed_tasks JSONB NOT NULL DEFAULT '[]',
+			points_earned INT NOT NULL DEFAULT 0,
+			UNIQUE (user_id, roadmap_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS assessments (
+			id SERIAL PRIMARY KEY,
+			title VARCHAR(255) NOT NULL,
+			category VARCHAR(160) NOT NULL,
+			questions_json JSONB NOT NULL DEFAULT '[]',
+			points INT NOT NULL DEFAULT 100,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS attempts (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			assessment_id INT NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+			score INT NOT NULL,
+			total_questions INT NOT NULL,
+			answers_json JSONB NOT NULL DEFAULT '{}',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_problem_submissions (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			problem_key VARCHAR(160) NOT NULL,
+			problem_name VARCHAR(255) NOT NULL,
+			difficulty VARCHAR(32) NOT NULL,
+			status VARCHAR(32) NOT NULL,
+			score INT NOT NULL DEFAULT 0,
+			submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (user_id, problem_key)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_problem_activity ON user_problem_submissions (user_id, submitted_at)`,
+		`CREATE TABLE IF NOT EXISTS companies (
+			id SERIAL PRIMARY KEY,
+			name VARCHAR(255) NOT NULL,
+			description TEXT NULL,
+			logo VARCHAR(500) NULL,
+			culture_video_urls JSONB NOT NULL DEFAULT '[]',
+			website VARCHAR(500) NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS internships (
+			id SERIAL PRIMARY KEY,
+			role VARCHAR(255) NOT NULL,
+			company_id INT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+			location VARCHAR(255) NULL,
+			stipend VARCHAR(160) NULL,
+			duration VARCHAR(160) NULL,
+			tags JSONB NOT NULL DEFAULT '[]',
+			is_verified BOOLEAN NOT NULL DEFAULT FALSE
+		)`,
+		`CREATE TABLE IF NOT EXISTS events (
+			id SERIAL PRIMARY KEY,
+			title VARCHAR(255) NOT NULL,
+			description TEXT NULL,
+			city VARCHAR(160) NULL,
+			event_date TIMESTAMPTZ NULL,
+			month_tag VARCHAR(32) NULL,
+			image VARCHAR(1000) NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS rewards (
+			id SERIAL PRIMARY KEY,
+			title VARCHAR(255) NOT NULL,
+			description TEXT NULL,
+			points_required INT NOT NULL,
+			partner VARCHAR(255) NULL,
+			category VARCHAR(160) NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS soft_skill_lessons (
+			id SERIAL PRIMARY KEY,
+			title VARCHAR(255) NOT NULL,
+			content TEXT NULL,
+			video_url VARCHAR(1000) NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS soft_skill_attempts (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			lesson_id INT NOT NULL REFERENCES soft_skill_lessons(id) ON DELETE CASCADE,
+			completed BOOLEAN NOT NULL DEFAULT FALSE,
+			UNIQUE (user_id, lesson_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS courses (
+			id SERIAL PRIMARY KEY,
+			title VARCHAR(255) NOT NULL,
+			description TEXT NOT NULL,
+			category VARCHAR(160) NOT NULL,
+			level VARCHAR(32) NOT NULL DEFAULT 'Beginner',
+			duration VARCHAR(160) NOT NULL,
+			instructor VARCHAR(255) NOT NULL,
+			thumbnail VARCHAR(1000) NULL,
+			playlist_url VARCHAR(1000) NULL,
+			youtube_url VARCHAR(1000) NULL,
+			resource_url VARCHAR(1000) NULL,
+			published BOOLEAN NOT NULL DEFAULT TRUE,
+			created_by INT NOT NULL REFERENCES users(id),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_course_progress (
+			user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			course_id INT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+			progress_percent SMALLINT NOT NULL DEFAULT 0,
+			completed_at TIMESTAMPTZ NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (user_id, course_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS buddy_progress (
+			user_id VARCHAR(160) PRIMARY KEY,
+			points INT NOT NULL DEFAULT 0,
+			level INT NOT NULL DEFAULT 1,
+			achievements JSONB NOT NULL DEFAULT '[]',
+			missing_skills JSONB NOT NULL DEFAULT '[]',
+			weekly_challenges JSONB NOT NULL DEFAULT '[]',
+			preferred_language VARCHAR(32) NOT NULL DEFAULT 'english',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS buddy_chat_messages (
+			id BIGSERIAL PRIMARY KEY,
+			user_id VARCHAR(160) NOT NULL,
+			message_role VARCHAR(32) NOT NULL,
+			text TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_buddy_messages ON buddy_chat_messages (user_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS buddy_conversations (
+			id VARCHAR(64) PRIMARY KEY,
+			user_id VARCHAR(160) NOT NULL,
+			title VARCHAR(255) NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS buddy_messages (
+			id VARCHAR(64) PRIMARY KEY,
+			conversation_id VARCHAR(64) NOT NULL,
+			role VARCHAR(32) NOT NULL,
+			content TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 	}
 	for index, statement := range statements {
 		if _, err := db.Exec(statement); err != nil {
 			return fmt.Errorf("schema statement %d: %w", index+1, err)
 		}
 	}
-	for column := range map[string]string{"playlist_url": "VARCHAR(1000) NULL", "youtube_url": "VARCHAR(1000) NULL", "resource_url": "VARCHAR(1000) NULL"} {
-		var count int
-		if err := db.QueryRow("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'courses' AND column_name = ?", column).Scan(&count); err != nil {
-			return fmt.Errorf("check courses.%s: %w", column, err)
-		}
-		if count == 0 {
-			if _, err := db.Exec("ALTER TABLE courses ADD COLUMN " + column + " VARCHAR(1000) NULL"); err != nil {
-				return fmt.Errorf("add courses.%s: %w", column, err)
-			}
-		}
-	}
-	for column, definition := range map[string]string{
-		"file_name": "VARCHAR(255) NOT NULL DEFAULT ''",
-		"mime_type": "VARCHAR(100) NOT NULL DEFAULT 'application/octet-stream'",
-		"file_size": "BIGINT UNSIGNED NOT NULL DEFAULT 0",
-		"doc_data":  "LONGBLOB NULL",
-	} {
-		var count int
-		if err := db.QueryRow("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'college_verifications' AND column_name = ?", column).Scan(&count); err != nil {
-			return fmt.Errorf("check college_verifications.%s: %w", column, err)
-		}
-		if count == 0 {
-			if _, err := db.Exec("ALTER TABLE college_verifications ADD COLUMN " + column + " " + definition); err != nil {
-				return fmt.Errorf("add college_verifications.%s: %w", column, err)
-			}
-		}
-	}
 	return nil
 }
 
-// ensureAdminUser inserts an admin if missing (idempotent).
 func (s *Server) ensureAdminUser(email, name, plainPassword string) error {
 	var id int64
 	err := s.db.QueryRow("SELECT id FROM users WHERE email = ? LIMIT 1", email).Scan(&id)
@@ -85,11 +231,9 @@ func (s *Server) ensureAdminUser(email, name, plainPassword string) error {
 }
 
 func (s *Server) ensureDefaultAdmin() error {
-	// Existing default staff account (unchanged)
 	if err := s.ensureAdminUser("vansh777@gmail.com", "EDUROUTE Staff Admin", "timepass"); err != nil {
 		return err
 	}
-	// Additional admin for sign-in page (admin@gmail.com / timepass)
 	return s.ensureAdminUser("admin@gmail.com", "EduRoute Admin", "timepass")
 }
 
@@ -116,13 +260,14 @@ func (s *Server) ensureDemoStudent() error {
 		if hashErr != nil {
 			return hashErr
 		}
-		result, insertErr := s.db.Exec("INSERT INTO users (name,email,password,role,is_verified,college_verified) VALUES (?,?,?,?,TRUE,?)", "Demo Student", email, hashed, "student", "verified")
-		if insertErr != nil {
-			return insertErr
+		err = s.db.QueryRow(
+			"INSERT INTO users (name,email,password,role,is_verified,college_verified) VALUES (?,?,?,?,TRUE,?) RETURNING id",
+			"Demo Student", email, hashed, "student", "verified",
+		).Scan(&userID)
+		if err != nil {
+			return err
 		}
-		userID, err = result.LastInsertId()
-	}
-	if err != nil {
+	} else if err != nil {
 		return err
 	}
 	hashed, hashErr := bcrypt.GenerateFromPassword([]byte(password), 12)
@@ -134,6 +279,6 @@ func (s *Server) ensureDemoStudent() error {
 	}
 	_, err = s.db.Exec(`INSERT INTO user_course_progress (user_id, course_id, progress_percent)
 		SELECT ?, id, 0 FROM courses WHERE published = TRUE
-		ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)`, userID)
+		ON CONFLICT (user_id, course_id) DO NOTHING`, userID)
 	return err
 }
