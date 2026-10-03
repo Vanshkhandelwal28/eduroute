@@ -1,11 +1,10 @@
 /**
- * EduRoute Landing — paced cinematic chapters + stronger team.
+ * EduRoute Landing — Dala-matched: real brain.glb hero + editorial chapters.
  */
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthModal } from '../components/AuthModal';
-import Experience from '../experience/Experience.js';
-import Cursor from '../experience/ui/Cursor.js';
+import { DalaBrainHero } from '../components/DalaBrainHero';
 import Loader from '../experience/ui/Loader.js';
 import gsap from 'gsap';
 import '../experience/styles/landing.css';
@@ -18,24 +17,9 @@ const SECTIONS = [
 ];
 
 const TEAM = [
-  {
-    initials: 'AR',
-    name: 'Alex Rivera',
-    role: 'Founder & Vision',
-    hue: 265,
-  },
-  {
-    initials: 'SC',
-    name: 'Sam Chen',
-    role: 'Product & Systems',
-    hue: 195,
-  },
-  {
-    initials: 'JL',
-    name: 'Jordan Lee',
-    role: 'Experience Design',
-    hue: 35,
-  },
+  { initials: 'AR', name: 'Alex Rivera', role: 'Founder & Vision', hue: 265 },
+  { initials: 'SC', name: 'Sam Chen', role: 'Product & Systems', hue: 195 },
+  { initials: 'JL', name: 'Jordan Lee', role: 'Experience Design', hue: 35 },
 ];
 
 function revealHeroNow() {
@@ -82,17 +66,11 @@ export const LandingPage = () => {
   const [auth, setAuth] = useState(false);
   const [showTop, setShowTop] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const experienceRef = useRef<InstanceType<typeof Experience> | null>(null);
+  const [brainReady, setBrainReady] = useState(false);
 
   const scrollToTop = useCallback(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const exp = experienceRef.current as { smoothScroll?: { scrollTo: (t: number) => void } } | null;
-    if (exp?.smoothScroll) {
-      exp.smoothScroll.scrollTo(0);
-    } else {
-      window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
-    }
+    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
   }, []);
 
   useEffect(() => {
@@ -116,55 +94,78 @@ export const LandingPage = () => {
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
 
-    if (!canvasRef.current) {
-      revealHeroNow();
-      return () => {
-        document.body.classList.remove('er-on-landing');
-        window.removeEventListener('scroll', onScroll);
-      };
-    }
-
     const loader = new Loader();
-    const cursor = new Cursor();
-
-    let experience: InstanceType<typeof Experience> | null = null;
-    try {
-      experience = new Experience({
-        canvas: canvasRef.current,
-        onProgress: (t: number) => loader.setProgress(t),
-      });
-      experienceRef.current = experience;
-
-      experience.ready.then(() => {
-        loader.complete().then(() => {
-          revealHeroNow();
-        });
-      });
-    } catch {
-      document.querySelector('.er-landing')?.classList.add('er-no-webgl');
-      loader.complete().then(() => revealHeroNow());
-    }
+    loader.setProgress(0.15);
 
     const safetyT = window.setTimeout(() => {
+      loader.setProgress(1);
       loader.complete().then(() => revealHeroNow());
-    }, 5000);
+      setBrainReady(true);
+    }, 6000);
 
     return () => {
       document.body.classList.remove('er-on-landing');
       window.removeEventListener('scroll', onScroll);
       window.clearTimeout(safetyT);
       loader.dispose();
-      cursor.dispose();
-      experience?.destroy();
-      experienceRef.current = null;
     };
   }, []);
 
+  const handleBrainReady = useCallback(() => {
+    setBrainReady(true);
+    const loaderEl = document.querySelector('.er-loader');
+    if (!loaderEl) {
+      revealHeroNow();
+      return;
+    }
+    // Drive existing loader if still present
+    const loaders = (window as unknown as { __erLoader?: { setProgress: (n: number) => void; complete: () => Promise<void> } }).__erLoader;
+    void loaders;
+    // Complete via DOM path — create a one-shot complete
+    const finish = async () => {
+      const bar = document.querySelector('.er-loader__bar span') as HTMLElement | null;
+      if (bar) bar.style.transform = 'scaleX(1)';
+      await new Promise((r) => setTimeout(r, 400));
+      const el = document.querySelector('.er-loader') as HTMLElement | null;
+      if (el) {
+        el.style.transition = 'opacity 0.85s ease';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 900);
+      }
+      revealHeroNow();
+    };
+    finish();
+  }, []);
+
+  // Simpler loader integration: when brain ready, dismiss
+  useEffect(() => {
+    if (!brainReady) return;
+    const el = document.querySelector('.er-loader') as HTMLElement | null;
+    if (!el) {
+      revealHeroNow();
+      return;
+    }
+    const bar = el.querySelector('.er-loader__bar span') as HTMLElement | null;
+    const pct = el.querySelector('.er-loader__pct');
+    if (bar) bar.style.transform = 'scaleX(1)';
+    if (pct) pct.textContent = '100';
+    const t = window.setTimeout(() => {
+      el.style.transition = 'opacity 0.9s ease';
+      el.style.opacity = '0';
+      window.setTimeout(() => {
+        el.remove();
+        revealHeroNow();
+      }, 950);
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [brainReady]);
+
   return (
-    <div className="er-landing">
+    <div className="er-landing er-landing--dala">
       <AuthModal isOpen={auth} onClose={() => setAuth(false)} />
 
-      <canvas id="webgl-canvas" ref={canvasRef} />
+      {/* Real Dala brain — fixed full-bleed, interactive */}
+      <DalaBrainHero mode="fixed" ready onReady={handleBrainReady} />
 
       <div className="er-progress" aria-hidden="true">
         {['hero', 'manifesto', 'feature-01', 'feature-02', 'feature-03', 'team', 'cta'].map(
@@ -252,8 +253,7 @@ export const LandingPage = () => {
           </p>
         </section>
 
-        {/* Extra vertical room for the long morph */}
-        <section id="feature-01" className="er-section er-feature er-feature--tall">
+        <section id="feature-01" className="er-section er-feature">
           <p className="er-label">02 — Transform</p>
           <h2 className="er-title er-title--short">
             <span className="er-reveal">

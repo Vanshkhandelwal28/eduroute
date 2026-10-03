@@ -1,9 +1,10 @@
 /**
- * Dala-matched brain with strong hover effect
- * - raycast scaled brain mesh
- * - sphere proximity fallback (easy to trigger)
- * - pointer follows surface / plane under cursor
- * - cursor: crosshair while over hero
+ * Faithful Dala brain hero (threejs-dala / craftedbygc).
+ * - Real brain.glb instanced wireframe boxes
+ * - Strong hover: scale + rotate under cursor
+ * - Purple radial background
+ * - Crosshair on hover
+ * - Fixed full-bleed for landing
  */
 import { useRef, useMemo, useEffect, useState, Suspense, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -43,10 +44,10 @@ void main() {
   mvPosition = instanceMatrix * mvPosition;
 
   float d = distance(uPointer, mvPosition.xyz);
-  // Slightly wider falloff so hover reads clearly
-  float c = smoothstep(0.55, 0.08, d);
+  // Dala-like falloff — tight core, readable burst
+  float c = smoothstep(0.65, 0.06, d);
 
-  float scale = aSize + c * 10.0 * uHover;
+  float scale = aSize + c * 14.0 * uHover;
   vec3 pos = position;
   pos *= scale;
   pos.xz *= rotate(PI * c * aRotation + PI * aRotation * 0.43);
@@ -92,7 +93,7 @@ function BrainInstances({
   const camTarget = useRef({ x: 0, y: 0 });
   const notified = useRef(false);
   const wasHovering = useRef(false);
-  const sphere = useMemo(() => new THREE.Sphere(new THREE.Vector3(0, 0, 0), 0.55), []);
+  const sphere = useMemo(() => new THREE.Sphere(new THREE.Vector3(0, 0, 0), 0.7), []);
 
   const uniforms = useMemo(
     () => ({
@@ -118,14 +119,14 @@ function BrainInstances({
     }
     const posAttr = brainGeo.attributes.position;
     const count = posAttr.count;
-    const boxGeo = new THREE.BoxGeometry(0.004, 0.004, 0.004);
+    const boxGeo = new THREE.BoxGeometry(0.0045, 0.0045, 0.0045);
     const aRotation = new Float32Array(count);
     const aSize = new Float32Array(count);
     const aColor = new Float32Array(count * 3);
 
     for (let i = 0; i < count; i++) {
       aRotation[i] = THREE.MathUtils.randFloat(-1, 1);
-      aSize[i] = THREE.MathUtils.randFloat(0.3, 3);
+      aSize[i] = THREE.MathUtils.randFloat(0.35, 3.2);
       const col = COLORS[Math.floor(Math.random() * COLORS.length)];
       aColor[i * 3] = col.r;
       aColor[i * 3 + 1] = col.g;
@@ -162,11 +163,10 @@ function BrainInstances({
     }
     mesh.instanceMatrix.needsUpdate = true;
 
-    // Fit hover sphere to brain bounds
     brainGeo.computeBoundingSphere();
     if (brainGeo.boundingSphere) {
       sphere.center.copy(brainGeo.boundingSphere.center);
-      sphere.radius = brainGeo.boundingSphere.radius * 1.15;
+      sphere.radius = brainGeo.boundingSphere.radius * 1.35;
     }
 
     if (!notified.current) {
@@ -180,11 +180,11 @@ function BrainInstances({
 
     const { x, y, active } = mouseRef.current;
 
-    camTarget.current.x = x * 0.15;
-    camTarget.current.y = y * 0.1;
-    camera.position.x += (camTarget.current.x - camera.position.x) * 0.1;
-    camera.position.y += (camTarget.current.y - camera.position.y) * 0.1;
-    camera.position.z = size.width < 767 ? 2.3 : 1.2;
+    camTarget.current.x = x * 0.18;
+    camTarget.current.y = y * 0.12;
+    camera.position.x += (camTarget.current.x - camera.position.x) * 0.08;
+    camera.position.y += (camTarget.current.y - camera.position.y) * 0.08;
+    camera.position.z = size.width < 767 ? 2.4 : 1.15;
     camera.lookAt(0, 0, 0);
 
     let hovering = false;
@@ -193,7 +193,6 @@ function BrainInstances({
       ndc.set(x, y);
       raycaster.setFromCamera(ndc, camera);
 
-      // 1) Raycast enlarged hit mesh
       if (hitMeshRef.current) {
         hitMeshRef.current.updateMatrixWorld(true);
         const hits = raycaster.intersectObject(hitMeshRef.current, false);
@@ -203,7 +202,6 @@ function BrainInstances({
         }
       }
 
-      // 2) Sphere fallback — easy hover near brain volume
       if (!hovering) {
         const hitSphere = raycaster.ray.intersectSphere(sphere, planeHit);
         if (hitSphere) {
@@ -212,11 +210,10 @@ function BrainInstances({
         }
       }
 
-      // Always track pointer on z=0 plane for smooth motion under cursor
       if (!hovering) {
         const onPlane = raycaster.ray.intersectPlane(plane, planeHit);
         if (onPlane) {
-          targetPoint.current.lerp(planeHit, 0.5);
+          targetPoint.current.lerp(planeHit, 0.45);
         }
       }
     }
@@ -228,8 +225,8 @@ function BrainInstances({
       onHoverChange(hovering);
     }
 
-    smoothPoint.current.lerp(targetPoint.current, 0.25);
-    hoverRef.current += (targetHover.current - hoverRef.current) * 0.18;
+    smoothPoint.current.lerp(targetPoint.current, 0.28);
+    hoverRef.current += (targetHover.current - hoverRef.current) * 0.22;
 
     uniforms.uPointer.value.copy(smoothPoint.current);
     uniforms.uHover.value = hoverRef.current;
@@ -239,8 +236,7 @@ function BrainInstances({
 
   return (
     <>
-      {/* Slightly scaled invisible mesh = larger hover target */}
-      <mesh ref={hitMeshRef} geometry={brainGeo} scale={1.12} visible={false}>
+      <mesh ref={hitMeshRef} geometry={brainGeo} scale={1.2} visible={false}>
         <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
       <instancedMesh
@@ -280,14 +276,29 @@ useGLTF.preload(BRAIN_URL);
 const DALA_BG =
   'radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%)';
 
-export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
+export type DalaBrainHeroProps = {
+  ready?: boolean;
+  onReady?: () => void;
+  /** fixed = full-page background for landing */
+  mode?: 'fixed' | 'absolute';
+};
+
+export function DalaBrainHero({
+  ready = true,
+  onReady,
+  mode = 'fixed',
+}: DalaBrainHeroProps) {
   const [webglOk, setWebglOk] = useState(true);
   const [modelReady, setModelReady] = useState(false);
   const [brainHover, setBrainHover] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseRef = useRef<MouseState>({ x: 0, y: 0, active: false });
 
-  const onModelReady = useCallback(() => setModelReady(true), []);
+  const handleModelReady = useCallback(() => {
+    setModelReady(true);
+    onReady?.();
+  }, [onReady]);
+
   const onHoverChange = useCallback((h: boolean) => setBrainHover(h), []);
 
   useEffect(() => {
@@ -301,6 +312,12 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
   }, []);
 
   useEffect(() => {
+    if (!webglOk) {
+      onReady?.();
+    }
+  }, [webglOk, onReady]);
+
+  useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
@@ -309,8 +326,8 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
       if (rect.width <= 0 || rect.height <= 0) return;
       const x = ((clientX - rect.left) / rect.width) * 2 - 1;
       const y = -(((clientY - rect.top) / rect.height) * 2 - 1);
-      mouseRef.current.x = THREE.MathUtils.clamp(x, -1.2, 1.2);
-      mouseRef.current.y = THREE.MathUtils.clamp(y, -1.2, 1.2);
+      mouseRef.current.x = THREE.MathUtils.clamp(x, -1.3, 1.3);
+      mouseRef.current.y = THREE.MathUtils.clamp(y, -1.3, 1.3);
       mouseRef.current.active = true;
     };
 
@@ -336,8 +353,16 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
     };
   }, []);
 
+  const positionClass = mode === 'fixed' ? 'fixed' : 'absolute';
+
   if (!webglOk) {
-    return <div className="absolute inset-0 z-0" style={{ background: DALA_BG }} />;
+    return (
+      <div
+        className={`${positionClass} inset-0 z-0`}
+        style={{ background: DALA_BG }}
+        aria-hidden
+      />
+    );
   }
 
   const showCanvas = modelReady && ready;
@@ -345,22 +370,23 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 z-0"
+      className={`${positionClass} inset-0 z-0`}
       style={{
         background: DALA_BG,
         cursor: brainHover ? 'crosshair' : 'default',
       }}
+      aria-hidden
     >
       <div
         style={{
           width: '100%',
           height: '100%',
           opacity: showCanvas ? 1 : 0,
-          transition: 'opacity 1s ease',
+          transition: 'opacity 1.1s ease',
         }}
       >
         <Canvas
-          camera={{ position: [0, 0, 1.2], fov: 75, near: 0.1, far: 100 }}
+          camera={{ position: [0, 0, 1.15], fov: 70, near: 0.1, far: 100 }}
           dpr={[
             1,
             Math.min(1.5, typeof window !== 'undefined' ? window.devicePixelRatio : 1),
@@ -379,7 +405,7 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
           <Scene
             ready={ready}
             mouseRef={mouseRef}
-            onModelReady={onModelReady}
+            onModelReady={handleModelReady}
             onHoverChange={onHoverChange}
           />
         </Canvas>
@@ -387,3 +413,5 @@ export function DalaBrainHero({ ready = true }: { ready?: boolean }) {
     </div>
   );
 }
+
+export default DalaBrainHero;
