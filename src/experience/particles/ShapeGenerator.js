@@ -1,6 +1,6 @@
 /**
  * Procedural volumetric shapes — denser interior + organic surface.
- * Includes scatter + abstract organic form to match live Dala morph story.
+ * Brain + Globe hardened for clear silhouettes matching live Dala.
  */
 
 import { getParticleCount as deviceParticleCount } from '../utils/device.js';
@@ -38,10 +38,8 @@ export function createScatter(count) {
 
   for (let i = 0; i < count; i++) {
     let { x, y, z } = fibDirection(i, count);
-    // Cube-root for uniform volume density
     const u = hash(i * 0.73 + 1.1);
     const r = Math.cbrt(u) * R;
-    // Mild noise so it feels organic, not a perfect sphere shell
     const n = noise3(x * 2.1, y * 2.1, z * 2.1) * 0.12;
     positions[i * 3] = x * (r + n);
     positions[i * 3 + 1] = y * (r + n) * 0.85;
@@ -51,59 +49,94 @@ export function createScatter(count) {
 }
 
 /**
- * Volumetric brain — surface shell + interior fill for density.
- * ~60% surface, ~40% volume sample.
+ * Volumetric brain with clear silhouette:
+ * - Deep longitudinal fissure (midline split)
+ * - Distinct left / right hemispheres
+ * - Cerebellum bulge (rear-bottom)
+ * - Subtle brainstem taper at bottom
+ * - Cortical folds via multi-octave noise
  */
 export function createBrain(count) {
   const positions = new Float32Array(count * 3);
-  const scaleX = 1.2;
-  const scaleY = 0.95;
-  const scaleZ = 1.4;
 
-  const nSurface = Math.floor(count * 0.58);
+  // Aspect: wider left-right, elongated front-back, slightly flattened top
+  const scaleX = 1.28;
+  const scaleY = 0.92;
+  const scaleZ = 1.48;
+
+  // More surface for sharp outline, less interior fill
+  const nSurface = Math.floor(count * 0.68);
   const nVolume = count - nSurface;
 
   for (let i = 0; i < nSurface; i++) {
     let { x, y, z } = fibDirection(i, nSurface);
 
-    const n1 = noise3(x * 2.2, y * 2.2, z * 2.2);
-    const n2 = noise3(x * 5.5 + 1.3, y * 5.5, z * 5.5 - 0.7);
-    const n3 = noise3(x * 11.0, y * 11.0 + 2.1, z * 11.0);
-    const fold = 0.2 * n1 + 0.1 * n2 + 0.045 * n3;
+    // ── Multi-octave cortical folds ──────────────────────────────
+    const n1 = noise3(x * 2.4, y * 2.4, z * 2.4);
+    const n2 = noise3(x * 6.0 + 1.3, y * 6.0, z * 6.0 - 0.7);
+    const n3 = noise3(x * 12.0, y * 12.0 + 2.1, z * 12.0);
+    const fold = 0.16 * n1 + 0.09 * n2 + 0.04 * n3;
 
-    const hemisphere = Math.sign(x || 0.001) * 0.07 * Math.abs(x);
-    const sulcus = -0.05 * Math.exp(-x * x * 8.0);
-    const radius = 1.0 + fold + hemisphere + sulcus;
+    // ── Deep longitudinal fissure (midline sulcus) ───────────────
+    // Strong inward pull near x≈0 so the two hemispheres separate clearly
+    const fissure = -0.14 * Math.exp(-x * x * 18.0);
+
+    // ── Hemisphere outward push ──────────────────────────────────
+    // Push each side further out so left/right read as two lobes
+    const hemiPush = Math.sign(x || 0.001) * 0.11 * Math.abs(x);
+
+    // ── Cerebellum bulge (rear-bottom, z>0 & y low) ──────────────
+    const cereY = Math.max(0, -y + 0.15);
+    const cereZ = Math.max(0, z);
+    const cerebellum = 0.12 * cereY * cereZ * cereZ;
+
+    // ── Brainstem taper (bottom center) ──────────────────────────
+    // Pull bottom-center slightly down and in for a stem silhouette
+    const stemMask = Math.exp(-(x * x * 6 + z * z * 4)) * Math.max(0, -y);
+    const stemY = -0.08 * stemMask;
+    const stemIn = -0.04 * stemMask;
+
+    // ── Frontal lobe slight forward bias ─────────────────────────
+    const frontal = Math.max(0, -z) * 0.04;
+
+    let radius = 1.0 + fold + fissure + hemiPush + cerebellum + frontal;
 
     x *= radius * scaleX;
     y *= radius * scaleY;
     z *= radius * scaleZ;
-    y += 0.08;
 
-    x += (hash(i * 0.137 + 19.7) - 0.5) * 0.035;
-    y += (hash(i * 0.271 + 3.1) - 0.5) * 0.025;
-    z += (hash(i * 0.419 + 7.9) - 0.5) * 0.035;
+    // Apply stem offset after scaling
+    y += 0.06 + stemY;
+    x *= 1.0 + stemIn;
+    z *= 1.0 + stemIn * 0.5;
+
+    // Tiny jitter so sampling isn't perfectly regular
+    x += (hash(i * 0.137 + 19.7) - 0.5) * 0.022;
+    y += (hash(i * 0.271 + 3.1) - 0.5) * 0.018;
+    z += (hash(i * 0.419 + 7.9) - 0.5) * 0.022;
 
     positions[i * 3] = x;
     positions[i * 3 + 1] = y;
     positions[i * 3 + 2] = z;
   }
 
-  // Interior volume — cube-root radius for uniform density
+  // Interior volume — denser near cortex, thinner at center
   for (let j = 0; j < nVolume; j++) {
     const i = nSurface + j;
     let { x, y, z } = fibDirection(j * 3 + 7, nVolume * 3);
 
     const u = hash(j * 0.91 + 2.3);
-    const r = Math.cbrt(u) * 0.72;
+    // Bias toward outer shell (0.45–0.85) so silhouette stays dense
+    const r = 0.45 + Math.cbrt(u) * 0.4;
 
-    const n1 = noise3(x * 3.1, y * 3.1, z * 3.1) * 0.08;
-    const hemisphere = Math.sign(x || 0.001) * 0.04 * Math.abs(x);
+    const n1 = noise3(x * 3.1, y * 3.1, z * 3.1) * 0.06;
+    const hemi = Math.sign(x || 0.001) * 0.05 * Math.abs(x);
+    const fissure = -0.08 * Math.exp(-x * x * 14.0);
 
-    x *= (r + n1 + hemisphere) * scaleX;
+    x *= (r + n1 + hemi + fissure) * scaleX;
     y *= (r + n1) * scaleY;
     z *= (r + n1) * scaleZ;
-    y += 0.06;
+    y += 0.05;
 
     positions[i * 3] = x;
     positions[i * 3 + 1] = y;
@@ -169,32 +202,108 @@ export function createBulb(count) {
   return positions;
 }
 
+/**
+ * Globe with readable continental landmasses.
+ * Land is raised; ocean basins pulled slightly inward so continents
+ * read as distinct shapes (Africa, Eurasia, Americas, Australia).
+ */
 export function createGlobe(count) {
   const positions = new Float32Array(count * 3);
-  const nSurface = Math.floor(count * 0.7);
+  const nSurface = Math.floor(count * 0.78);
   const nVolume = count - nSurface;
-  const R = 1.08;
+  const R = 1.12;
+
+  /**
+   * Continental height field in lat/lon space.
+   * Returns positive for land, near-zero / negative for ocean.
+   * Approximate real-world placement (lon: -π..π, lat: -π/2..π/2).
+   */
+  function continentHeight(lon, lat) {
+    let h = 0;
+
+    // Africa — broad oval centered ~lon 20°, lat 5°
+    {
+      const dlon = lon - 0.35;
+      const dlat = lat - 0.08;
+      const af = Math.exp(-(dlon * dlon * 2.8 + dlat * dlat * 3.5));
+      h += af * 0.09;
+    }
+
+    // Eurasia — wide band lon 20°..140°, lat 20°..60°
+    {
+      const dlon = lon - 1.4;
+      const dlat = lat - 0.7;
+      const eu = Math.exp(-(dlon * dlon * 0.9 + dlat * dlat * 4.5));
+      h += eu * 0.07;
+    }
+
+    // North America — lon -100°, lat 40°
+    {
+      const dlon = lon + 1.75;
+      const dlat = lat - 0.7;
+      const na = Math.exp(-(dlon * dlon * 2.2 + dlat * dlat * 3.0));
+      h += na * 0.075;
+    }
+
+    // South America — lon -60°, lat -15°
+    {
+      const dlon = lon + 1.05;
+      const dlat = lat + 0.25;
+      const sa = Math.exp(-(dlon * dlon * 4.0 + dlat * dlat * 2.2));
+      h += sa * 0.08;
+    }
+
+    // Australia — lon 135°, lat -25°
+    {
+      const dlon = lon - 2.35;
+      const dlat = lat + 0.45;
+      const au = Math.exp(-(dlon * dlon * 5.5 + dlat * dlat * 6.0));
+      h += au * 0.065;
+    }
+
+    // Antarctica band (bottom)
+    if (lat < -1.0) {
+      h += 0.04 * Math.max(0, -lat - 1.0);
+    }
+
+    // Soft ocean depression so land stands out
+    const ocean = -0.025 * (1.0 - Math.min(1, h * 12));
+
+    // Fine coastal noise
+    const coast = noise3(lon * 3.5, lat * 3.5, 0.5) * 0.012;
+
+    return h + ocean + coast;
+  }
 
   for (let i = 0; i < nSurface; i++) {
     let { x, y, z } = fibDirection(i, nSurface);
+
     const lat = Math.asin(Math.max(-1, Math.min(1, y)));
-    const band = Math.sin(lat * 6.0) * 0.025;
     const lon = Math.atan2(z, x);
-    const ridge = Math.sin(lon * 8.0) * 0.02;
-    // Continental-ish landmass bias (Africa-like band)
-    const land =
-      Math.max(0, Math.sin(lon * 1.4 + 0.6) * Math.cos(lat * 1.8)) * 0.04;
-    const n = noise3(x * 4, y * 4, z * 4) * 0.035;
-    const radius = R + band + ridge + land + n;
+
+    const land = continentHeight(lon, lat);
+
+    // Subtle latitude banding (climate / cloud bands)
+    const band = Math.sin(lat * 5.0) * 0.012;
+
+    // Ridge noise for mountain-ish texture on land
+    const ridge =
+      land > 0.02
+        ? noise3(x * 5.5, y * 5.5, z * 5.5) * 0.02
+        : noise3(x * 3.0, y * 3.0, z * 3.0) * 0.008;
+
+    const radius = R + land + band + ridge;
+
     positions[i * 3] = x * radius;
     positions[i * 3 + 1] = y * radius;
     positions[i * 3 + 2] = z * radius;
   }
 
+  // Sparse interior so the sphere doesn't look hollow but silhouette stays crisp
   for (let j = 0; j < nVolume; j++) {
     const i = nSurface + j;
     let { x, y, z } = fibDirection(j + 5, nVolume);
-    const r = Math.cbrt(hash(j * 1.1)) * 0.85;
+    const r = Math.cbrt(hash(j * 1.1)) * 0.78;
     positions[i * 3] = x * r;
     positions[i * 3 + 1] = y * r;
     positions[i * 3 + 2] = z * r;
@@ -290,7 +399,6 @@ export function createNetwork(count) {
 
 /**
  * Abstract organic ribbon / twisted form — used at Team / CTA.
- * Smooth flowing surface with strong silhouette, not a hard geometric shape.
  */
 export function createAbstract(count) {
   const positions = new Float32Array(count * 3);
@@ -299,7 +407,6 @@ export function createAbstract(count) {
 
   for (let i = 0; i < nSurface; i++) {
     const t = i / Math.max(nSurface - 1, 1);
-    // Parametric twisted ribbon path
     const angle = t * Math.PI * 4.2;
     const twist = t * Math.PI * 2.6;
     const radius = 0.55 + 0.35 * Math.sin(t * Math.PI * 3);
@@ -309,10 +416,8 @@ export function createAbstract(count) {
     const cy = elev + Math.sin(twist) * 0.18;
     const cz = Math.sin(angle) * radius * 0.85;
 
-    // Tube cross-section around the path
     const tubeR = 0.22 + noise3(cx * 2, cy * 2, cz * 2) * 0.06;
     const { x: dx, y: dy, z: dz } = fibDirection(i * 3 + 11, nSurface * 2);
-    // Flatten slightly so it reads as a ribbon
     const ox = dx * tubeR * 0.55;
     const oy = dy * tubeR * 1.15;
     const oz = dz * tubeR * 0.55;
@@ -339,10 +444,9 @@ export function createAbstract(count) {
   return positions;
 }
 
-/** Optional hard geometric pyramid for CTA accent if desired */
+/** Optional hard geometric pyramid for CTA accent */
 export function createPyramid(count) {
   const positions = new Float32Array(count * 3);
-  // Square base corners + apex
   const apex = { x: 0, y: 1.15, z: 0 };
   const base = [
     { x: -0.95, y: -0.55, z: -0.95 },
@@ -355,7 +459,7 @@ export function createPyramid(count) {
     [apex, base[1], base[2]],
     [apex, base[2], base[3]],
     [apex, base[3], base[0]],
-    [base[0], base[1], base[2]], // base split into 2 tris conceptually
+    [base[0], base[1], base[2]],
     [base[0], base[2], base[3]],
   ];
 
@@ -364,7 +468,6 @@ export function createPyramid(count) {
 
   for (let i = 0; i < nSurface; i++) {
     const face = faces[i % faces.length];
-    // Barycentric sample
     let u = hash(i * 0.37 + 1.1);
     let v = hash(i * 0.59 + 2.3);
     if (u + v > 1) {
@@ -382,7 +485,6 @@ export function createPyramid(count) {
 
   for (let j = 0; j < nVolume; j++) {
     const i = nSurface + j;
-    // Rejection-style volume sample toward apex
     const u = hash(j * 0.71);
     const v = hash(j * 0.93);
     const w = hash(j * 1.17);
