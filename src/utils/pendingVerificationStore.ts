@@ -19,7 +19,15 @@ export type LocalPendingVerification = {
   mimeType?: string;
   appliedAt: string;
   status: 'pending' | 'verified' | 'rejected';
+  compressed?: boolean;
 };
+
+/** Student-facing verification state */
+export type StudentVerificationState =
+  | 'none' // never submitted (skipped signup)
+  | 'pending' // submitted, waiting admin
+  | 'verified' // admin approved
+  | 'rejected'; // admin rejected — may resubmit
 
 const STORE_KEY = 'eduroute.localPendingVerifications';
 
@@ -39,6 +47,7 @@ const writeAll = (items: LocalPendingVerification[]) => {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(items));
+    window.dispatchEvent(new Event('eduroute:verification-updated'));
   } catch {
     // ignore quota / private mode
   }
@@ -47,15 +56,24 @@ const writeAll = (items: LocalPendingVerification[]) => {
 export const listLocalPendingVerifications = (): LocalPendingVerification[] =>
   readAll().filter((item) => item.status === 'pending');
 
+/** All rows (any status) — for admin history if needed */
+export const listAllLocalVerifications = (): LocalPendingVerification[] => readAll();
+
 export const addLocalPendingVerification = (
   payload: Omit<LocalPendingVerification, 'id' | 'verificationId' | 'status' | 'appliedAt'> &
-    { appliedAt?: string },
+    { appliedAt?: string; status?: LocalPendingVerification['status'] },
 ): LocalPendingVerification => {
   const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const email = String(payload.email || '').toLowerCase().trim();
+  // Replace prior pending/rejected for same email (keep verified history)
+  const withoutSamePending = readAll().filter(
+    (item) =>
+      !(item.email.toLowerCase() === email && (item.status === 'pending' || item.status === 'rejected')),
+  );
   const entry: LocalPendingVerification = {
     id,
     verificationId: id,
-    status: 'pending',
+    status: payload.status || 'pending',
     appliedAt: payload.appliedAt || new Date().toISOString(),
     name: payload.name,
     email: payload.email,
@@ -68,9 +86,9 @@ export const addLocalPendingVerification = (
     fileName: payload.fileName,
     documentDataUrl: payload.documentDataUrl,
     mimeType: payload.mimeType,
+    compressed: payload.compressed,
   };
-  const next = [entry, ...readAll()];
-  writeAll(next);
+  writeAll([entry, ...withoutSamePending]);
   return entry;
 };
 
@@ -86,4 +104,45 @@ export const updateLocalVerificationStatus = (
 
 export const getLocalVerificationDocument = (id: string): LocalPendingVerification | null => {
   return readAll().find((item) => item.id === id || item.verificationId === id) || null;
+};
+
+/** Latest verification row for an email (any status). */
+export const getLatestVerificationForEmail = (
+  email?: string | null,
+): LocalPendingVerification | null => {
+  const key = String(email || '')
+    .toLowerCase()
+    .trim();
+  if (!key) return null;
+  const rows = readAll().filter((item) => item.email.toLowerCase() === key);
+  if (!rows.length) return null;
+  // Prefer verified > pending > rejected by recency within group
+  const rank = (s: string) => (s === 'verified' ? 3 : s === 'pending' ? 2 : 1);
+  rows.sort((a, b) => {
+    const r = rank(b.status) - rank(a.status);
+    if (r !== 0) return r;
+    return String(b.appliedAt).localeCompare(String(a.appliedAt));
+  });
+  return rows[0];
+};
+
+export const getStudentVerificationState = (email?: string | null): StudentVerificationState => {
+  const row = getLatestVerificationForEmail(email);
+  if (!row) return 'none';
+  if (row.status === 'verified') return 'verified';
+  if (row.status === 'pending') return 'pending';
+  if (row.status === 'rejected') return 'rejected';
+  return 'none';
+};
+
+/** True if student already submitted and cannot upload again (pending or verified). */
+export const hasActiveSubmission = (email?: string | null): boolean => {
+  const s = getStudentVerificationState(email);
+  return s === 'pending' || s === 'verified';
+};
+
+/** Can open upload form: never submitted or rejected. */
+export const canSubmitCollegeId = (email?: string | null): boolean => {
+  const s = getStudentVerificationState(email);
+  return s === 'none' || s === 'rejected';
 };
