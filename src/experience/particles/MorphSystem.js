@@ -4,6 +4,7 @@ import { generateAllShapes, SHAPE_NAMES } from './ShapeGenerator.js';
 /**
  * Dual-target morph controller.
  * Shape pairs driven by scroll; GPU reads progress each frame.
+ * Defaults tuned for rock-solid settle on pure black.
  */
 export default class MorphSystem {
   constructor(count, texSize) {
@@ -17,13 +18,13 @@ export default class MorphSystem {
     this.shapeBName = 'brain';
     this.morphProgress = 0;
 
-    // Softer defaults for cinematic settle
+    // Stronger spring + lower noise = silhouettes lock cleanly
     this.params = {
       morphProgress: 0,
       scatter: 0,
-      turbulence: 0.1,
-      springStrength: 3.8,
-      noiseStrength: 0.09,
+      turbulence: 0.08,
+      springStrength: 4.6,
+      noiseStrength: 0.06,
       morphSpeed: 1.0,
     };
 

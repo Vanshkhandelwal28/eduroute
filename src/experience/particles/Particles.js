@@ -9,6 +9,7 @@ import MorphSystem from './MorphSystem.js';
 
 /**
  * GPU particle field — hero opens held on brain, then morphs with scroll.
+ * Filled triangles on pure black, multi-color, clear individual shapes.
  */
 export default class Particles {
   constructor({ scene, renderer }) {
@@ -51,8 +52,9 @@ export default class Particles {
     this.morph.setPair('brain', 'brain');
     this.morph.setProgress(0);
 
+    // Clear filled triangle — larger than before so individual particles read
     const tri = new THREE.BufferGeometry();
-    const s = 0.008;
+    const s = 0.014; // was 0.008 — clearer on black
     const vertices = new Float32Array([
       0.0, s * 1.25, 0.0,
       -s, -s * 0.7, 0.0,
@@ -67,11 +69,11 @@ export default class Particles {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      const core = Math.random() > 0.92;
-      aScale[i] = core ? 1.4 + Math.random() * 0.8 : 0.45 + Math.random() * 1.2;
+      const core = Math.random() > 0.9;
+      aScale[i] = core ? 1.35 + Math.random() * 0.7 : 0.5 + Math.random() * 1.15;
       aBrightness[i] = core
-        ? 0.85 + Math.random() * 0.15
-        : 0.35 + Math.random() * 0.45;
+        ? 0.88 + Math.random() * 0.12
+        : 0.4 + Math.random() * 0.5;
       aIndex[i] = i;
     }
 
@@ -90,8 +92,8 @@ export default class Particles {
       fragmentShader: particleFragmentShader,
       uniforms: {
         uTime: { value: 0 },
-        uBreathAmount: { value: 0.02 },
-        uBreathSpeed: { value: 0.4 },
+        uBreathAmount: { value: 0.018 },
+        uBreathSpeed: { value: 0.38 },
         uPositionTexture: { value: null },
         uTexSize: { value: this.simulation.textureSize },
         uOpacity: { value: 1 },
@@ -143,7 +145,7 @@ export default class Particles {
     if (this._timelineGather > 0.01 && this.morph) {
       this.morph.params.noiseStrength = Math.min(
         this.morph.params.noiseStrength,
-        0.04
+        0.035
       );
     }
 
@@ -184,7 +186,7 @@ export default class Particles {
       // Slow continuous spin + timeline + mouse parallax
       this.mesh.rotation.x = this._rotCurrent.x + this._timelineRotX;
       this.mesh.rotation.y =
-        elapsed * 0.014 + this._rotCurrent.y + this._timelineRotY;
+        elapsed * 0.012 + this._rotCurrent.y + this._timelineRotY;
     }
   }
 

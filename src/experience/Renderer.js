@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import { getCappedDPR } from './utils/device.js';
 
 /**
- * Renderer for EffectComposer pipeline.
- * Clear color matches Dala purple so the canvas never flashes black.
+ * Renderer — pure black clear color matching live Dala.
  */
 export default class Renderer {
   constructor({ canvas, sizes }) {
@@ -19,8 +18,8 @@ export default class Renderer {
       depth: true,
     });
 
-    // Dala deep purple — same as Scene background
-    this.instance.setClearColor(0x3c184c, 1);
+    // Pure black — matches live Dala, maximum particle contrast
+    this.instance.setClearColor(0x000000, 1);
     this.instance.setPixelRatio(getCappedDPR());
     this.instance.setSize(this.sizes.width, this.sizes.height);
 
