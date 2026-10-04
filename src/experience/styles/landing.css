@@ -1,14 +1,14 @@
 /* ============================================================
-   EduRoute landing — Dala-matched purple atmosphere
+   EduRoute landing — live Dala match (pure black + multi-color triangles)
    ============================================================ */
 
 :root {
-  --bg: #3c184c;
-  --bg-mid: #692a84;
+  --bg: #000000;
+  --bg-mid: #0a0a0a;
   --text: #f5f5f5;
   --text-secondary: rgba(255, 255, 255, 0.62);
   --text-muted: rgba(255, 255, 255, 0.38);
-  --accent: #c5299b;
+  --accent: #c39bd3;
   --border: rgba(255, 255, 255, 0.22);
   --border-hover: rgba(255, 255, 255, 0.55);
   --font: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
@@ -32,7 +32,7 @@ body.er-on-landing .theme-toggle {
 }
 
 .er-landing {
-  background: radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%);
+  background: #000000;
   color: var(--text);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
@@ -47,7 +47,7 @@ body.er-on-landing .theme-toggle {
 }
 
 .er-landing.er-no-webgl {
-  background: radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%);
+  background: #000000;
 }
 
 .er-landing.er-no-webgl #webgl-canvas {
@@ -115,7 +115,7 @@ body.er-on-landing .theme-toggle {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: radial-gradient(circle at 50% 45%, #692a84 0%, #3c184c 65%);
+  background: #000000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -355,7 +355,7 @@ body.er-on-landing .theme-toggle {
   }
 }
 
-/* Extra scroll room for the long brain→bulb morph */
+/* Extra scroll room for morph transitions */
 .er-landing .er-feature--tall {
   min-height: 140svh;
 }
