@@ -4,6 +4,7 @@ import Scene from './Scene.js';
 import Camera from './Camera.js';
 import Renderer from './Renderer.js';
 import Particles from './particles/Particles.js';
+import AmbientLayer from './particles/AmbientLayer.js';
 import MouseInteraction from './interaction/MouseInteraction.js';
 import TimelineController from './animation/Timeline.js';
 import PostProcessing from './postprocessing/PostProcessing.js';
@@ -15,7 +16,7 @@ import {
 
 /**
  * Experience — single cinematic system.
- * Lenis + GPU particles + morph timeline + post.
+ * Lenis + GPU particles + morph timeline + ambient layer + post.
  * Hero opens on brain; scroll drives the full story.
  */
 export default class Experience {
@@ -65,6 +66,9 @@ export default class Experience {
       renderer: this.renderer.instance,
     });
 
+    // Ambient floating triangle layer — always present, never morphs
+    this.ambient = new AmbientLayer({ scene: this.scene });
+
     // Center structure for hero readability
     if (this.particles.mesh) {
       this.particles.mesh.position.set(0.55, 0.08, 0);
@@ -100,7 +104,6 @@ export default class Experience {
 
     this.onResize = this.onResize.bind(this);
     this.onVisibilityChange = this.onVisibilityChange.bind(this);
-    this.tick = this.tick.bind(this);
 
     window.addEventListener('resize', this.onResize, { passive: true });
     document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -111,7 +114,7 @@ export default class Experience {
 
   _showFallback() {
     if (this.canvas) this.canvas.style.display = 'none';
-    document.querySelector('.er-landing')?.classList.add('er-no-webgl');
+    document.querySelector('.er-landing')?.classList.add('er-no-webgl);
   }
 
   onResize() {
@@ -163,6 +166,7 @@ export default class Experience {
     this.scene.update();
     this.mouse?.update(delta);
     this.particles?.update(elapsed, delta, this.mouse);
+    this.ambient?.update(elapsed); // ambient layer tick
 
     if (this.post && this.camera?.instance) {
       this.post.setFocus(this.camera.instance.position.length());
@@ -206,18 +210,21 @@ export default class Experience {
     this.mouse?.dispose();
     this.mouse = null;
 
+    this.ambient?.dispose(); // ambient layer cleanup
+    this.ambient = null;
+
     this.particles?.dispose();
     this.particles = null;
 
     this.renderer?.dispose();
 
     this.scene?.instance?.traverse((obj) => {
-      if (obj.geometry) obj.geometry.dispose();
+      if (obj.geometry) obj.geometry?.dispose?.();
       if (obj.material) {
         if (Array.isArray(obj.material)) {
-          obj.material.forEach((m) => m.dispose());
+          obj.material.forEach((m) => m?.dispose?.());
         } else {
-          obj.material.dispose();
+          obj.material?.dispose?.();
         }
       }
     });

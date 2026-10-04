@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
 /**
- * Cinematic camera states.
+ * Cinematic camera states with subtle dolly breathing per section.
  * LookAt bias toward particle offset (x ≈ 1.15) so structure sits right of hero type.
+ * Dala-style: slow push-in on hero, pull-back on manifesto, gentle orbit on CTA.
  */
 
 export const CAMERA_STATES = {
@@ -11,60 +12,71 @@ export const CAMERA_STATES = {
     lookAt: [1.0, 0.08, 0],
     fov: 40,
     damping: 0.055,
+    // Dolly: slow push toward structure during hero hold
+    dolly: { zAmp: -0.15, phase: 0 },
   },
   MANIFESTO: {
     position: [-0.2, 0.35, 5.5],
     lookAt: [0.9, 0.1, 0],
     fov: 38,
     damping: 0.045,
+    dolly: { zAmp: 0.2, phase: 0.5 },
   },
   FEATURE_01: {
     position: [1.4, 0.5, 5.2],
     lookAt: [0.8, 0.05, 0],
     fov: 42,
     damping: 0.04,
+    dolly: { zAmp: 0.1, phase: 1.0 },
   },
   FEATURE_02: {
     position: [-0.6, 0.3, 5.4],
     lookAt: [1.0, 0.08, 0],
     fov: 43,
     damping: 0.038,
+    dolly: { zAmp: 0.12, phase: 1.5 },
   },
   FEATURE_02_END: {
     position: [1.5, 0.4, 5.7],
     lookAt: [1.0, 0.05, 0],
     fov: 42,
     damping: 0.038,
+    dolly: { zAmp: 0.08, phase: 2.0 },
   },
   FEATURE_03: {
     position: [0.6, 0.65, 6.9],
     lookAt: [1.0, 0, 0],
     fov: 45,
     damping: 0.035,
+    dolly: { zAmp: 0.15, phase: 2.5 },
   },
   TEAM: {
     position: [1.5, 0.45, 6.3],
     lookAt: [1.0, 0.05, 0],
     fov: 42,
     damping: 0.03,
+    dolly: { zAmp: 0.1, phase: 3.0 },
   },
   TEAM_END: {
     position: [1.1, 0.55, 6.5],
     lookAt: [1.0, 0.08, 0],
     fov: 41,
     damping: 0.03,
+    dolly: { zAmp: 0.08, phase: 3.5 },
   },
   CTA: {
     position: [0.9, 0.1, 3.8],
     lookAt: [1.0, 0.05, 0],
     fov: 38,
     damping: 0.045,
+    dolly: { zAmp: -0.2, phase: 4.0 },
   },
   FOOTER: {
     position: [0.5, 0.25, 5.4],
     lookAt: [1.0, 0, 0],
     fov: 44,
     damping: 0.035,
+    dolly: { zAmp: 0.1, phase: 4.5 },
   },
 };
 
@@ -93,6 +105,7 @@ export default class Camera {
     this._damping = h.damping;
 
     this.travelScale = this._computeTravelScale();
+    this._elapsed = 0;
   }
 
   _computeTravelScale() {
@@ -164,11 +177,20 @@ export default class Camera {
   }
 
   update(delta = 0.016) {
+    this._elapsed += delta;
+
     const k = 1 - Math.exp(-this._damping * 60 * Math.min(delta, 0.05));
 
     this._pos.lerp(this._targetPos, k);
     this._look.lerp(this._targetLook, k);
     this._fov += (this._targetFov - this._fov) * k;
+
+    // Subtle dolly breathing — slow sine push/pull per section
+    const dolly = this._currentDolly;
+    if (dolly) {
+      const breath = Math.sin(this._elapsed * 0.15 + dolly.phase) * dolly.zAmp;
+      this._pos.z += breath * 0.3; // gentle, not jarring
+    }
 
     this.instance.position.copy(this._pos);
     this.instance.lookAt(this._look);
@@ -177,5 +199,10 @@ export default class Camera {
       this.instance.fov = this._fov;
       this.instance.updateProjectionMatrix();
     }
+  }
+
+  // Called by Timeline to set current dolly params
+  setDolly(dolly) {
+    this._currentDolly = dolly || null;
   }
 }
