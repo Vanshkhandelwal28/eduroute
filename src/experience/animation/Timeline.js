@@ -316,7 +316,7 @@ export default class TimelineController {
         scrub,
         onUpdate: () => this._syncMorphParams(),
       },
-    ]);
+    });
 
     partnersTl.fromTo(s, { noiseStrength: 0.025, scatter: 0.008 },
       { noiseStrength: 0.02, scatter: 0.005, ease: 'none', duration: 1 }, 0);
