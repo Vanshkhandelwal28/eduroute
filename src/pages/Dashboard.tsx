@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
-  CheckCircle2,
-  Flame,
-  Star,
-  Trophy,
   ArrowRight,
-  ShieldCheck,
-  Sparkles,
-  Target,
+  BookOpen,
   Briefcase,
-  FileText,
+  Boxes,
+  CheckCircle2,
+  Cpu,
+  Flame,
+  Shield,
+  Sparkles,
+  Star,
   TrendingUp,
-  Clock,
-  Wand2,
+  BarChart3,
 } from 'lucide-react';
 import { COURSES } from '../data/mockData';
 import { getCurrentUser, getDisplayFirstName } from '../utils/userProfile';
@@ -30,6 +30,14 @@ import {
   runDashboardSkillAnalyze,
   readDashboardSkillAnalyze,
 } from '../utils/placementChance';
+import {
+  getStudentVerificationState,
+  syncVerificationFromServer,
+  type StudentVerificationState,
+} from '../utils/pendingVerificationStore';
+import { getAuthUser } from '../utils/rbacAuth';
+import { getStoredUserProfile } from '../utils/userProfile';
+import { DashboardHero3D } from '../components/dashboard/DashboardHero3D';
 
 function courseTopicIds(course: (typeof COURSES)[0]): string[] {
   const ids: string[] = [];
@@ -48,23 +56,67 @@ function courseHref(course: (typeof COURSES)[0]): string {
   return `/ai-course-designer?skills=${skills}&auto=1&days=30`;
 }
 
+const fadeUp = {
+  hidden: { opacity: 0, y: 18 },
+  show: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: 0.06 * i, duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
+  }),
+};
+
+const COURSE_ICONS = [Cpu, BarChart3, Briefcase, Boxes, BookOpen, Star];
+
 export const Dashboard = () => {
   const currentUser = getCurrentUser();
   const firstName = getDisplayFirstName() || 'there';
   const onboarding = readOnboarding();
   const nextPlan = getNextStepPlan(onboarding);
-  const gapCount =
-    nextPlan.kind === 'gaps' ? nextPlan.gapCount : onboarding.missingSkills?.length || 0;
   const hasSkillProfile = Boolean(onboarding.completedAt);
   const [applications, setApplications] = useState<InternshipApplication[]>(() => readApplications());
   const earnedSkills = useMemo(() => {
-    try { return getAllEarnedCourseSkills() || []; } catch { return []; }
+    try {
+      return getAllEarnedCourseSkills() || [];
+    } catch {
+      return [];
+    }
   }, []);
   const [skillAnalyze, setSkillAnalyze] = useState(() => readDashboardSkillAnalyze());
+
+  // College verification state for action-zone card (keeps admin approve/reject sync)
+  const auth = getAuthUser();
+  const profile = getStoredUserProfile();
+  const email = auth?.email || profile?.email || '';
+  const [verifyState, setVerifyState] = useState<StudentVerificationState>(() =>
+    getStudentVerificationState(email),
+  );
 
   useEffect(() => {
     setSkillAnalyze(runDashboardSkillAnalyze());
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      const next = await syncVerificationFromServer(email);
+      if (!cancelled) setVerifyState(next);
+    };
+    void refresh();
+    const onUpd = () => {
+      void refresh();
+    };
+    window.addEventListener('eduroute:verification-updated', onUpd);
+    window.addEventListener('focus', onUpd);
+    const interval = window.setInterval(() => {
+      void refresh();
+    }, 8000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('eduroute:verification-updated', onUpd);
+      window.removeEventListener('focus', onUpd);
+      window.clearInterval(interval);
+    };
+  }, [email]);
 
   const userSkills = useMemo(() => {
     const strengths = (onboarding.gapAnswers || [])
@@ -93,19 +145,26 @@ export const Dashboard = () => {
       boost: computePlacementChance(c, userSkills).boostPercent,
     }));
     scored.sort((a, b) => b.boost - a.boost);
-    return scored.slice(0, 4);
+    return scored.slice(0, 3);
   }, [currentUser.enrolledCourses, userSkills]);
 
   const pathPercent = useMemo(() => {
-    if (!enrolledCourses.length) return 0;
+    if (!enrolledCourses.length) {
+      if (userSkills.length >= 8) return 62;
+      if (userSkills.length >= 4) return 38;
+      if (hasSkillProfile) return 22;
+      return isNewLearner ? 0 : 12;
+    }
     let sum = 0;
+    let n = 0;
     for (const c of enrolledCourses) {
       const topics = courseTopicIds(c);
       if (!topics.length) continue;
       sum += courseCompletionStats(c.id, topics).percent;
+      n += 1;
     }
-    return Math.round(sum / enrolledCourses.length);
-  }, [enrolledCourses]);
+    return n ? Math.round(sum / n) : 12;
+  }, [enrolledCourses, userSkills.length, hasSkillProfile, isNewLearner]);
 
   useEffect(() => {
     const refresh = () => setApplications(readApplications());
@@ -117,379 +176,267 @@ export const Dashboard = () => {
     };
   }, []);
 
-  const stats = [
-    {
-      label: 'Completed',
-      value: String(earnedSkills.length > 0 ? Math.max(1, Math.floor(earnedSkills.length / 3)) : 0),
-      delta: isNewLearner ? 'Start first course' : 'Keep learning',
-      icon: CheckCircle2,
-      iconBg: 'bg-emerald-100 dark:bg-emerald-500/20',
-      iconColor: 'text-emerald-600 dark:text-emerald-400',
-    },
-    {
-      label: 'Streak',
-      value: isNewLearner ? '0d' : '3d',
-      delta: isNewLearner ? 'Lesson today' : 'On track',
-      icon: Flame,
-      iconBg: 'bg-violet-100 dark:bg-violet-500/20',
-      iconColor: 'text-violet-600 dark:text-violet-400',
-    },
-    {
-      label: 'Skills',
-      value: String(userSkills.length || 0),
-      delta: userSkills.length ? 'Mapped' : 'Add profile',
-      icon: Star,
-      iconBg: 'bg-amber-100 dark:bg-amber-500/20',
-      iconColor: 'text-amber-600 dark:text-amber-400',
-    },
-    {
-      label: 'Apps',
-      value: String(applications.length),
-      delta: applications.length ? 'Tracked' : 'Browse roles',
-      icon: Trophy,
-      iconBg: 'bg-blue-100 dark:bg-blue-500/20',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-    },
-  ];
+  const completedCoursesCount =
+    earnedSkills.length > 0 ? Math.max(1, Math.floor(earnedSkills.length / 3)) : enrolledCourses.length || 0;
+  const streakDays = isNewLearner ? 0 : Math.max(3, Math.min(18, userSkills.length + 2));
+  const skillsUnlocked = userSkills.length || 0;
+  const appsTracked = applications.length;
+
+  const verifyBadge =
+    verifyState === 'verified'
+      ? { label: 'Verified', sub: 'Your college is verified. Unlock exclusive opportunities.', cls: 'text-emerald-400', pill: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40' }
+      : verifyState === 'pending'
+        ? { label: 'Under review', sub: 'College ID submitted — awaiting admin approval.', cls: 'text-amber-400', pill: 'bg-amber-500/20 text-amber-300 border-amber-400/40' }
+        : verifyState === 'rejected'
+          ? { label: 'Not verified', sub: 'Previous ID rejected — upload again to get verified.', cls: 'text-rose-400', pill: 'bg-rose-500/20 text-rose-300 border-rose-400/40' }
+          : { label: 'Not verified', sub: 'Upload college ID to unlock verified benefits.', cls: 'text-slate-300', pill: 'bg-slate-500/20 text-slate-300 border-slate-400/40' };
 
   return (
-    <div className="er-page space-y-6">
-      <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border-default)] min-h-[160px] md:min-h-[176px]">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105"
-          style={{
-            backgroundImage:
-              "url('https://images.unsplash.com/photo-1507608616759-54f48f0af0ee?auto=format&fit=crop&w=1600&q=85')",
-            filter: 'brightness(1.18) contrast(1.12) saturate(1.2)',
-          }}
-          aria-hidden
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-white/88 via-white/45 to-transparent dark:from-slate-950/92 dark:via-slate-950/70 dark:to-slate-950/35" aria-hidden />
-        <div className="relative z-10 flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6">
-          <div className="max-w-xl">
-            <p className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              <span className="mr-1">{isNewLearner ? '🚀' : '👋'}</span>{' '}
-              {isNewLearner ? 'Welcome,' : 'Welcome back,'}
-            </p>
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white md:text-3xl">
-              {firstName}!
-            </h1>
-            <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              {isNewLearner
-                ? 'Start a course or design your own path — placement chance rises as your skills match courses.'
-                : enrolledCourses.length
-                  ? `You're about ${pathPercent}% through your current path. Finish modules to unlock the final assessment & certificate.`
-                  : 'Enroll in a course or design a mixed path matched to market demand.'}
-            </p>
-            <div className="mt-4 flex items-center gap-3">
-              <div className="er-progress flex-1 max-w-xs">
-                <div className="er-progress-bar" style={{ width: `${Math.max(4, pathPercent)}%` }} />
-              </div>
-              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{pathPercent}%</span>
+    <div className="er-page space-y-6 md:space-y-7">
+      {/* ZONE 1: CINEMATIC HERO */}
+      <motion.section
+        custom={0}
+        variants={fadeUp}
+        initial="hidden"
+        animate="show"
+        className="relative overflow-hidden rounded-3xl border border-indigo-500/25 bg-[#06061a] min-h-[220px] md:min-h-[260px]"
+      >
+        <DashboardHero3D percent={Math.max(pathPercent, isNewLearner ? 0 : 12)} />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#06061a] via-[#06061a]/75 to-transparent pointer-events-none" />
+        <div className="relative z-10 flex flex-col justify-center gap-3 p-6 md:p-8 md:max-w-[48%]">
+          <h1 className="text-3xl font-black tracking-tight text-white md:text-4xl lg:text-[2.6rem]">
+            Welcome, {firstName}!
+          </h1>
+          <p className="text-sm font-medium text-indigo-100/85 md:text-[15px]">
+            Your placement journey starts here.
+          </p>
+          {nextPlan.kind === 'gaps' && nextPlan.primary ? (
+            <Link
+              to={nextPlan.primary.to}
+              className="mt-1 inline-flex max-w-fit items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Next: {nextPlan.primary.skill}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : nextPlan.kind === 'quiz' ? (
+            <Link
+              to="/onboarding"
+              className="mt-1 inline-flex max-w-fit items-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-500/15 px-3 py-1.5 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-500/25"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Complete skill quiz
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : null}
+          <div className="mt-2 flex items-center gap-3 md:hidden">
+            <div className="h-2 flex-1 max-w-[140px] overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400"
+                style={{ width: `${Math.max(4, pathPercent)}%` }}
+              />
             </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-card)]/80 px-4 py-3 shadow-sm backdrop-blur-sm">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-500/20">
-              <ShieldCheck className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Skill profile</p>
-              <p className="text-sm font-bold text-[var(--text-primary)]">
-                {hasSkillProfile ? `${userSkills.length} skills mapped` : 'Complete skill profile'}
-              </p>
-            </div>
+            <span className="text-sm font-bold text-white">{pathPercent}%</span>
           </div>
         </div>
-      </section>
-           
-      <VerificationStatusCard />
-      
-      {skillAnalyze && (
-        <section className="er-card flex flex-col gap-3 border border-indigo-500/20 bg-gradient-to-r from-indigo-500/10 to-violet-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Skill analysis</p>
-            <h2 className="text-base font-bold text-[var(--text-primary)]">
-              {skillAnalyze.hasProfile
-                ? `Analyzed ${skillAnalyze.skillCount} skills · high placement chance paths`
-                : 'Run skill quiz for real placement-chance scores'}
-            </h2>
-            {skillAnalyze.top?.[0] && skillAnalyze.hasProfile && (
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                Top lift:{' '}
-                <span className="font-semibold text-[var(--text-primary)]">{skillAnalyze.top[0].title}</span>
-                {' · '}high placement chance by +{skillAnalyze.top[0].boostPercent}%
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setSkillAnalyze(runDashboardSkillAnalyze())}
-            className="inline-flex shrink-0 items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white"
-          >
-            AI Analyze
-          </button>
-        </section>
-      )}
+      </motion.section>
 
-      <section className="er-stat-grid">
-        {stats.map((s) => {
+      {/* ZONE 2: STATS STRIP */}
+      <motion.section
+        custom={1}
+        variants={fadeUp}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-2 gap-3 rounded-2xl border border-indigo-500/20 bg-[#0b0b22]/90 p-2 backdrop-blur-md sm:grid-cols-4 sm:gap-0 sm:divide-x sm:divide-indigo-500/15 sm:p-1"
+      >
+        {[
+          { label: 'Completed courses', value: completedCoursesCount, icon: Boxes, color: 'text-violet-400', glow: 'from-violet-500/25 to-indigo-500/10' },
+          { label: 'Streak days', value: streakDays, icon: Flame, color: 'text-orange-400', glow: 'from-orange-500/25 to-amber-500/10' },
+          { label: 'Skills unlocked', value: skillsUnlocked, icon: Star, color: 'text-sky-400', glow: 'from-sky-500/25 to-cyan-500/10' },
+          { label: 'Apps tracked', value: appsTracked, icon: Briefcase, color: 'text-indigo-300', glow: 'from-indigo-500/25 to-violet-500/10' },
+        ].map((s) => {
           const Icon = s.icon;
           return (
-            <div key={s.label} className="er-stat-card">
-              <div className={`er-stat-icon ${s.iconBg}`}>
-                <Icon className={`shrink-0 ${s.iconColor}`} />
+            <div key={s.label} className="group flex items-center gap-3 rounded-xl px-3 py-3.5 transition hover:bg-white/[0.04]">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${s.glow} transition-transform duration-500 group-hover:rotate-12 group-hover:scale-110`}>
+                <Icon className={`h-5 w-5 ${s.color}`} />
               </div>
-              <div>
-                <div className="er-stat-label">{s.label}</div>
-                <div className="er-stat-value">{s.value}</div>
-                <div className="er-stat-delta">{s.delta}</div>
+              <div className="min-w-0">
+                <div className="text-xl font-black tabular-nums text-white">{s.value}</div>
+                <div className="truncate text-[11px] font-medium text-slate-400">{s.label}</div>
               </div>
             </div>
           );
         })}
-      </section>
+      </motion.section>
 
-      <Link
-        to="/ai-course-designer"
-        className="group relative block overflow-hidden rounded-[var(--radius-xl)] border border-fuchsia-200/70 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-indigo-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-fuchsia-500/25 dark:from-fuchsia-950/40 dark:via-violet-950/30 dark:to-indigo-950/30 sm:p-5"
-      >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-md">
-              <Wand2 className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-fuchsia-600 dark:text-fuchsia-300">New · AI-powered</p>
-              <h2 className="text-base font-bold text-[var(--text-primary)]">Design your own mixed course</h2>
-              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
-                Pick duration + interests. AI builds a roadmap with real YouTube + docs.
-              </p>
-            </div>
-          </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-fuchsia-600 px-4 py-2 text-sm font-bold text-white shadow-sm sm:self-center">
-            Start <ArrowRight className="h-4 w-4" />
-          </span>
-        </div>
-      </Link>
+      {skillAnalyze && (
+        <motion.div custom={2} variants={fadeUp} initial="hidden" animate="show" className="flex flex-col gap-2 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-indigo-100/90">
+            {skillAnalyze.hasProfile
+              ? `AI analyzed ${skillAnalyze.skillCount} skills · top lift: ${skillAnalyze.top?.[0]?.title || '—'} (+${skillAnalyze.top?.[0]?.boostPercent ?? 0}%)`
+              : 'Run AI skill analyze for real placement-chance scores'}
+          </p>
+          <button type="button" onClick={() => setSkillAnalyze(runDashboardSkillAnalyze())} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg shadow-indigo-500/30">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI Analyze
+          </button>
+        </motion.div>
+      )}
 
-      <Link
-        to="/trend-analyse"
-        className="group relative block overflow-hidden rounded-[var(--radius-xl)] border border-sky-200/70 bg-gradient-to-br from-sky-50 via-cyan-50 to-teal-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-sky-500/25 dark:from-sky-950/40 dark:via-cyan-950/30 dark:to-teal-950/30 sm:p-5"
-      >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-teal-600 text-white shadow-md">
-              <TrendingUp className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-300">Market vs you</p>
-              <h2 className="text-base font-bold text-[var(--text-primary)]">Trend Analyse — skill gaps vs market demand</h2>
-              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
-                Compare market trends with your skill profile. Gaps, charts, refresh every 7 days.
-              </p>
-            </div>
-          </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-sky-600 px-4 py-2 text-sm font-bold text-white shadow-sm sm:self-center">
-            Open <ArrowRight className="h-4 w-4" />
-          </span>
-        </div>
-      </Link>
-
-      <section>
-        {nextPlan.kind === 'gaps' && nextPlan.primary ? (
-          <div className="er-card border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 p-5 dark:border-amber-500/30 dark:from-amber-950/30 dark:to-orange-950/20">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md">
-                  <Target className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">Close gaps</p>
-                  <h2 className="text-base font-bold text-[var(--text-primary)]">Skill gaps on your path</h2>
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                    Track <span className="font-semibold text-[var(--text-primary)]">{nextPlan.trackLabel}</span>
-                    {' · '}start with{' '}
-                    <span className="font-semibold text-[var(--text-primary)]">{nextPlan.primary.skill}</span>
-                    {' → '}{nextPlan.primary.courseTitle}
-                  </p>
+      {/* ZONE 3: ACTION ZONE */}
+      <motion.section custom={3} variants={fadeUp} initial="hidden" animate="show">
+        <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Action Zone</h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Link to="/ai-course-designer" className="group relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-[#12123a] via-[#1a1040] to-[#0d1b3a] p-5 shadow-[0_0_40px_-12px_rgba(99,102,241,0.45)] transition hover:border-indigo-400/50 hover:shadow-[0_0_50px_-10px_rgba(99,102,241,0.55)]">
+            <div className="flex items-center gap-5">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-lg font-bold text-white md:text-xl">Design AI mixed course</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-300">Build job-ready skills with AI-curated courses and hands-on projects.</p>
+                <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-indigo-500/35 transition group-hover:bg-indigo-500">Start <ArrowRight className="h-4 w-4" /></span>
+              </div>
+              <div className="relative flex h-28 w-28 shrink-0 items-end justify-center">
+                <div className="absolute bottom-0 h-3 w-20 rounded-full bg-indigo-500/40 blur-md" />
+                <div className="absolute bottom-1 h-2.5 w-16 rounded-full bg-cyan-400/30 blur-sm" />
+                <div className="relative animate-[pulse_3s_ease-in-out_infinite]">
+                  <BookOpen className="h-16 w-16 text-cyan-300 drop-shadow-[0_0_18px_rgba(34,211,238,0.65)] transition-transform duration-700 group-hover:scale-110 group-hover:-rotate-6" strokeWidth={1.25} />
+                  <div className="absolute -inset-2 rounded-xl bg-cyan-400/10 blur-xl" />
                 </div>
               </div>
-              <div className="flex flex-col items-stretch gap-2 sm:items-end">
-                <Link
-                  to={nextPlan.primary.to}
-                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-400"
-                >
-                  Start: {nextPlan.primary.courseTitle} <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link to="/skill-profile" className="text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400">
-                  View full gap analysis
-                </Link>
+            </div>
+          </Link>
+
+          <div className="relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-[#0f1a3a] via-[#12123a] to-[#0a1628] p-5 shadow-[0_0_40px_-12px_rgba(56,189,248,0.35)]">
+            <div className="flex items-center gap-5">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-lg font-bold text-white md:text-xl">College verification</h3>
+                <div className="mt-2">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-bold ${verifyBadge.pill}`}>
+                    {verifyState === 'verified' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                    {verifyBadge.label}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-slate-300">{verifyBadge.sub}</p>
+                {verifyState !== 'verified' && (
+                  <Link to="/verify-college" className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-cyan-300 hover:text-cyan-200">
+                    {verifyState === 'pending' ? 'View status' : 'Upload college ID'}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                )}
+              </div>
+              <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
+                <div className="absolute h-20 w-20 animate-ping rounded-full bg-cyan-400/10" style={{ animationDuration: '2.5s' }} />
+                <div className="absolute h-16 w-16 rounded-full bg-cyan-500/15 blur-md" />
+                <Shield className="relative h-16 w-16 text-cyan-300 drop-shadow-[0_0_20px_rgba(34,211,238,0.7)]" strokeWidth={1.2} />
+                {verifyState === 'verified' && (
+                  <CheckCircle2 className="absolute h-6 w-6 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                )}
               </div>
             </div>
           </div>
-        ) : nextPlan.kind === 'quiz' ? (
-          <Link
-            to="/onboarding"
-            className="er-card er-card-hover group flex flex-col gap-4 border-indigo-200/80 bg-gradient-to-r from-indigo-50 to-violet-50 p-5 transition-all dark:border-indigo-500/30 dark:from-indigo-950/20 dark:to-violet-950/20 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="flex items-start gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Next step</p>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">Complete your skill quiz</h2>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Map strengths and gaps to unlock a personal learning path and better internship matches.
-                </p>
-              </div>
+        </div>
+        <div className="sr-only" aria-hidden>
+          <VerificationStatusCard />
+        </div>
+      </motion.section>
+
+      {/* ZONE 4: RECOMMENDED COURSES */}
+      <motion.section custom={4} variants={fadeUp} initial="hidden" animate="show">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Recommended Courses</h2>
+          <Link to="/courses" className="text-xs font-semibold text-indigo-400 hover:text-indigo-300">View all →</Link>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {recommendedCourses.map(({ course, boost }, idx) => {
+            const Icon = COURSE_ICONS[idx % COURSE_ICONS.length];
+            const badge =
+              boost >= 15
+                ? { text: 'High Demand', cls: 'bg-sky-500/20 text-sky-300 border-sky-400/30' }
+                : boost >= 8
+                  ? { text: 'Trending', cls: 'bg-violet-500/20 text-violet-300 border-violet-400/30' }
+                  : { text: 'Advanced', cls: 'bg-indigo-500/20 text-indigo-300 border-indigo-400/30' };
+            const modules =
+              (course.modules && course.modules.length) ||
+              Math.max(6, Math.round(Number(course.duration?.match(/\d+/)?.[0] || 8)));
+            const level = course.level || (idx === 0 ? 'Beginner' : idx === 1 ? 'Intermediate' : 'Advanced');
+            return (
+              <Link
+                key={course.id}
+                to={courseHref(course)}
+                className="group relative overflow-hidden rounded-2xl border border-indigo-500/20 bg-[#0c0c24] p-4 transition duration-300 hover:-translate-y-1 hover:border-indigo-400/40 hover:shadow-[0_12px_40px_-16px_rgba(99,102,241,0.5)]"
+              >
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/30 to-violet-600/20 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-6">
+                  <Icon className="h-6 w-6 text-indigo-300" />
+                </div>
+                <h3 className="text-sm font-bold leading-snug text-white group-hover:text-indigo-200">{course.title}</h3>
+                <p className="mt-1 text-xs text-slate-400">{modules} Modules · {level}</p>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}>{badge.text}</span>
+                  {boost > 0 && <span className="text-[10px] font-semibold text-emerald-400">+{boost}% chance</span>}
+                </div>
+              </Link>
+            );
+          })}
+          {recommendedCourses.length === 0 && (
+            <div className="col-span-full rounded-2xl border border-dashed border-indigo-500/25 bg-[#0c0c24]/60 p-8 text-center text-sm text-slate-400">
+              Complete onboarding or enroll in a course to get personalized recommendations.
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white">
-              Start quiz <ArrowRight className="h-4 w-4" />
-            </span>
-          </Link>
-        ) : nextPlan.kind === 'internships' ? (
-          <Link
-            to="/internships"
-            className="er-card er-card-hover group flex flex-col gap-4 border-emerald-200/80 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 transition-all dark:border-emerald-500/30 dark:from-emerald-950/30 dark:to-teal-950/20 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="flex items-start gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md">
-                <Briefcase className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Next step</p>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">Apply with skill match</h2>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Your profile{nextPlan.trackLabel ? ` for ${nextPlan.trackLabel}` : ''} is ready. Browse internships ranked by match.
-                </p>
-              </div>
-            </div>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-white">
-              View internships <ArrowRight className="h-4 w-4" />
-            </span>
-          </Link>
-        ) : null}
-      </section>
+          )}
+        </div>
+      </motion.section>
 
       {enrolledCourses.length > 0 && (
-        <section>
+        <motion.section custom={5} variants={fadeUp} initial="hidden" animate="show">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">Continue Learning</h2>
-            <Link to="/courses" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
-              View all
-            </Link>
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Continue Learning</h2>
+            <Link to="/courses" className="text-xs font-semibold text-indigo-400 hover:underline">View all</Link>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {enrolledCourses.map((course) => {
               const topics = courseTopicIds(course);
               const pct = topics.length ? courseCompletionStats(course.id, topics).percent : 0;
-              const boost = computePlacementChance(course, userSkills).boostPercent;
               return (
-                <Link
-                  key={course.id}
-                  to={courseHref(course)}
-                  className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition-all hover:shadow-md"
-                >
-                  <div className="relative aspect-video overflow-hidden bg-slate-100 dark:bg-slate-800">
-                    <img
-                      src={course.thumbnail}
-                      alt=""
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
-                    <span className="absolute left-2 top-2 rounded-full bg-indigo-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
-                      {pct}% done
-                    </span>
-                    {boost > 0 && (
-                      <span className="absolute right-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
-                        +{boost}% chance
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-1 flex-col gap-1 p-3">
-                    <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">
-                      {course.title}
-                    </p>
-                    <p className="text-xs text-[var(--text-secondary)]">{course.category}</p>
-                    <div className="mt-auto pt-1">
-                      <div className="er-progress h-1.5">
-                        <div className="er-progress-bar" style={{ width: `${Math.max(2, pct)}%` }} />
-                      </div>
+                <Link key={course.id} to={courseHref(course)} className="group overflow-hidden rounded-2xl border border-indigo-500/15 bg-[#0c0c24] transition hover:border-indigo-400/35">
+                  <div className="relative aspect-video overflow-hidden bg-slate-900">
+                    <img src={course.thumbnail} alt="" className="h-full w-full object-cover opacity-90 transition group-hover:scale-105" />
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
+                      <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400" style={{ width: `${pct}%` }} />
                     </div>
+                  </div>
+                  <div className="p-3">
+                    <p className="line-clamp-2 text-sm font-bold text-white">{course.title}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">{pct}% complete</p>
                   </div>
                 </Link>
               );
             })}
           </div>
-        </section>
+        </motion.section>
       )}
 
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">Recommended for you</h2>
-          <Link to="/courses" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
-            Browse all
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {recommendedCourses.map(({ course, boost }) => (
-            <Link
-              key={course.id}
-              to={courseHref(course)}
-              className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition-all hover:shadow-md"
-            >
-              <div className="relative aspect-video overflow-hidden bg-slate-100 dark:bg-slate-800">
-                <img
-                  src={course.thumbnail}
-                  alt=""
-                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
-                <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
-                  High chance +{boost}%
-                </span>
-              </div>
-              <div className="flex flex-1 flex-col gap-1 p-3">
-                <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">{course.title}</p>
-                <p className="text-xs text-[var(--text-secondary)]">{course.category}</p>
-                <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-[var(--text-muted)]">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3 shrink-0" /> {course.duration}
-                  </span>
-                  <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600 dark:text-amber-400">
-                    <Star className="h-3 w-3 fill-current" /> {course.rating}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Link to="/internships" className="er-card er-card-hover flex items-center gap-3 p-4">
-          <Briefcase className="h-5 w-5 text-blue-500" />
+      <motion.section custom={6} variants={fadeUp} initial="hidden" animate="show" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Link to="/internships" className="flex items-center gap-3 rounded-2xl border border-indigo-500/15 bg-[#0c0c24] p-4 transition hover:border-indigo-400/35">
+          <Briefcase className="h-5 w-5 text-blue-400" />
           <div>
-            <p className="text-sm font-bold text-[var(--text-primary)]">Internships</p>
-            <p className="text-xs text-[var(--text-secondary)]">{applications.length} tracked</p>
+            <p className="text-sm font-bold text-white">Internships</p>
+            <p className="text-xs text-slate-400">{applications.length} tracked</p>
           </div>
         </Link>
-        <Link to="/cv-builder" className="er-card er-card-hover flex items-center gap-3 p-4">
-          <FileText className="h-5 w-5 text-violet-500" />
+        <Link to="/trend-analyse" className="flex items-center gap-3 rounded-2xl border border-indigo-500/15 bg-[#0c0c24] p-4 transition hover:border-indigo-400/35">
+          <TrendingUp className="h-5 w-5 text-teal-400" />
           <div>
-            <p className="text-sm font-bold text-[var(--text-primary)]">CV Builder</p>
-            <p className="text-xs text-[var(--text-secondary)]">Build & export</p>
+            <p className="text-sm font-bold text-white">Trend Analyse</p>
+            <p className="text-xs text-slate-400">Market vs you</p>
           </div>
         </Link>
-        <Link to="/buddy" className="er-card er-card-hover flex items-center gap-3 p-4">
-          <Clock className="h-5 w-5 text-amber-500" />
+        <Link to="/buddy" className="flex items-center gap-3 rounded-2xl border border-indigo-500/15 bg-[#0c0c24] p-4 transition hover:border-indigo-400/35">
+          <Sparkles className="h-5 w-5 text-amber-400" />
           <div>
-            <p className="text-sm font-bold text-[var(--text-primary)]">AI Buddy</p>
-            <p className="text-xs text-[var(--text-secondary)]">Ask anything</p>
+            <p className="text-sm font-bold text-white">AI Buddy</p>
+            <p className="text-xs text-slate-400">Ask anything</p>
           </div>
         </Link>
-      </section>
+      </motion.section>
     </div>
   );
 };
