@@ -7,6 +7,7 @@ import {
   canSubmitCollegeId,
   getLatestVerificationForEmail,
   getStudentVerificationState,
+  syncVerificationFromServer,
   type StudentVerificationState,
 } from '../utils/pendingVerificationStore';
 
@@ -24,26 +25,36 @@ export function VerificationStatusCard() {
   const [state, setState] = useState<StudentVerificationState>(() => getStudentVerificationState(email));
   const [open, setOpen] = useState(false);
 
-  const refresh = () => {
-    const next = getStudentVerificationState(email);
+  const refresh = async () => {
+    // Prefer shared queue (admin approve/reject) then fall back to local
+    const next = await syncVerificationFromServer(email);
     setState(next);
-    // Keep session in sync when admin approved on same browser
-    if (auth && next === 'verified' && auth.verificationStatus !== 'verified') {
-      saveAuthSession(getAuthToken() || 'session', { ...auth, verificationStatus: 'verified' });
+    const u = getAuthUser();
+    if (u && next === 'verified' && u.verificationStatus !== 'verified') {
+      saveAuthSession(getAuthToken() || 'session', { ...u, verificationStatus: 'verified' });
     }
-    if (auth && next === 'pending' && auth.verificationStatus !== 'pending') {
-      saveAuthSession(getAuthToken() || 'session', { ...auth, verificationStatus: 'pending' });
+    if (u && next === 'pending' && u.verificationStatus !== 'pending') {
+      saveAuthSession(getAuthToken() || 'session', { ...u, verificationStatus: 'pending' });
+    }
+    if (u && next === 'rejected' && u.verificationStatus !== 'rejected') {
+      saveAuthSession(getAuthToken() || 'session', { ...u, verificationStatus: 'rejected' });
     }
   };
 
   useEffect(() => {
-    refresh();
-    const onUpd = () => refresh();
+    void refresh();
+    const onUpd = () => {
+      void refresh();
+    };
     window.addEventListener('eduroute:verification-updated', onUpd);
     window.addEventListener('focus', onUpd);
+    const interval = window.setInterval(() => {
+      void refresh();
+    }, 20000);
     return () => {
       window.removeEventListener('eduroute:verification-updated', onUpd);
       window.removeEventListener('focus', onUpd);
+      window.clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email]);
