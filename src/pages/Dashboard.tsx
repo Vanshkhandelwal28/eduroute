@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { COURSES } from '../data/mockData';
 import { getCurrentUser, getDisplayFirstName } from '../utils/userProfile';
+import { VerificationStatusCard } from '../components/VerificationStatusCard';
 import { getNextStepPlan, readOnboarding, interestLabel } from '../utils/onboardingStore';
 import {
   readApplications,
@@ -29,7 +30,6 @@ import {
   runDashboardSkillAnalyze,
   readDashboardSkillAnalyze,
 } from '../utils/placementChance';
-import { VerificationStatusCard } from '../components/VerificationStatusCard';
 
 function courseTopicIds(course: (typeof COURSES)[0]): string[] {
   const ids: string[] = [];
@@ -58,11 +58,7 @@ export const Dashboard = () => {
   const hasSkillProfile = Boolean(onboarding.completedAt);
   const [applications, setApplications] = useState<InternshipApplication[]>(() => readApplications());
   const earnedSkills = useMemo(() => {
-    try {
-      return getAllEarnedCourseSkills() || [];
-    } catch {
-      return [];
-    }
+    try { return getAllEarnedCourseSkills() || []; } catch { return []; }
   }, []);
   const [skillAnalyze, setSkillAnalyze] = useState(() => readDashboardSkillAnalyze());
 
@@ -168,10 +164,7 @@ export const Dashboard = () => {
           }}
           aria-hidden
         />
-        <div
-          className="absolute inset-0 bg-gradient-to-r from-white/88 via-white/45 to-transparent dark:from-slate-950/92 dark:via-slate-950/70 dark:to-slate-950/35"
-          aria-hidden
-        />
+        <div className="absolute inset-0 bg-gradient-to-r from-white/88 via-white/45 to-transparent dark:from-slate-950/92 dark:via-slate-950/70 dark:to-slate-950/35" aria-hidden />
         <div className="relative z-10 flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6">
           <div className="max-w-xl">
             <p className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -208,15 +201,13 @@ export const Dashboard = () => {
           </div>
         </div>
       </section>
-
+           
       <VerificationStatusCard />
-
+      
       {skillAnalyze && (
         <section className="er-card flex flex-col gap-3 border border-indigo-500/20 bg-gradient-to-r from-indigo-500/10 to-violet-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
-              Skill analysis
-            </p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Skill analysis</p>
             <h2 className="text-base font-bold text-[var(--text-primary)]">
               {skillAnalyze.hasProfile
                 ? `Analyzed ${skillAnalyze.skillCount} skills · high placement chance paths`
@@ -230,128 +221,274 @@ export const Dashboard = () => {
               </p>
             )}
           </div>
-          <Link
-            to={skillAnalyze.hasProfile ? '/skill-profile' : '/onboarding'}
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white"
+          <button
+            type="button"
+            onClick={() => setSkillAnalyze(runDashboardSkillAnalyze())}
+            className="inline-flex shrink-0 items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white"
           >
-            <Wand2 className="h-4 w-4" />
-            {skillAnalyze.hasProfile ? 'View profile' : 'Skill quiz'}
-          </Link>
+            AI Analyze
+          </button>
         </section>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {stats.map((s) => (
-          <div key={s.label} className="er-card flex items-center gap-3 p-4">
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${s.iconBg}`}>
-              <s.icon className={`h-5 w-5 ${s.iconColor}`} />
+      <section className="er-stat-grid">
+        {stats.map((s) => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} className="er-stat-card">
+              <div className={`er-stat-icon ${s.iconBg}`}>
+                <Icon className={`shrink-0 ${s.iconColor}`} />
+              </div>
+              <div>
+                <div className="er-stat-label">{s.label}</div>
+                <div className="er-stat-value">{s.value}</div>
+                <div className="er-stat-delta">{s.delta}</div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">{s.label}</p>
-              <p className="text-xl font-black text-[var(--text-primary)]">{s.value}</p>
-              <p className="truncate text-[11px] text-[var(--text-secondary)]">{s.delta}</p>
+          );
+        })}
+      </section>
+
+      <Link
+        to="/ai-course-designer"
+        className="group relative block overflow-hidden rounded-[var(--radius-xl)] border border-fuchsia-200/70 bg-gradient-to-br from-fuchsia-50 via-violet-50 to-indigo-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-fuchsia-500/25 dark:from-fuchsia-950/40 dark:via-violet-950/30 dark:to-indigo-950/30 sm:p-5"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-md">
+              <Wand2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-fuchsia-600 dark:text-fuchsia-300">New · AI-powered</p>
+              <h2 className="text-base font-bold text-[var(--text-primary)]">Design your own mixed course</h2>
+              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
+                Pick duration + interests. AI builds a roadmap with real YouTube + docs.
+              </p>
             </div>
           </div>
-        ))}
-      </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-fuchsia-600 px-4 py-2 text-sm font-bold text-white shadow-sm sm:self-center">
+            Start <ArrowRight className="h-4 w-4" />
+          </span>
+        </div>
+      </Link>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className="er-card p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-bold">Continue Learning</h2>
-            <Link to="/courses" className="text-xs font-bold text-indigo-600">
+      <Link
+        to="/trend-analyse"
+        className="group relative block overflow-hidden rounded-[var(--radius-xl)] border border-sky-200/70 bg-gradient-to-br from-sky-50 via-cyan-50 to-teal-50 p-5 shadow-sm transition-all hover:shadow-lg dark:border-sky-500/25 dark:from-sky-950/40 dark:via-cyan-950/30 dark:to-teal-950/30 sm:p-5"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-teal-600 text-white shadow-md">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-300">Market vs you</p>
+              <h2 className="text-base font-bold text-[var(--text-primary)]">Trend Analyse — skill gaps vs market demand</h2>
+              <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
+                Compare market trends with your skill profile. Gaps, charts, refresh every 7 days.
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-sky-600 px-4 py-2 text-sm font-bold text-white shadow-sm sm:self-center">
+            Open <ArrowRight className="h-4 w-4" />
+          </span>
+        </div>
+      </Link>
+
+      <section>
+        {nextPlan.kind === 'gaps' && nextPlan.primary ? (
+          <div className="er-card border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 p-5 dark:border-amber-500/30 dark:from-amber-950/30 dark:to-orange-950/20">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md">
+                  <Target className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">Close gaps</p>
+                  <h2 className="text-base font-bold text-[var(--text-primary)]">Skill gaps on your path</h2>
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                    Track <span className="font-semibold text-[var(--text-primary)]">{nextPlan.trackLabel}</span>
+                    {' · '}start with{' '}
+                    <span className="font-semibold text-[var(--text-primary)]">{nextPlan.primary.skill}</span>
+                    {' → '}{nextPlan.primary.courseTitle}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <Link
+                  to={nextPlan.primary.to}
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-400"
+                >
+                  Start: {nextPlan.primary.courseTitle} <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link to="/skill-profile" className="text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400">
+                  View full gap analysis
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : nextPlan.kind === 'quiz' ? (
+          <Link
+            to="/onboarding"
+            className="er-card er-card-hover group flex flex-col gap-4 border-indigo-200/80 bg-gradient-to-r from-indigo-50 to-violet-50 p-5 transition-all dark:border-indigo-500/30 dark:from-indigo-950/20 dark:to-violet-950/20 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Next step</p>
+                <h2 className="text-base font-bold text-[var(--text-primary)]">Complete your skill quiz</h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  Map strengths and gaps to unlock a personal learning path and better internship matches.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white">
+              Start quiz <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
+        ) : nextPlan.kind === 'internships' ? (
+          <Link
+            to="/internships"
+            className="er-card er-card-hover group flex flex-col gap-4 border-emerald-200/80 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 transition-all dark:border-emerald-500/30 dark:from-emerald-950/30 dark:to-teal-950/20 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Next step</p>
+                <h2 className="text-base font-bold text-[var(--text-primary)]">Apply with skill match</h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  Your profile{nextPlan.trackLabel ? ` for ${nextPlan.trackLabel}` : ''} is ready. Browse internships ranked by match.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-white">
+              View internships <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
+        ) : null}
+      </section>
+
+      {enrolledCourses.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">Continue Learning</h2>
+            <Link to="/courses" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
               View all
             </Link>
           </div>
-          {enrolledCourses.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[var(--border-default)] p-6 text-center">
-              <p className="text-sm text-[var(--text-secondary)]">No enrolled courses yet.</p>
-              <Link to="/courses" className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-indigo-600">
-                Browse courses <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-          ) : (
-            <ul className="space-y-3">
-              {enrolledCourses.map((c) => {
-                const topics = courseTopicIds(c);
-                const pct = topics.length ? courseCompletionStats(c.id, topics).percent : 0;
-                return (
-                  <li key={c.id}>
-                    <Link
-                      to={courseHref(c)}
-                      className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] p-3 hover:bg-[var(--bg-elevated)]"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold">{c.title}</p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <div className="er-progress h-1.5 flex-1">
-                            <div className="er-progress-bar" style={{ width: `${Math.max(3, pct)}%` }} />
-                          </div>
-                          <span className="text-[11px] font-bold text-[var(--text-muted)]">{pct}%</span>
-                        </div>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-[var(--text-muted)]" />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        <section className="er-card p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-bold">Recommended for you</h2>
-            <Link to="/ai-course-designer" className="text-xs font-bold text-indigo-600">
-              Design path
-            </Link>
-          </div>
-          <ul className="space-y-3">
-            {recommendedCourses.map(({ course: c, boost }) => (
-              <li key={c.id}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {enrolledCourses.map((course) => {
+              const topics = courseTopicIds(course);
+              const pct = topics.length ? courseCompletionStats(course.id, topics).percent : 0;
+              const boost = computePlacementChance(course, userSkills).boostPercent;
+              return (
                 <Link
-                  to={courseHref(c)}
-                  className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] p-3 hover:bg-[var(--bg-elevated)]"
+                  key={course.id}
+                  to={courseHref(course)}
+                  className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition-all hover:shadow-md"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold">{c.title}</p>
-                    <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                      {c.category} · +{boost}% placement lift
-                    </p>
+                  <div className="relative aspect-video overflow-hidden bg-slate-100 dark:bg-slate-800">
+                    <img
+                      src={course.thumbnail}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
+                    <span className="absolute left-2 top-2 rounded-full bg-indigo-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
+                      {pct}% done
+                    </span>
+                    {boost > 0 && (
+                      <span className="absolute right-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
+                        +{boost}% chance
+                      </span>
+                    )}
                   </div>
-                  <TrendingUp className="h-4 w-4 text-emerald-500" />
+                  <div className="flex flex-1 flex-col gap-1 p-3">
+                    <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">
+                      {course.title}
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)]">{course.category}</p>
+                    <div className="mt-auto pt-1">
+                      <div className="er-progress h-1.5">
+                        <div className="er-progress-bar" style={{ width: `${Math.max(2, pct)}%` }} />
+                      </div>
+                    </div>
+                  </div>
                 </Link>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
         </section>
-      </div>
+      )}
 
-      <section className="er-card p-5">
-        <h2 className="mb-4 text-base font-bold">Quick actions</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { to: '/internships', label: 'Internships', icon: Briefcase },
-            { to: '/cv-builder', label: 'CV Builder', icon: FileText },
-            { to: '/skill-profile', label: 'Skill profile', icon: Target },
-            { to: '/ai-course-designer', label: 'AI path', icon: Sparkles },
-          ].map((a) => (
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">Recommended for you</h2>
+          <Link to="/courses" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
+            Browse all
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {recommendedCourses.map(({ course, boost }) => (
             <Link
-              key={a.to}
-              to={a.to}
-              className="flex flex-col items-center gap-2 rounded-xl border border-[var(--border-default)] p-4 text-center hover:bg-[var(--bg-elevated)]"
+              key={course.id}
+              to={courseHref(course)}
+              className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-card)] shadow-sm transition-all hover:shadow-md"
             >
-              <a.icon className="h-5 w-5 text-indigo-500" />
-              <span className="text-xs font-bold">{a.label}</span>
+              <div className="relative aspect-video overflow-hidden bg-slate-100 dark:bg-slate-800">
+                <img
+                  src={course.thumbnail}
+                  alt=""
+                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
+                <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white">
+                  High chance +{boost}%
+                </span>
+              </div>
+              <div className="flex flex-1 flex-col gap-1 p-3">
+                <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--text-primary)] group-hover:text-[var(--accent)]">{course.title}</p>
+                <p className="text-xs text-[var(--text-secondary)]">{course.category}</p>
+                <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-[var(--text-muted)]">
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3 w-3 shrink-0" /> {course.duration}
+                  </span>
+                  <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600 dark:text-amber-400">
+                    <Star className="h-3 w-3 fill-current" /> {course.rating}
+                  </span>
+                </div>
+              </div>
             </Link>
           ))}
         </div>
-        {gapCount > 0 && (
-          <p className="mt-4 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-            <Clock className="h-3.5 w-3.5" />
-            {gapCount} skill gap{gapCount === 1 ? '' : 's'} left — keep learning.
-          </p>
-        )}
+      </section>
+
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Link to="/internships" className="er-card er-card-hover flex items-center gap-3 p-4">
+          <Briefcase className="h-5 w-5 text-blue-500" />
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">Internships</p>
+            <p className="text-xs text-[var(--text-secondary)]">{applications.length} tracked</p>
+          </div>
+        </Link>
+        <Link to="/cv-builder" className="er-card er-card-hover flex items-center gap-3 p-4">
+          <FileText className="h-5 w-5 text-violet-500" />
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">CV Builder</p>
+            <p className="text-xs text-[var(--text-secondary)]">Build & export</p>
+          </div>
+        </Link>
+        <Link to="/buddy" className="er-card er-card-hover flex items-center gap-3 p-4">
+          <Clock className="h-5 w-5 text-amber-500" />
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">AI Buddy</p>
+            <p className="text-xs text-[var(--text-secondary)]">Ask anything</p>
+          </div>
+        </Link>
       </section>
     </div>
   );
