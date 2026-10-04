@@ -1,7 +1,6 @@
 /**
  * Living Learning Path — career rail + soft animated background.
  * Data from onboarding career + Groq (buddy-chat), falls back to templates.
- * UI-only; no backend changes.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -72,12 +71,14 @@ export function LivingLearningPath() {
 
   useEffect(() => {
     void load();
-    const onUp = () => void load();
-    window.addEventListener('eduroute:learning-path-updated', onUp);
-    window.addEventListener('eduroute:onboarding-updated', onUp);
+    const onPath = () => void load();
+    // Retake MCQ / onboarding change → rebuild path (replace old)
+    const onOnboarding = () => void load(true);
+    window.addEventListener('eduroute:learning-path-updated', onPath);
+    window.addEventListener('eduroute:onboarding-updated', onOnboarding);
     return () => {
-      window.removeEventListener('eduroute:learning-path-updated', onUp);
-      window.removeEventListener('eduroute:onboarding-updated', onUp);
+      window.removeEventListener('eduroute:learning-path-updated', onPath);
+      window.removeEventListener('eduroute:onboarding-updated', onOnboarding);
     };
   }, [load]);
 
