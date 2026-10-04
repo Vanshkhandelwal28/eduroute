@@ -5,6 +5,7 @@ import { pushUserData, pullUserData } from './userDataStore';
 
 import type { AiDesignedCourse } from './aiCourseStore';
 import { levelFromDurationDays, makeCertId, formatCertDate } from './courseProgressStore';
+import { addXp } from './gamificationStore';
 
 export type CertBadge = 'gold' | 'silver' | 'bronze';
 
@@ -73,6 +74,7 @@ export function recordCourseAchievement(
   percent: number,
 ): CourseAchievement {
   const map = readAll();
+  const alreadyHad = Boolean(map[course.id]);
   const badge = badgeFromPercent(percent);
   const level = levelFromDurationDays(course.durationDays);
   const next: CourseAchievement = {
@@ -89,6 +91,25 @@ export function recordCourseAchievement(
   };
   map[course.id] = next;
   writeAll(map);
+
+  // Award XP once per course (first completion only)
+  if (!alreadyHad) {
+    const xp =
+      badge === 'gold' ? 200 : badge === 'silver' ? 140 : 100;
+    try {
+      addXp(xp, {
+        badge: {
+          id: `course-${course.id}`,
+          icon: badge === 'gold' ? '🏆' : badge === 'silver' ? '⭐' : '🎖️',
+          title: `Completed: ${course.title}`,
+          xp,
+        },
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
   return next;
 }
 

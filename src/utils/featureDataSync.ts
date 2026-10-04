@@ -9,6 +9,7 @@ import { syncUserProfileFromServer } from './userProfile';
 import { syncCvFromServer } from './cvStore';
 import { syncAchievementsFromServer } from './courseAchievementsStore';
 import { syncLearningPathFromServer } from './learningPathStore';
+import { syncGamificationFromServer } from './gamificationStore';
 
 export async function syncAllFeatureData(): Promise<void> {
   await Promise.allSettled([
@@ -19,6 +20,7 @@ export async function syncAllFeatureData(): Promise<void> {
     syncCvFromServer(),
     syncAchievementsFromServer(),
     syncLearningPathFromServer(),
+    syncGamificationFromServer(),
   ]);
 
   // Onboarding: optional dynamic import so build does not fail if export missing
