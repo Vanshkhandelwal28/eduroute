@@ -146,3 +146,73 @@ export const canSubmitCollegeId = (email?: string | null): boolean => {
   const s = getStudentVerificationState(email);
   return s === 'none' || s === 'rejected';
 };
+
+/**
+ * Apply admin decision to local store by email so the student UI updates
+ * after shared-queue approve/reject (cross-browser).
+ */
+export const applyVerificationStatusByEmail = (
+  email: string | null | undefined,
+  status: 'verified' | 'rejected' | 'pending',
+  meta?: Partial<LocalPendingVerification>,
+): void => {
+  const key = String(email || '')
+    .toLowerCase()
+    .trim();
+  if (!key) return;
+  const all = readAll();
+  let found = false;
+  const next = all.map((item) => {
+    if (item.email.toLowerCase() === key) {
+      found = true;
+      return { ...item, status, ...meta };
+    }
+    return item;
+  });
+  if (!found) {
+    const id = `sync-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    next.unshift({
+      id,
+      verificationId: meta?.verificationId || id,
+      name: meta?.name || 'Student',
+      email: email || key,
+      status,
+      appliedAt: meta?.appliedAt || new Date().toISOString(),
+      fileName: meta?.fileName,
+      documentDataUrl: meta?.documentDataUrl,
+      mimeType: meta?.mimeType,
+      compressed: meta?.compressed,
+    });
+  }
+  writeAll(next);
+};
+
+/** Pull status from shared college-verifications queue into local store. */
+export async function syncVerificationFromServer(
+  email?: string | null,
+): Promise<StudentVerificationState> {
+  const key = String(email || '')
+    .toLowerCase()
+    .trim();
+  if (!key) return getStudentVerificationState(email);
+
+  try {
+    const { fetchVerificationStatusForEmail } = await import('./collegeVerificationApi');
+    const { status, row } = await fetchVerificationStatusForEmail(key);
+    if (status === 'none') {
+      return getStudentVerificationState(email);
+    }
+    applyVerificationStatusByEmail(key, status, {
+      verificationId: row?.verificationId || row?.id,
+      name: row?.name,
+      fileName: row?.fileName,
+      appliedAt: row?.appliedAt,
+      documentDataUrl: row?.documentDataUrl,
+      mimeType: row?.mimeType,
+      compressed: row?.compressed,
+    });
+    return status;
+  } catch {
+    return getStudentVerificationState(email);
+  }
+}
