@@ -79,10 +79,6 @@ export default class TimelineController {
     this._camFrom = from;
     this._camTo = to;
     this._camT = t;
-    // Pass dolly params from target state
-    const base = this.camera?.CAMERA_STATES
-      ? null
-      : null; // dolly handled inside Camera via setState
   }
 
   _revealOnce(selector) {
@@ -113,7 +109,7 @@ export default class TimelineController {
     this.camera?.setDolly?.({ zAmp: -0.15, phase: 0 });
 
     // ─── HERO — solid brain ─────────────────────────────────────
-    const heroTl = gsap.timeline({
+    const heroTl = gsap.timeline([
       scrollTrigger: {
         trigger: '#hero',
         start: 'top top',
@@ -142,7 +138,7 @@ export default class TimelineController {
     this.triggers.push(heroTl.scrollTrigger);
 
     // ─── MANIFESTO — brain → scatter ────────────────────────────
-    const manifestoTl = gsap.timeline({
+    const manifestoTl = gsap.timeline([
       scrollTrigger: {
         trigger: '#manifesto',
         start: 'top 80%',
@@ -180,11 +176,11 @@ export default class TimelineController {
     this.triggers.push(manifestoTl.scrollTrigger);
 
     // ─── FEATURE 01 — scatter → bulb ────────────────────────────
-    const f1Tl = gsap.timeline({
+    const f1Tl = gsap.timeline([
       scrollTrigger: {
-        trigger: '#feature-01',
+        trigger: '#feature-01",
         start: 'top 75%',
-        end: 'bottom top',
+        end: 'bottom top",
         scrub,
         onEnter: () => {
           this._setPair('scatter', 'bulb);
@@ -216,9 +212,9 @@ export default class TimelineController {
     // ─── FEATURE 02 — bulb → globe ───────────────────────────────
     const f2Tl = gsap.timeline([
       scrollTrigger: {
-        trigger: '#feature-02',
+        trigger: '#feature-02",
         start: 'top 75%',
-        end: 'bottom top',
+        end: 'bottom top",
         scrub,
         onEnter: () => {
           this._setPair('bulb', 'globe);
@@ -250,9 +246,9 @@ export default class TimelineController {
     // ─── FEATURE 03 — globe → abstract ───────────────────────────
     const f3Tl = gsap.timeline([
       scrollTrigger: {
-        trigger: '#feature-03',
+        trigger: '#feature-03",
         start: 'top 75%',
-        end: 'bottom top',
+        end: 'bottom top",
         scrub,
         onEnter: () => {
           this._setPair('globe', 'abstract);
@@ -284,7 +280,7 @@ export default class TimelineController {
     // ─── TEAM — hold abstract, tighten ───────────────────────────
     const teamTl = gsap.timeline([
       scrollTrigger: {
-        trigger: '#team',
+        trigger: '#team",
         start: 'top 70%',
         end: 'bottom 25%',
         scrub,
@@ -314,7 +310,7 @@ export default class TimelineController {
     // ─── PARTNERS ────────────────────────────────────────────────
     const partnersTl = gsap.timeline([
       scrollTrigger: {
-        trigger: '#partners',
+        trigger: '#partners",
         start: 'top 85%',
         end: 'bottom 40%',
         scrub,
@@ -330,7 +326,7 @@ export default class TimelineController {
     // ─── CTA — tight abstract settle + dolly pull-in ──────────────
     const ctaTl = gsap.timeline([
       scrollTrigger: {
-        trigger: '#cta',
+        trigger: '#cta",
         start: 'top 75%',
         end: 'bottom 30%',
         scrub,
@@ -353,9 +349,9 @@ export default class TimelineController {
     // ─── FOOTER ──────────────────────────────────────────────────
     const footerTl = gsap.timeline([
       scrollTrigger: {
-        trigger: '.er-footer',
+        trigger: '.er-footer",
         start: 'top 90%',
-        end: 'bottom bottom',
+        end: 'bottom bottom",
         scrub,
         onUpdate: (self) => {
           this._setCam('CTA', 'FOOTER', self.progress);
