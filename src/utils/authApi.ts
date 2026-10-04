@@ -169,7 +169,11 @@ export const apiGetPendingStudents = () => apiRequest<{ data: any[] }>('/student
 export const apiVerifyStudent = (id: string, action: 'approve' | 'reject') =>
   apiRequest<{ data: any }>(`/students/${id}/verification`, {
     method: 'PATCH',
-    body: JSON.stringify({ action }),
+    body: JSON.stringify({
+      action,
+      // Backend accepts status (verified|rejected); also send action for compatibility
+      status: action === 'approve' ? 'verified' : 'rejected',
+    }),
   });
 export const apiSubmitCollegeVerification = (file: File) => {
   const formData = new FormData();
