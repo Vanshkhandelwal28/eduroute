@@ -109,7 +109,7 @@ export default class TimelineController {
     this.camera?.setDolly?.({ zAmp: -0.15, phase: 0 });
 
     // ─── HERO — solid brain ─────────────────────────────────────
-    const heroTl = gsap.timeline([
+    const heroTl = gsap.timeline({
       scrollTrigger: {
         trigger: '#hero',
         start: 'top top',
@@ -140,7 +140,7 @@ export default class TimelineController {
     // ─── MANIFESTO — brain → scatter ────────────────────────────
     const manifestoTl = gsap.timeline([
       scrollTrigger: {
-        trigger: '#manifesto',
+        trigger: '#manifesto",
         start: 'top 80%',
         end: 'bottom 20%',
         scrub,
