@@ -35,9 +35,9 @@ import { pushUserData } from '../../utils/userDataStore';
 type Step = 'interests' | 'gaps' | 'custom_role' | 'custom_skills';
 
 const iconFor = (icon: 'software' | 'cyber' | 'data') => {
-  if (icon === 'software') return <Code2 className="h-8 w-8 text-indigo-600" />;
-  if (icon === 'cyber') return <Shield className="h-8 w-8 text-violet-600" />;
-  return <Database className="h-8 w-8 text-emerald-600" />;
+  if (icon === 'software') return <Code2 className="h-7 w-7 text-indigo-400" />;
+  if (icon === 'cyber') return <Shield className="h-7 w-7 text-violet-400" />;
+  return <Database className="h-7 w-7 text-emerald-400" />;
 };
 
 export const OnboardingAnalyze = () => {
@@ -292,13 +292,13 @@ export const OnboardingAnalyze = () => {
           <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-bold text-indigo-400">
             <Sparkles className="h-3.5 w-3.5" /> Tell us about yourself
           </span>
-          <h1 className="mt-4 text-3xl font-black tracking-tight">
+          <h1 className="mt-4 text-3xl font-black tracking-tight text-white">
             {step === 'interests' && 'What are you aiming for?'}
             {step === 'gaps' && 'Quick skill check'}
             {step === 'custom_role' && 'Your target role'}
             {step === 'custom_skills' && 'Quick skill check'}
           </h1>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+          <p className="mt-2 text-sm text-white/50">
             {step === 'custom_skills'
               ? `For ${customRole || 'your role'} — skills + optional CV.`
               : 'We use this to design your learning path.'}
@@ -322,26 +322,40 @@ export const OnboardingAnalyze = () => {
                       key={opt.id}
                       type="button"
                       onClick={() => toggleInterest(opt.id)}
-                      className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${
+                      className={`group relative flex flex-col gap-3 rounded-2xl border p-5 text-left transition-all ${
                         active
-                          ? 'border-indigo-500 bg-indigo-500/10'
-                          : 'border-[var(--border)] bg-[var(--bg-secondary)] hover:border-indigo-400/50'
+                          ? 'border-indigo-400 bg-indigo-500/15 shadow-lg shadow-indigo-500/10 ring-1 ring-indigo-400/30'
+                          : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
                       }`}
                     >
-                      <span className="mt-0.5">{iconFor(opt.icon as 'software' | 'cyber' | 'data')}</span>
-                      <span>
-                        <span className="block font-semibold">{opt.label}</span>
-                        <span className="mt-1 block text-xs text-[var(--text-secondary)]">
-                          {opt.blurb}
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`flex h-11 w-11 items-center justify-center rounded-xl ${
+                            active ? 'bg-indigo-500/20' : 'bg-white/5'
+                          }`}
+                        >
+                          {iconFor(opt.icon as 'software' | 'cyber' | 'data')}
                         </span>
-                      </span>
-                      {active && <Check className="ml-auto h-5 w-5 text-indigo-500" />}
+                        {active && (
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500">
+                            <Check className="h-3.5 w-3.5 text-white" />
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="block text-[15px] font-semibold leading-snug text-white">
+                          {opt.title}
+                        </span>
+                        <span className="mt-1.5 block text-xs leading-relaxed text-white/55">
+                          {opt.description}
+                        </span>
+                      </div>
                     </button>
                   );
                 })}
               </div>
               <div className="flex justify-between pt-4">
-                <button type="button" onClick={handleSkip} className="text-sm text-[var(--text-secondary)]">
+                <button type="button" onClick={handleSkip} className="text-sm text-white/40 hover:text-white/70">
                   Skip for now
                 </button>
                 <button
@@ -365,8 +379,8 @@ export const OnboardingAnalyze = () => {
               className="space-y-4"
             >
               {gapQuestions.map((q) => (
-                <div key={q.id} className="rounded-2xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
-                  <p className="text-sm font-medium">{q.question}</p>
+                <div key={q.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-sm font-medium text-white">{q.question}</p>
                   <div className="mt-3 flex gap-2">
                     {(['yes', 'no'] as const).map((v) => (
                       <button
@@ -376,7 +390,7 @@ export const OnboardingAnalyze = () => {
                         className={`rounded-lg px-4 py-1.5 text-sm font-medium ${
                           answers[q.id] === v
                             ? 'bg-indigo-600 text-white'
-                            : 'bg-[var(--bg-primary)] text-[var(--text-secondary)]'
+                            : 'bg-white/5 text-white/60 hover:bg-white/10'
                         }`}
                       >
                         {v === 'yes' ? 'Yes' : 'No'}
@@ -386,7 +400,7 @@ export const OnboardingAnalyze = () => {
                 </div>
               ))}
               <div className="flex justify-between pt-4">
-                <button type="button" onClick={() => setStep('interests')} className="text-sm text-[var(--text-secondary)]">
+                <button type="button" onClick={() => setStep('interests')} className="text-sm text-white/40 hover:text-white/70">
                   Back
                 </button>
                 <button
@@ -414,10 +428,10 @@ export const OnboardingAnalyze = () => {
                 value={customRole}
                 onChange={(e) => setCustomRole(e.target.value)}
                 placeholder="e.g. SDE 2, Data Scientist"
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3 text-sm outline-none focus:border-indigo-500"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-indigo-500"
               />
               <div className="flex justify-between pt-4">
-                <button type="button" onClick={() => setStep('interests')} className="text-sm text-[var(--text-secondary)]">
+                <button type="button" onClick={() => setStep('interests')} className="text-sm text-white/40 hover:text-white/70">
                   Back
                 </button>
                 <button
@@ -445,10 +459,10 @@ export const OnboardingAnalyze = () => {
                 onChange={(e) => setSkillText(e.target.value)}
                 placeholder="Skills you already have (comma-separated)"
                 rows={3}
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3 text-sm outline-none focus:border-indigo-500"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-indigo-500"
               />
               <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-white/70 hover:border-white/20">
                   <FileUp className="h-4 w-4" />
                   {cvFileName || 'Upload CV'}
                   <input
@@ -467,17 +481,17 @@ export const OnboardingAnalyze = () => {
                   {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
                   Analyze
                 </button>
-                {pathStatus && <span className="text-xs text-[var(--text-secondary)]">{pathStatus}</span>}
+                {pathStatus && <span className="text-xs text-white/40">{pathStatus}</span>}
               </div>
               {cvSkills.length > 0 && (
-                <p className="text-xs text-[var(--text-secondary)]">
+                <p className="text-xs text-white/50">
                   Detected: {cvSkills.slice(0, 12).join(', ')}
                   {cvSkills.length > 12 ? '…' : ''}
                 </p>
               )}
               {customError && <p className="text-sm text-red-400">{customError}</p>}
               <div className="flex justify-between pt-4">
-                <button type="button" onClick={() => setStep('custom_role')} className="text-sm text-[var(--text-secondary)]">
+                <button type="button" onClick={() => setStep('custom_role')} className="text-sm text-white/40 hover:text-white/70">
                   Back
                 </button>
                 <button
