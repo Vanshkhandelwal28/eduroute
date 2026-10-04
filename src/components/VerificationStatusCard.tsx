@@ -48,9 +48,10 @@ export function VerificationStatusCard() {
     };
     window.addEventListener('eduroute:verification-updated', onUpd);
     window.addEventListener('focus', onUpd);
+    // Poll shared queue so admin approve/reject shows on student page quickly (cross-browser)
     const interval = window.setInterval(() => {
       void refresh();
-    }, 20000);
+    }, 8000);
     return () => {
       window.removeEventListener('eduroute:verification-updated', onUpd);
       window.removeEventListener('focus', onUpd);
