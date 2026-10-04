@@ -10,15 +10,18 @@ const RENDER_API = 'https://eduroute-api-nho4.onrender.com';
 const ENV_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.trim() || '';
 
 export function apiBase(): string {
-  if (ENV_BASE) return ENV_BASE.replace(/\/$/, '');
-  // Prefer Render in production so /api/* Netlify 404 never blocks persistence
-  if (typeof window !== 'undefined') {
+  let base = ENV_BASE || '';
+  if (!base && typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host.includes('netlify.app') || host.includes('eduroute')) {
-      return RENDER_API;
+      base = RENDER_API;
     }
   }
-  return '/api';
+  if (!base) base = '/api';
+  // Normalize: strip trailing slash and trailing /api so we never get /api/api/...
+  base = base.replace(/\/$/, '');
+  if (base.endsWith('/api')) base = base.slice(0, -4);
+  return base || RENDER_API;
 }
 
 export function authHeaders(extra?: Record<string, string>): Record<string, string> {
@@ -47,9 +50,12 @@ export async function apiFetch<T = unknown>(
   options: RequestInit = {},
 ): Promise<ApiResult<T>> {
   const base = apiBase();
-  const url = path.startsWith('http')
-    ? path
-    : `${base}${path.startsWith('/') ? path : `/${path}`}`;
+  // Ensure path starts with /api when talking to absolute host
+  let p = path.startsWith('http') ? path : path.startsWith('/') ? path : `/${path}`;
+  if (!p.startsWith('http') && base.startsWith('http') && !p.startsWith('/api')) {
+    p = `/api${p}`;
+  }
+  const url = p.startsWith('http') ? p : `${base}${p}`;
 
   try {
     const res = await fetch(url, {
@@ -72,10 +78,8 @@ export async function apiFetch<T = unknown>(
       body = await res.text().catch(() => null);
       // HTML from Netlify = wrong route; try Render absolute once
       if (typeof body === 'string' && body.includes('<!DOCTYPE') && !url.startsWith(RENDER_API)) {
-        return apiFetch<T>(
-          path.startsWith('/') ? `${RENDER_API}${path.startsWith('/api') ? path : `/api${path}`}` : path,
-          options,
-        );
+        const renderPath = p.startsWith('/api') ? p : `/api${p}`;
+        return apiFetch<T>(`${RENDER_API}${renderPath}`, options);
       }
     }
 
