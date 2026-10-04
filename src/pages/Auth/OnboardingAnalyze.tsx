@@ -109,8 +109,7 @@ export const OnboardingAnalyze = () => {
   const parsedSkills = useMemo(
     () =>
       skillText
-        .split(/[,|/;
-]+/)
+        .split(new RegExp('[,|/;\\s]+'))
         .map((s) => s.trim())
         .filter(Boolean)
         .slice(0, 40),
