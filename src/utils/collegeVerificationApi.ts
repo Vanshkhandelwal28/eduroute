@@ -71,12 +71,15 @@ export async function fetchCollegeVerificationQueue(
 export async function patchCollegeVerificationQueue(
   id: string,
   action: 'approve' | 'reject',
+  email?: string | null,
 ): Promise<boolean> {
+  const payload: Record<string, string> = { id, action };
+  if (email) payload.email = String(email).toLowerCase().trim();
   for (const url of ENDPOINTS) {
     const res = await tryFetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action }),
+      body: JSON.stringify(payload),
     });
     if (!res) continue;
     const json = await res.json().catch(() => ({}));
