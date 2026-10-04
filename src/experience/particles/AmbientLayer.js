@@ -4,7 +4,6 @@ import { getParticleCount } from './ShapeGenerator.js';
 /**
  * Ambient floating triangle layer — always present, never morphs.
  * Matches live Dala: sparse multi-colored triangles drifting in the black void.
- * Lower count, smaller size, lower opacity than the main morph layer.
  */
 export default class AmbientLayer {
   constructor({ scene }) {
@@ -17,7 +16,6 @@ export default class AmbientLayer {
   }
 
   _create() {
-    // Same filled triangle as main layer, slightly smaller
     const tri = new THREE.BufferGeometry();
     const s = 0.009;
     tri.setAttribute(
@@ -41,14 +39,13 @@ export default class AmbientLayer {
 
     for (let i = 0; i < this.count; i++) {
       aSeed[i] = Math.random();
-      aScale[i] = 0.4 + Math.random() * 0.9; // smaller than main
-      aBrightness[i] = 0.25 + Math.random() * 0.35; // dimmer
+      aScale[i] = 0.4 + Math.random() * 0.9;
+      aBrightness[i] = 0.25 + Math.random() * 0.35;
       aIndex[i] = i;
-      // Random drift velocity (slow)
       aDrift[i * 3] = (Math.random() - 0.5) * 0.15;
       aDrift[i * 3 + 1] = (Math.random() - 0.5) * 0.1;
       aDrift[i * 3 + 2] = (Math.random() - 0.5) * 0.15;
-      aSpin[i] = (Math.random() - 0.5) * 0.4; // gentle spin
+      aSpin[i] = (Math.random() - 0.5) * 0.4;
     }
 
     tri.setAttribute('aScale', new THREE.InstancedBufferAttribute(aScale, 1));
@@ -63,7 +60,6 @@ export default class AmbientLayer {
 
     this.geometry = tri;
 
-    // Vertex shader: drift + spin + billboard toward camera
     const vertexShader = /* glsl */ `
       attribute float aScale;
       attribute float aSeed;
@@ -79,7 +75,6 @@ export default class AmbientLayer {
         vBrightness = aBrightness;
         vSeed = aSeed;
 
-        // Base position: scattered in a large volume around origin
         float t = aSeed;
         float incl = acos(1.0 - 2.0 * t);
         float az = 6.2831853 * aSeed * 1.618;
@@ -89,20 +84,13 @@ export default class AmbientLayer {
           sin(incl) * sin(az) * 3.2
         );
 
-        // Slow drift
         vec3 drifted = base + aDrift * uTime * 0.3;
-
-        // Wrap around: keep particles in volume
         drifted = mod(drifted + 4.0, 8.0) - 4.0;
-
-        // Gentle bobbing
         drifted.y += sin(uTime * 0.2 + aSeed * 6.28) * 0.08;
 
-        // Billboard toward camera (modelView)
         vec4 mvPosition = modelViewMatrix * vec4(drifted, 1.0);
         vec3 local = position * aScale;
 
-        // Slow individual spin in screen space
         float angle = aSeed * 6.2831853 + uTime * aSpin;
         float c = cos(angle);
         float s = sin(angle);
@@ -111,24 +99,22 @@ export default class AmbientLayer {
 
         mvPosition.xyz += local;
         gl_Position = projectionMatrix * mvPosition;
-        gl_PointSize = 1.0; // triangles, not points
       }
     `;
 
-    // Fragment shader: same Dala palette, dimmer
     const fragmentShader = /* glsl */ `
       varying float vBrightness;
       varying float vSeed;
 
       void main() {
-        vec3 c0 = vec3(0.961, 0.843, 0.431); // yellow
-        vec3 c1 = vec3(0.765, 0.608, 0.827); // light purple
-        vec3 c2 = vec3(0.608, 0.349, 0.714); // purple
-        vec3 c3 = vec3(0.102, 0.737, 0.612); // teal
-        vec3 c4 = vec3(0.180, 0.800, 0.443); // green
-        vec3 c5 = vec3(1.000, 1.000, 1.000); // white
-        vec3 c6 = vec3(0.906, 0.298, 0.235); // coral
-        vec3 c7 = vec3(0.204, 0.596, 0.859); // blue
+        vec3 c0 = vec3(0.961, 0.843, 0.431);
+        vec3 c1 = vec3(0.765, 0.608, 0.827);
+        vec3 c2 = vec3(0.608, 0.349, 0.714);
+        vec3 c3 = vec3(0.102, 0.737, 0.612);
+        vec3 c4 = vec3(0.180, 0.800, 0.443);
+        vec3 c5 = vec3(1.000, 1.000, 1.000);
+        vec3 c6 = vec3(0.906, 0.298, 0.235);
+        vec3 c7 = vec3(0.204, 0.596, 0.859);
 
         float t = fract(vSeed * 7.13);
         vec3 col;
@@ -167,7 +153,6 @@ export default class AmbientLayer {
     );
     this.mesh.frustumCulled = false;
 
-    // Set initial instance matrices (identity — positions computed in shader)
     const dummy = new THREE.Object3D();
     for (let i = 0; i < this.count; i++) {
       dummy.position.set(0, 0, 0);
