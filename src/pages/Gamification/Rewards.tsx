@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Gift,
   Lock,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useUISound } from '../../contexts/SoundContext';
 import { GradientDotsBackground } from '../../components/GradientDotsBackground';
+import { getPoints, isRewardClaimed, claimReward } from '../../utils/gamificationStore';
 
 const REWARDS = [
   {
@@ -73,10 +74,24 @@ const card = {
 
 export const Rewards = () => {
   const { isMuted, toggleMuted, playSuccess } = useUISound();
-  const [claimedReward, setClaimedReward] = useState<string | null>(null);
+  const [balance, setBalance] = useState(0);
+  const [claimedIds, setClaimedIds] = useState<string[]>([]);
 
-  const handleClaim = (rewardTitle: string) => {
-    setClaimedReward(rewardTitle);
+  const refresh = () => {
+    setBalance(getPoints());
+    setClaimedIds(REWARDS.filter((r) => isRewardClaimed(r.id)).map((r) => r.id));
+  };
+
+  useEffect(() => {
+    refresh();
+    const onUpdate = () => refresh();
+    window.addEventListener('eduroute:gamification-updated', onUpdate);
+    return () => window.removeEventListener('eduroute:gamification-updated', onUpdate);
+  }, []);
+
+  const handleClaim = (rewardId: string, rewardTitle: string) => {
+    claimReward(rewardId);
+    refresh();
     playSuccess();
   };
 
@@ -127,7 +142,7 @@ export const Rewards = () => {
               <div className="text-sm font-bold uppercase opacity-80 mb-1 flex items-center gap-1.5">
                 <Star className="h-4 w-4" /> Your Balance
               </div>
-              <div className="text-4xl font-black mb-2">12,450</div>
+              <div className="text-4xl font-black mb-2">{balance.toLocaleString()}</div>
               <div className="text-sm opacity-80">XP points available</div>
             </div>
           </motion.div>
@@ -154,72 +169,76 @@ export const Rewards = () => {
           className="grid grid-cols-1 md:grid-cols-2 gap-6"
           style={{ perspective: 1200 }}
         >
-          {REWARDS.map((reward) => (
-            <motion.div
-              key={reward.id}
-              variants={card}
-              whileHover={{ y: -10, scale: 1.02, rotateX: 4, rotateY: -3 }}
-              whileTap={{ scale: 0.99 }}
-              style={{ transformPerspective: 900 }}
-              className={`group relative rounded-[32px] border p-8 shadow-[0_8px_32px_rgba(15,23,42,0.06)] transition-shadow duration-300 hover:shadow-[0_24px_50px_rgba(139,92,246,0.2)] dark:shadow-black/30 backdrop-blur-xl ${
-                reward.locked
-                  ? 'border-white/15 dark:border-white/10 bg-white/70 dark:bg-slate-900/60'
-                  : 'border-violet-200/50 dark:border-violet-500/30 bg-white/80 dark:bg-slate-900/65'
-              }`}
-            >
-              <div className="pointer-events-none absolute -inset-[1px] rounded-[32px] bg-gradient-to-br from-violet-500/30 via-fuchsia-500/15 to-transparent opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100" />
-              {reward.locked && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[32px] bg-slate-900/40 backdrop-blur-[2px]">
-                  <div className="flex items-center gap-2 rounded-full bg-slate-900/90 px-4 py-2 text-sm font-bold text-white">
-                    <Lock className="h-4 w-4" /> Locked — need {reward.points.toLocaleString()} XP
+          {REWARDS.map((reward) => {
+            const locked = reward.locked || balance < reward.points;
+            const claimed = claimedIds.includes(reward.id);
+            return (
+              <motion.div
+                key={reward.id}
+                variants={card}
+                whileHover={{ y: -10, scale: 1.02, rotateX: 4, rotateY: -3 }}
+                whileTap={{ scale: 0.99 }}
+                style={{ transformPerspective: 900 }}
+                className={`group relative rounded-[32px] border p-8 shadow-[0_8px_32px_rgba(15,23,42,0.06)] transition-shadow duration-300 hover:shadow-[0_24px_50px_rgba(139,92,246,0.2)] dark:shadow-black/30 backdrop-blur-xl ${
+                  locked
+                    ? 'border-white/15 dark:border-white/10 bg-white/70 dark:bg-slate-900/60'
+                    : 'border-violet-200/50 dark:border-violet-500/30 bg-white/80 dark:bg-slate-900/65'
+                }`}
+              >
+                <div className="pointer-events-none absolute -inset-[1px] rounded-[32px] bg-gradient-to-br from-violet-500/30 via-fuchsia-500/15 to-transparent opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100" />
+                {locked && !claimed && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[32px] bg-slate-900/40 backdrop-blur-[2px]">
+                    <div className="flex items-center gap-2 rounded-full bg-slate-900/90 px-4 py-2 text-sm font-bold text-white">
+                      <Lock className="h-4 w-4" /> Locked — need {reward.points.toLocaleString()} XP
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <span className="inline-flex rounded-full bg-violet-50 dark:bg-violet-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-violet-600 dark:text-violet-300">
+                      {reward.category}
+                    </span>
+                    <h3 className="mt-2 text-lg font-black text-slate-900 dark:text-white">{reward.title}</h3>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{reward.description}</p>
+                  </div>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg">
+                    <Gift className="h-6 w-6" />
                   </div>
                 </div>
-              )}
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div>
-                  <span className="inline-flex rounded-full bg-violet-50 dark:bg-violet-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-violet-600 dark:text-violet-300">
-                    {reward.category}
-                  </span>
-                  <h3 className="mt-2 text-lg font-black text-slate-900 dark:text-white">{reward.title}</h3>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{reward.description}</p>
+                <div className="flex items-center justify-between mt-6">
+                  <div className="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                    {reward.points.toLocaleString()} XP
+                  </div>
+                  {locked && !claimed ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="px-5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed"
+                    >
+                      Need more points
+                    </button>
+                  ) : claimed ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="px-5 py-2.5 rounded-2xl bg-emerald-600 text-white text-sm font-bold flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="h-4 w-4" /> Claimed
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleClaim(reward.id, reward.title)}
+                      className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold hover:from-violet-500 hover:to-indigo-500 transition-colors flex items-center gap-1.5 shadow-lg shadow-violet-500/25"
+                    >
+                      <Sparkles className="h-4 w-4" /> Redeem
+                    </button>
+                  )}
                 </div>
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg">
-                  <Gift className="h-6 w-6" />
-                </div>
-              </div>
-              <div className="flex items-center justify-between mt-6">
-                <div className="text-sm font-black text-indigo-600 dark:text-indigo-400">
-                  {reward.points.toLocaleString()} XP
-                </div>
-                {reward.locked ? (
-                  <button
-                    type="button"
-                    disabled
-                    className="px-5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed"
-                  >
-                    Need more points
-                  </button>
-                ) : claimedReward === reward.title ? (
-                  <button
-                    type="button"
-                    disabled
-                    className="px-5 py-2.5 rounded-2xl bg-emerald-600 text-white text-sm font-bold flex items-center gap-1.5"
-                  >
-                    <CheckCircle2 className="h-4 w-4" /> Claimed
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleClaim(reward.title)}
-                    className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold hover:from-violet-500 hover:to-indigo-500 transition-colors flex items-center gap-1.5 shadow-lg shadow-violet-500/25"
-                  >
-                    <Sparkles className="h-4 w-4" /> Redeem
-                  </button>
-                )}
-              </div>
-              <div className="mt-3 text-[11px] font-semibold text-slate-400">Partner · {reward.partner}</div>
-            </motion.div>
-          ))}
+                <div className="mt-3 text-[11px] font-semibold text-slate-400">Partner · {reward.partner}</div>
+              </motion.div>
+            );
+          })}
         </motion.div>
 
         <div className="mt-12 text-center">
