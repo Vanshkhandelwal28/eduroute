@@ -29,7 +29,7 @@ import {
 import { extractCvContent, formatCvReport } from '../../utils/pdfTextExtract';
 import { saveSkillGap } from '../../services/buddyApi';
 import { getAuthUser } from '../../utils/rbacAuth';
-import { clearLearningPath } from '../../utils/learningPathStore';
+import { clearLearningPath } from '../../utils/learningPathClear';
 import { pushUserData } from '../../utils/userDataStore';
 
 type Step = 'interests' | 'gaps' | 'custom_role' | 'custom_skills';
