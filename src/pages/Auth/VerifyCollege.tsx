@@ -11,6 +11,7 @@ import {
 } from '../../utils/pendingVerificationStore';
 import { compressImageToDataUrl, compressUploadFile } from '../../utils/imageCompress';
 import { pushUserData } from '../../utils/userDataStore';
+import { submitCollegeVerificationQueue } from '../../utils/collegeVerificationApi';
 import { motion } from 'framer-motion';
 import { Upload, CheckCircle2, Info, ChevronRight, ShieldCheck, Lock } from 'lucide-react';
 
@@ -77,7 +78,6 @@ export const VerifyCollege = () => {
     let fileName = file.name;
 
     try {
-      // Compress images; PDFs pass through size-checked
       uploadFile = await compressUploadFile(file, {
         maxWidth: 1200,
         maxHeight: 1200,
@@ -87,7 +87,6 @@ export const VerifyCollege = () => {
       fileName = uploadFile.name;
       mimeType = uploadFile.type || mimeType;
       documentDataUrl = await compressImageToDataUrl(file, 1200, 0.65).catch(async () => {
-        // fallback: read compressed file
         return new Promise<string>((resolve, reject) => {
           const r = new FileReader();
           r.onload = () => resolve(String(r.result || ''));
@@ -129,7 +128,19 @@ export const VerifyCollege = () => {
     });
     setStoredForAdmin(true);
 
-    // Also push JSON blob to Neon/Render user-data (best effort)
+    void submitCollegeVerificationQueue({
+      name,
+      email: studentEmail,
+      fileName,
+      documentDataUrl,
+      mimeType,
+      course: (storedProfile as any)?.course,
+      college: (storedProfile as any)?.college,
+      location: (storedProfile as any)?.location,
+      phone: (storedProfile as any)?.phone,
+      compressed: true,
+    }).catch(() => undefined);
+
     void pushUserData('college-verification', {
       verificationId: entry.verificationId,
       name,
@@ -235,7 +246,7 @@ export const VerifyCollege = () => {
               <div className="bg-blue-50 dark:bg-blue-950/40 p-4 rounded-xl flex gap-3">
                 <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
                 <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-                  ID is compressed, stored for admin review (Admin → Pending Approvals), and synced to the server when available.
+                  ID is compressed and stored for admin (Pending Approvals) via shared queue + local backup.
                 </p>
               </div>
               {error && <p className="text-sm text-rose-600" role="alert">{error}</p>}
@@ -277,7 +288,7 @@ export const VerifyCollege = () => {
               </p>
               {storedForAdmin && (
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mb-6">
-                  Compressed ID stored for admin review (local + server when available).
+                  Compressed ID stored for admin review (queue + local).
                 </p>
               )}
               <button
