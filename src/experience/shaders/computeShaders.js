@@ -1,7 +1,6 @@
 /**
- * GPU compute shaders.
- * Phase 4–5: spring, noise, damping, mouse.
- * Phase 6: dual-target morph with seed delay + scatter + turbulence.
+ * GPU compute — spring morph with spatial stagger, arc paths, soft damping.
+ * Tuned for slow cinematic transitions (brain → bulb → globe → network).
  */
 
 export const velocityFragmentShader = /* glsl */ `
@@ -42,9 +41,9 @@ vec3 noise3(vec3 p) {
   );
 }
 
-// Smoothstep ease
-float easeInOut(float t) {
-  return t * t * (3.0 - 2.0 * t);
+// Ken Perlin smootherstep — C2 continuous, no harsh acceleration
+float smootherstep(float t) {
+  return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
 }
 
 void main() {
@@ -59,65 +58,92 @@ void main() {
   vec3 shapeA = texture2D(uTargetA, uv).xyz;
   vec3 shapeB = texture2D(uTargetB, uv).xyz;
 
-  // --- Per-particle delayed morph progress ---
-  // seed 0..1 → delay offset so particles don't move in lockstep
-  float delay = seed * 0.35; // up to 35% lag
+  // ── Spatial stagger ──────────────────────────────────────────
+  // Neighbors share similar delay → wave-like fronts instead of noise
+  float spatial = (shapeA.x + shapeA.y * 0.7 + shapeA.z * 1.1) * 0.35;
+  spatial = fract(spatial * 0.5 + 0.5);
+  float delay = mix(seed, spatial, 0.55) * 0.42;
+
   float rawT = (uMorphProgress - delay) / max(1.0 - delay, 0.001);
   float t = clamp(rawT, 0.0, 1.0);
-  t = easeInOut(t);
+  t = smootherstep(t);
 
-  // Small overshoot near the middle of the transition
-  float overshoot = sin(t * 3.14159) * 0.08 * (1.0 - abs(uMorphProgress - 0.5) * 2.0);
+  // Soft overshoot only near mid-transition (organic settle)
+  float mid = sin(t * 3.14159265);
+  float overshoot = mid * 0.045 * (1.0 - abs(uMorphProgress - 0.5) * 2.0);
   float tMorph = clamp(t + overshoot, 0.0, 1.0);
 
-  // Base blended target
-  vec3 target = mix(shapeA, shapeB, tMorph);
+  // ── Arc path (not pure lerp) ─────────────────────────────────
+  // Particles bulge outward mid-morph for a fluid dissolve/reform
+  vec3 chord = shapeB - shapeA;
+  vec3 midPoint = (shapeA + shapeB) * 0.5;
+  float chordLen = length(chord);
+  vec3 radial = normalize(midPoint + vec3(0.0001));
+  // Prefer outward from origin; fall back to perpendicular if near center
+  if (length(midPoint) < 0.08) {
+    radial = normalize(cross(chord + vec3(0.001, 0.0, 0.0), vec3(0.0, 1.0, 0.0)) + vec3(0.0001));
+  }
+  float arcHeight = chordLen * 0.22 * mid + uScatter * mid * 0.55;
+  vec3 arcOffset = radial * arcHeight * (0.65 + seed * 0.35);
 
-  // Scatter — push outward during mid-morph
-  float scatterWave = sin(uMorphProgress * 3.14159); // peaks at 0.5
-  vec3 scatterDir = normalize(shapeA + vec3(0.001));
-  // Alternate outward from A or B based on seed
-  if (seed > 0.5) scatterDir = normalize(shapeB + vec3(0.001));
-  target += scatterDir * uScatter * scatterWave * (0.5 + seed * 0.5);
+  vec3 linearTarget = mix(shapeA, shapeB, tMorph);
+  vec3 target = linearTarget + arcOffset;
 
-  // Turbulence offset on target during transition
-  vec3 turb = noise3(pos * 2.5 + vec3(uTime * 0.3, seed * 4.0, uTime * 0.2));
-  target += turb * uTurbulence * scatterWave;
+  // Scatter — coherent outward push, seed-weighted
+  float scatterWave = sin(uMorphProgress * 3.14159265);
+  vec3 scatterDir = normalize(mix(shapeA, shapeB, 0.5) + vec3(0.001));
+  target += scatterDir * uScatter * scatterWave * (0.4 + seed * 0.6);
 
-  // --- Spring toward morphing target ---
+  // Turbulence — low-frequency curl during transition only
+  vec3 turbCoord = pos * 1.6 + vec3(uTime * 0.18, seed * 3.2, uTime * 0.14);
+  vec3 turb = noise3(turbCoord);
+  // Slight curl for fluid motion
+  vec3 turb2 = noise3(turbCoord + vec3(17.1, 9.3, 5.7));
+  turb = normalize(turb + cross(turb, turb2) * 0.35 + vec3(0.0001));
+  target += turb * uTurbulence * scatterWave * 0.85;
+
+  // ── Distance-aware spring (critical-ish) ─────────────────────
   vec3 toTarget = target - pos;
-  vec3 springForce = toTarget * uSpringStrength;
+  float dist = length(toTarget);
+  // Soften spring when far so particles don't snap; strengthen near settle
+  float springMul = mix(0.55, 1.15, smootherstep(1.0 - clamp(dist * 0.45, 0.0, 1.0)));
+  // Extra ease during active morph
+  float morphEase = mix(1.0, 0.72, scatterWave);
+  vec3 springForce = toTarget * uSpringStrength * springMul * morphEase;
 
-  // --- Ambient noise ---
-  vec3 noiseCoord = pos * 1.8 + vec3(uTime * 0.15, uTime * 0.11, uTime * 0.09);
+  // ── Ambient breath noise ─────────────────────────────────────
+  vec3 noiseCoord = pos * 1.5 + vec3(uTime * 0.12, uTime * 0.09, uTime * 0.07);
   vec3 noiseForce = noise3(noiseCoord) * uNoiseStrength;
   float phase = seed * 6.2831853;
-  noiseForce *= (0.7 + 0.3 * sin(uTime * 0.4 + phase));
+  noiseForce *= (0.75 + 0.25 * sin(uTime * 0.35 + phase));
 
-  // --- Mouse repulsion ---
+  // ── Mouse repulsion ──────────────────────────────────────────
   vec3 mouseForce = vec3(0.0);
   if (uMouseStrength > 0.001) {
     vec3 toMouse = pos - uMouse;
-    float dist = length(toMouse);
+    float mDist = length(toMouse);
     float radius = max(uMouseRadius, 0.15);
-    float influence = 1.0 - smoothstep(0.0, radius, dist);
+    float influence = 1.0 - smoothstep(0.0, radius, mDist);
     influence *= influence;
-    float soft = 1.0 / (dist * dist + 0.12);
-    vec3 dir = dist > 0.0001 ? toMouse / dist : vec3(0.0, 1.0, 0.0);
-    mouseForce = dir * soft * influence * uMouseStrength * 0.35;
+    float soft = 1.0 / (mDist * mDist + 0.15);
+    vec3 dir = mDist > 0.0001 ? toMouse / mDist : vec3(0.0, 1.0, 0.0);
+    mouseForce = dir * soft * influence * uMouseStrength * 0.32;
     float mLen = length(mouseForce);
-    if (mLen > 3.0) mouseForce *= 3.0 / mLen;
+    if (mLen > 2.4) mouseForce *= 2.4 / mLen;
   }
 
-  // --- Integrate ---
+  // ── Integrate with velocity damping ──────────────────────────
   vel += springForce * uDelta;
   vel += noiseForce * uDelta;
   vel += mouseForce * uDelta;
-  vel *= uDamping;
+
+  // Adaptive damping: more friction when close to target → soft land
+  float adaptiveDamp = mix(uDamping, min(uDamping + 0.04, 0.97), clamp(1.0 - dist * 0.8, 0.0, 1.0));
+  vel *= adaptiveDamp;
 
   float speed = length(vel);
-  if (speed > 2.5) {
-    vel *= 2.5 / speed;
+  if (speed > 1.8) {
+    vel *= 1.8 / speed;
   }
 
   gl_FragColor = vec4(vel, seed);

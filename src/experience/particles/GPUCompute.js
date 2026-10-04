@@ -6,8 +6,8 @@ import {
 } from '../shaders/computeShaders.js';
 
 /**
- * GPU particle simulation.
- * Phase 4–6: spring, noise, mouse, dual-target morph.
+ * GPU particle simulation with smoothed morph-progress lerp
+ * so scrubbed scroll never snaps targets frame-to-frame.
  */
 export default class GPUCompute {
   constructor(renderer, targets, count) {
@@ -28,7 +28,6 @@ export default class GPUCompute {
     const velTex = this.gpuCompute.createTexture();
     const velArr = velTex.image.data;
 
-    // Initial single target (will be replaced by dual morph textures)
     const targetData = new Float32Array(this.texSize * this.texSize * 4);
 
     for (let i = 0; i < this.texSize * this.texSize; i++) {
@@ -55,7 +54,6 @@ export default class GPUCompute {
       }
     }
 
-    // Placeholder textures until MorphSystem binds real ones
     this._placeholderTarget = new THREE.DataTexture(
       targetData,
       this.texSize,
@@ -90,18 +88,17 @@ export default class GPUCompute {
     const velUniforms = this.velocityVariable.material.uniforms;
     velUniforms.uTime = { value: 0 };
     velUniforms.uDelta = { value: 0.016 };
-    velUniforms.uDamping = { value: 0.92 };
-    velUniforms.uSpringStrength = { value: 4.5 };
-    velUniforms.uNoiseStrength = { value: 0.12 };
+    // Higher damping → softer, less jittery motion
+    velUniforms.uDamping = { value: 0.94 };
+    velUniforms.uSpringStrength = { value: 3.8 };
+    velUniforms.uNoiseStrength = { value: 0.1 };
 
-    // Dual morph targets
     velUniforms.uTargetA = { value: this._placeholderTarget };
     velUniforms.uTargetB = { value: this._placeholderTarget };
     velUniforms.uMorphProgress = { value: 0 };
     velUniforms.uScatter = { value: 0 };
-    velUniforms.uTurbulence = { value: 0.15 };
+    velUniforms.uTurbulence = { value: 0.12 };
 
-    // Mouse
     velUniforms.uMouse = { value: new THREE.Vector3(0, 0, 0) };
     velUniforms.uMouseStrength = { value: 0 };
     velUniforms.uMouseRadius = { value: 1.1 };
@@ -127,6 +124,15 @@ export default class GPUCompute {
 
     this._posDelta = posUniforms.uDelta;
 
+    // Smoothed values — absorb scroll scrub spikes
+    this._smooth = {
+      morphProgress: 0,
+      scatter: 0,
+      turbulence: 0.12,
+      springStrength: 3.8,
+      noiseStrength: 0.1,
+    };
+
     const error = this.gpuCompute.init();
     if (error !== null) {
       console.error('[GPUCompute] init error:', error);
@@ -134,7 +140,6 @@ export default class GPUCompute {
     this.ready = error === null;
   }
 
-  /** Bind MorphSystem textures + sync params. */
   bindMorph(morphSystem) {
     this.uniforms.targetA.value = morphSystem.textureA;
     this.uniforms.targetB.value = morphSystem.textureB;
@@ -152,20 +157,30 @@ export default class GPUCompute {
   compute(elapsed, delta) {
     if (!this.ready) return;
 
-    const dt = Math.min(Math.max(delta, 0.001), 0.033);
+    // Fixed-ish step for stable spring response
+    const dt = Math.min(Math.max(delta, 0.001), 0.028);
 
     this.uniforms.time.value = elapsed;
     this.uniforms.delta.value = dt;
     this._posDelta.value = dt;
 
-    // Sync morph params from MorphSystem if bound
     if (this._morphSystem) {
       const p = this._morphSystem.params;
-      this.uniforms.morphProgress.value = p.morphProgress;
-      this.uniforms.scatter.value = p.scatter;
-      this.uniforms.turbulence.value = p.turbulence;
-      this.uniforms.springStrength.value = p.springStrength;
-      this.uniforms.noiseStrength.value = p.noiseStrength;
+      // Exponential approach — morph feels continuous under scroll scrub
+      const k = 1 - Math.exp(-6.5 * dt);
+      const kSlow = 1 - Math.exp(-4.0 * dt);
+
+      this._smooth.morphProgress += (p.morphProgress - this._smooth.morphProgress) * k;
+      this._smooth.scatter += (p.scatter - this._smooth.scatter) * kSlow;
+      this._smooth.turbulence += (p.turbulence - this._smooth.turbulence) * kSlow;
+      this._smooth.springStrength += (p.springStrength - this._smooth.springStrength) * k;
+      this._smooth.noiseStrength += (p.noiseStrength - this._smooth.noiseStrength) * kSlow;
+
+      this.uniforms.morphProgress.value = this._smooth.morphProgress;
+      this.uniforms.scatter.value = this._smooth.scatter;
+      this.uniforms.turbulence.value = this._smooth.turbulence;
+      this.uniforms.springStrength.value = this._smooth.springStrength;
+      this.uniforms.noiseStrength.value = this._smooth.noiseStrength;
     }
 
     this.gpuCompute.compute();

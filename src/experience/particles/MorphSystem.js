@@ -2,15 +2,10 @@ import * as THREE from 'three';
 import { generateAllShapes, SHAPE_NAMES } from './ShapeGenerator.js';
 
 /**
- * Phase 6 — Reusable GPU morph controller.
- * Stores shape datasets, morph progress, and uploads dual target textures.
- * Designed to be driven by GSAP later (morphProgress 0→1).
+ * Dual-target morph controller.
+ * Shape pairs driven by scroll; GPU reads progress each frame.
  */
 export default class MorphSystem {
-  /**
-   * @param {number} count
-   * @param {number} texSize  GPU texture size
-   */
   constructor(count, texSize) {
     this.count = count;
     this.texSize = texSize;
@@ -18,24 +13,22 @@ export default class MorphSystem {
     this.shapes = generateAllShapes(count);
     this.shapeNames = SHAPE_NAMES;
 
-    // Current pair
     this.shapeAName = 'brain';
-    this.shapeBName = 'bulb';
+    this.shapeBName = 'brain';
     this.morphProgress = 0;
 
-    // Exposed parameters (mutable for GSAP / external control)
+    // Softer defaults for cinematic settle
     this.params = {
       morphProgress: 0,
       scatter: 0,
-      turbulence: 0.15,
-      springStrength: 4.5,
-      noiseStrength: 0.12,
+      turbulence: 0.1,
+      springStrength: 3.8,
+      noiseStrength: 0.09,
       morphSpeed: 1.0,
     };
 
-    // Dual target textures for GPU
     this.textureA = this._createTargetTexture(this.shapes.brain);
-    this.textureB = this._createTargetTexture(this.shapes.bulb);
+    this.textureB = this._createTargetTexture(this.shapes.brain);
   }
 
   _createTargetTexture(positions) {
@@ -76,8 +69,8 @@ export default class MorphSystem {
   }
 
   /**
-   * Set the morph pair by name.
-   * @param {string} from  'brain' | 'bulb' | 'globe' | 'network'
+   * Set morph pair. Resets progress to 0 so the new path starts clean.
+   * @param {string} from
    * @param {string} to
    */
   setPair(from, to) {
@@ -93,27 +86,17 @@ export default class MorphSystem {
     this.morphProgress = 0;
   }
 
-  /**
-   * Set morph progress 0–1 (will be read by GPU each frame).
-   * @param {number} t
-   */
   setProgress(t) {
     this.morphProgress = Math.max(0, Math.min(1, t));
     this.params.morphProgress = this.morphProgress;
   }
 
-  /**
-   * Animate progress toward a value (simple internal lerp).
-   * GSAP can drive setProgress directly instead.
-   */
-  update(delta) {
-    // If external systems set params.morphProgress, sync
+  update() {
     if (Math.abs(this.params.morphProgress - this.morphProgress) > 0.0001) {
       this.morphProgress = this.params.morphProgress;
     }
   }
 
-  /** Get shape positions by name. */
   getShape(name) {
     return this.shapes[name] || null;
   }
