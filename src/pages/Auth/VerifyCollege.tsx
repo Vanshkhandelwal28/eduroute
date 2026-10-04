@@ -1,39 +1,56 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { saveAuthSession, getAuthUser, getAuthToken } from '../../utils/rbacAuth';
 import { getStoredUserProfile } from '../../utils/userProfile';
 import { apiSubmitCollegeVerification } from '../../utils/authApi';
-import { addLocalPendingVerification } from '../../utils/pendingVerificationStore';
+import {
+  addLocalPendingVerification,
+  canSubmitCollegeId,
+  getStudentVerificationState,
+  hasActiveSubmission,
+} from '../../utils/pendingVerificationStore';
+import { compressImageToDataUrl, compressUploadFile } from '../../utils/imageCompress';
+import { pushUserData } from '../../utils/userDataStore';
 import { motion } from 'framer-motion';
-import { Upload, CheckCircle2, Info, ChevronRight } from 'lucide-react';
+import { Upload, CheckCircle2, Info, ChevronRight, ShieldCheck, Lock } from 'lucide-react';
 
-const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Unable to read file'));
-    reader.readAsDataURL(file);
-  });
+const BENEFITS = [
+  'Verified student badge on your profile & dashboard',
+  'Priority visibility for internships and campus drives',
+  'Unlock premium student features after admin approval',
+  'Build trust with colleges and recruiters',
+];
 
 export const VerifyCollege = () => {
   const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'pending'>('idle');
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'pending' | 'locked'>('idle');
   const [error, setError] = useState('');
   const [storedForAdmin, setStoredForAdmin] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const completeVerification = () => {
-    const storedProfile = getStoredUserProfile();
+  const storedProfile = getStoredUserProfile();
+  const authUser = getAuthUser();
+  const email = authUser?.email || storedProfile?.email || '';
+
+  useEffect(() => {
+    const state = getStudentVerificationState(email);
+    if (state === 'pending' || state === 'verified') {
+      setStatus('locked');
+    }
+  }, [email]);
+
+  const completeVerification = (verificationStatus: string = 'pending') => {
     const existing = getAuthUser();
+    const profile = getStoredUserProfile();
     const token = getAuthToken() || localStorage.getItem('eduroute:auth-token') || 'pending-verification-session';
 
     saveAuthSession(token, {
-      id: existing?.id || (storedProfile?.email ? `pending-${storedProfile.email}` : `pending-${Date.now()}`),
-      name: existing?.name || storedProfile?.name || 'Student',
-      email: existing?.email || storedProfile?.email || 'student@eduroute.app',
+      id: existing?.id || (profile?.email ? `pending-${profile.email}` : `pending-${Date.now()}`),
+      name: existing?.name || profile?.name || 'Student',
+      email: existing?.email || profile?.email || 'student@eduroute.app',
       role: 'student',
-      verificationStatus: 'pending',
+      verificationStatus,
     });
 
     navigate('/onboarding', { replace: true });
@@ -42,48 +59,88 @@ export const VerifyCollege = () => {
   const handleUpload = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!file) return;
+    if (!canSubmitCollegeId(email)) {
+      setError('You already submitted a college ID. Wait for admin review or check your dashboard badge.');
+      setStatus('locked');
+      return;
+    }
     setError('');
     setStatus('uploading');
     setStoredForAdmin(false);
 
-    const storedProfile = getStoredUserProfile();
-    const authUser = getAuthUser();
     const name = authUser?.name || storedProfile?.name || 'Student';
-    const email = authUser?.email || storedProfile?.email || 'student@eduroute.app';
+    const studentEmail = email || 'student@eduroute.app';
+
+    let uploadFile = file;
+    let documentDataUrl = '';
+    let mimeType = file.type || 'image/jpeg';
+    let fileName = file.name;
+
+    try {
+      // Compress images; PDFs pass through size-checked
+      uploadFile = await compressUploadFile(file, {
+        maxWidth: 1200,
+        maxHeight: 1200,
+        quality: 0.65,
+        maxBytes: 800_000,
+      });
+      fileName = uploadFile.name;
+      mimeType = uploadFile.type || mimeType;
+      documentDataUrl = await compressImageToDataUrl(file, 1200, 0.65).catch(async () => {
+        // fallback: read compressed file
+        return new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result || ''));
+          r.onerror = () => reject(new Error('read failed'));
+          r.readAsDataURL(uploadFile);
+        });
+      });
+    } catch (compressErr) {
+      console.warn('Compress failed, using original', compressErr);
+      documentDataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result || ''));
+        r.onerror = () => reject(new Error('read failed'));
+        r.readAsDataURL(file);
+      });
+    }
 
     let backendOk = false;
     if (getAuthToken()) {
       try {
-        await apiSubmitCollegeVerification(file);
+        await apiSubmitCollegeVerification(uploadFile);
         backendOk = true;
       } catch (uploadError) {
         console.warn('Backend college verification failed, using local queue', uploadError);
       }
     }
 
-    try {
-      const documentDataUrl = await fileToDataUrl(file);
-      addLocalPendingVerification({
-        name,
-        email,
-        fileName: file.name,
-        documentDataUrl,
-        mimeType: file.type || 'image/jpeg',
-        course: (storedProfile as any)?.course,
-        college: (storedProfile as any)?.college,
-        location: (storedProfile as any)?.location,
-        phone: (storedProfile as any)?.phone,
-      });
-      setStoredForAdmin(true);
-    } catch {
-      addLocalPendingVerification({
-        name,
-        email,
-        fileName: file.name,
-        mimeType: file.type,
-      });
-      setStoredForAdmin(true);
-    }
+    const entry = addLocalPendingVerification({
+      name,
+      email: studentEmail,
+      fileName,
+      documentDataUrl,
+      mimeType,
+      course: (storedProfile as any)?.course,
+      college: (storedProfile as any)?.college,
+      location: (storedProfile as any)?.location,
+      phone: (storedProfile as any)?.phone,
+      compressed: true,
+    });
+    setStoredForAdmin(true);
+
+    // Also push JSON blob to Neon/Render user-data (best effort)
+    void pushUserData('college-verification', {
+      verificationId: entry.verificationId,
+      name,
+      email: studentEmail,
+      fileName,
+      mimeType,
+      documentDataUrl,
+      status: 'pending',
+      appliedAt: entry.appliedAt,
+      compressed: true,
+    }).catch(() => undefined);
 
     if (!backendOk && !getAuthToken()) {
       setError('Saved for admin review locally. Log in as a student before upload to also store on the server.');
@@ -97,7 +154,7 @@ export const VerifyCollege = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <h2 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">College ID Verification</h2>
         <p className="mt-2 text-slate-600 dark:text-slate-400">
-          Upload your college ID card or admission letter to unlock premium student features.
+          Upload your college ID card or admission letter. Photos are compressed before storage.
         </p>
       </div>
 
@@ -107,6 +164,35 @@ export const VerifyCollege = () => {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white dark:bg-slate-900 py-8 px-6 shadow-xl rounded-3xl border border-slate-100 dark:border-slate-800"
         >
+          {status === 'locked' && (
+            <div className="py-8 text-center space-y-4">
+              <div className="mx-auto h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center">
+                {hasActiveSubmission(email) && getStudentVerificationState(email) === 'verified' ? (
+                  <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+                ) : (
+                  <Lock className="h-8 w-8 text-indigo-600" />
+                )}
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                {getStudentVerificationState(email) === 'verified'
+                  ? 'You are verified'
+                  : 'ID already submitted'}
+              </h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {getStudentVerificationState(email) === 'verified'
+                  ? 'Admin approved your college ID. Your profile shows a Verified badge.'
+                  : 'Your college ID is under admin review. You cannot submit another until a decision is made.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard', { replace: true })}
+                className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          )}
+
           {status === 'idle' && (
             <form className="space-y-6" onSubmit={handleUpload}>
               <button
@@ -123,6 +209,7 @@ export const VerifyCollege = () => {
                 <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-300">
                   {file ? file.name : 'Drag and drop your ID card here, or click to browse'}
                 </p>
+                <p className="mt-1 text-xs text-slate-400">Image or PDF · auto-compressed</p>
               </button>
               <input
                 ref={fileInputRef}
@@ -132,10 +219,23 @@ export const VerifyCollege = () => {
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               />
 
+              <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 p-4 text-left">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" /> Benefits of verification
+                </p>
+                <ul className="space-y-1.5">
+                  {BENEFITS.map((b) => (
+                    <li key={b} className="text-xs text-slate-600 dark:text-slate-400 flex gap-2">
+                      <span className="text-emerald-500 font-bold">✓</span> {b}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
               <div className="bg-blue-50 dark:bg-blue-950/40 p-4 rounded-xl flex gap-3">
                 <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
                 <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-                  Your ID is stored for admin review (Admin → Pending Approvals). Verification usually takes 24–48 hours.
+                  ID is compressed, stored for admin review (Admin → Pending Approvals), and synced to the server when available.
                 </p>
               </div>
               {error && <p className="text-sm text-rose-600" role="alert">{error}</p>}
@@ -150,7 +250,7 @@ export const VerifyCollege = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={completeVerification}
+                  onClick={() => completeVerification('none')}
                   className="flex-1 py-3 px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
                 >
                   Skip for Now
@@ -162,7 +262,7 @@ export const VerifyCollege = () => {
           {status === 'uploading' && (
             <div className="py-12 text-center">
               <div className="mx-auto h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
-              <p className="text-slate-600 dark:text-slate-300 font-medium">Uploading and storing your ID…</p>
+              <p className="text-slate-600 dark:text-slate-300 font-medium">Compressing & storing your ID…</p>
             </div>
           )}
 
@@ -177,11 +277,11 @@ export const VerifyCollege = () => {
               </p>
               {storedForAdmin && (
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mb-6">
-                  ID card stored for admin review.
+                  Compressed ID stored for admin review (local + server when available).
                 </p>
               )}
               <button
-                onClick={completeVerification}
+                onClick={() => completeVerification('pending')}
                 className="inline-flex items-center px-8 py-3 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl font-bold hover:bg-slate-800 transition-all group"
               >
                 Continue <ChevronRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
