@@ -21,6 +21,10 @@ import {
   updateLocalVerificationStatus,
   getLocalVerificationDocument,
 } from '../../utils/pendingVerificationStore';
+import {
+  fetchCollegeVerificationQueue,
+  patchCollegeVerificationQueue,
+} from '../../utils/collegeVerificationApi';
 
 type PendingStudent = {
   id: string;
@@ -115,22 +119,57 @@ export const PendingApprovals = () => {
     } catch {
       connected = false;
     }
+
+    let queueRows: PendingStudent[] = [];
+    try {
+      const queue = await fetchCollegeVerificationQueue(false);
+      queueRows = queue.map((item) => ({
+        id: item.id,
+        name: item.name,
+        email: item.email,
+        phone: item.phone,
+        course: item.course,
+        college: item.college,
+        location: item.location,
+        fileName: item.fileName,
+        verificationId: item.verificationId,
+        appliedAt: item.appliedAt,
+        source: 'local' as const,
+        documentDataUrl: item.documentDataUrl,
+        mimeType: item.mimeType,
+      }));
+    } catch {
+      /* ignore */
+    }
+
     setBackendConnected(connected);
     const localRows: PendingStudent[] = listLocalPendingVerifications().map((item) => ({
       ...item,
       source: 'local' as const,
     }));
-    const apiEmails = new Set(apiRows.map((r) => r.email.toLowerCase()));
-    const localOnly = localRows.filter((l) => !apiEmails.has(l.email.toLowerCase()));
-    const merged = [...DEMO_CONSTANT, ...apiRows, ...localOnly];
+
+    const seen = new Set<string>();
+    const merged: PendingStudent[] = [];
+    const pushUnique = (row: PendingStudent) => {
+      const key = (row.email || row.id).toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      merged.push(row);
+    };
+    apiRows.forEach(pushUnique);
+    queueRows.forEach(pushUnique);
+    localRows.forEach(pushUnique);
+    DEMO_CONSTANT.forEach(pushUnique);
+
     setStudents(merged);
     setSelectedId((prev) => (prev && merged.some((s) => s.id === prev) ? prev : merged[0]?.id || null));
+    const realCount = apiRows.length + queueRows.length + localRows.length;
     setMessage(
-      connected
-        ? apiRows.length
-          ? `Loaded ${apiRows.length} real pending request(s) (+ 2 demo rows).`
-          : 'Backend connected. No pending API requests — demo rows shown.'
-        : 'Backend offline — demo rows and local uploads.',
+      realCount
+        ? `Loaded ${realCount} real request(s)${connected ? ' (API + queue + local)' : ' (queue + local; API offline)'}.`
+        : connected
+          ? 'Backend connected. No pending requests — demo rows shown.'
+          : 'Backend offline — demo rows and local/queue uploads.',
     );
     setLoading(false);
   }, []);
@@ -188,6 +227,7 @@ export const PendingApprovals = () => {
         await apiVerifyStudent(selected.id, action);
       } else {
         updateLocalVerificationStatus(selected.id, action === 'approve' ? 'verified' : 'rejected');
+        await patchCollegeVerificationQueue(selected.verificationId || selected.id, action);
       }
       setMessage(`Student ${action === 'approve' ? 'approved' : 'rejected'} successfully.`);
       await load();
