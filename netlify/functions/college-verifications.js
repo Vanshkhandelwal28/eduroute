@@ -2,7 +2,7 @@
  * Shared college-ID verification queue (works when Render /students/pending returns 401).
  * GET  → list pending (+ optional all)
  * POST → append compressed submission { name, email, fileName, documentDataUrl, mimeType, ... }
- * PATCH → { id, action: 'approve'|'reject' }
+ * PATCH → { id, action: 'approve'|'reject' } (optional email for match)
  *
  * Storage: Go /api/user-data under fixed userId so admin & student share one queue.
  */
@@ -115,15 +115,21 @@ exports.handler = async (event) => {
     if (event.httpMethod === 'PATCH') {
       const body = JSON.parse(event.body || '{}');
       const id = body.id || body.verificationId;
+      const emailKey = String(body.email || '').toLowerCase().trim();
       const action = body.action;
-      if (!id || !['approve', 'reject'].includes(action)) {
-        return cors(400, { ok: false, error: 'id and action required' });
+      if ((!id && !emailKey) || !['approve', 'reject'].includes(action)) {
+        return cors(400, { ok: false, error: 'id or email, and action required' });
       }
       const status = action === 'approve' ? 'verified' : 'rejected';
       let items = await readQueue();
       let found = false;
       items = items.map((x) => {
-        if (x.id === id || x.verificationId === id) {
+        const matchId = id && (x.id === id || x.verificationId === id);
+        const matchEmail =
+          emailKey &&
+          String(x.email || '').toLowerCase().trim() === emailKey &&
+          x.status === 'pending';
+        if (matchId || matchEmail) {
           found = true;
           return { ...x, status };
         }
@@ -131,7 +137,7 @@ exports.handler = async (event) => {
       });
       if (!found) return cors(404, { ok: false, error: 'not found' });
       await writeQueue(items);
-      return cors(200, { ok: true, data: { id, status } });
+      return cors(200, { ok: true, data: { id: id || emailKey, status } });
     }
 
     return cors(405, { ok: false, error: 'Method not allowed' });
