@@ -12,24 +12,14 @@ export type AuthUser = {
 };
 
 /**
- * TEMP: auth gate disabled.
- * The Render-hosted auth/DB API (https://eduroute-api-nho4.onrender.com) is
- * unreachable, so real login/signup fail and visitors get stuck on /login.
- * While AUTH_DISABLED is true, every visitor is treated as the demo student
- * and routed straight into the app — no DB auth check is performed.
- * Set AUTH_DISABLED back to false to restore real authentication.
+ * TEMP SWITCH — credential checks are OFF while the Render/Supabase DB is down.
+ * When AUTH_BYPASS is true, Login/Signup skip DB verification and create a
+ * local demo session instead, then route into the app.
+ * NOTHING is deleted — every real auth code path is still in place.
+ * Set AUTH_BYPASS back to false to restore real authentication once the
+ * Supabase + Render DB are connected again.
  */
-export const AUTH_DISABLED = true;
-
-const DEMO_BYPASS_USER: AuthUser = {
-  id: 'demo-student',
-  name: 'Demo Student',
-  email: 'demo.student@eduroute.app',
-  role: 'student',
-  verificationStatus: 'verified',
-};
-
-const DEMO_BYPASS_TOKEN = 'demo-bypass-token';
+export const AUTH_BYPASS = true;
 
 const TOKEN_KEY = 'eduroute:auth-token';
 const USER_KEY = 'eduroute:auth-user';
@@ -76,25 +66,17 @@ export const clearAuthSession = () => {
   removeStorage('eduroute:is-authenticated');
 };
 
-export const getAuthToken = () => {
-  const token = readStorage(TOKEN_KEY);
-  if (token) return token;
-  return AUTH_DISABLED ? DEMO_BYPASS_TOKEN : '';
-};
+export const getAuthToken = () => readStorage(TOKEN_KEY) || '';
 
 export const getAuthUser = (): AuthUser | null => {
   const raw = readStorage(USER_KEY);
-  if (raw) {
-    try {
-      return JSON.parse(raw) as AuthUser;
-    } catch {
-      // fall through to bypass user when auth is disabled
-    }
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    return null;
   }
-  return AUTH_DISABLED ? DEMO_BYPASS_USER : null;
 };
 
-export const isAuthenticated = () => {
-  if (AUTH_DISABLED) return true;
-  return Boolean(getAuthToken() && getAuthUser());
-};
+export const isAuthenticated = () => Boolean(getAuthToken() && getAuthUser());

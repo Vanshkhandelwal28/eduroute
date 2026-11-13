@@ -15,7 +15,8 @@ import {
   EyeOff,
 } from 'lucide-react';
 
-import { saveAuthSession, type UserRole } from '../../utils/rbacAuth';
+import { saveAuthSession, AUTH_BYPASS, type UserRole } from '../../utils/rbacAuth';
+import { saveUserProfile } from '../../utils/userProfile';
 import { setAdminSession } from '../../utils/adminSession';
 import { handleSocialAuth } from '../../utils/socialAuth';
 import { INDUSTRY_DEMO_CREDENTIALS } from '../../utils/industryStore';
@@ -58,7 +59,8 @@ export const Login = () => {
   const [roleOpen, setRoleOpen] = useState(false);
   const roleRef = useRef<HTMLDivElement>(null);
 
-  const studentNeedsRealAuth = isSupabaseConfigured && role === 'student';
+  // AUTH_BYPASS on (Render/Supabase DB down) → never hit the DB, straight to app
+  const studentNeedsRealAuth = !AUTH_BYPASS && isSupabaseConfigured && role === 'student';
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -129,6 +131,9 @@ export const Login = () => {
                     .split(' ')
                     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
                     .join(' ') || 'Student Demo';
+
+      // Keep a local profile so dashboard/sidebar render user info (no DB involved)
+      saveUserProfile({ name: displayName, email });
 
       if (role === 'admin') {
         saveAuthSession(`open-admin-${Date.now()}`, {
@@ -235,11 +240,13 @@ export const Login = () => {
               <div>
                 <div className="text-base font-bold">Sign in</div>
                 <div className={`text-xs ${muted}`}>
-                  {studentNeedsRealAuth
-                    ? 'Student login requires email + password'
-                    : isSupabaseConfigured
-                      ? 'Other roles: demo · Student: real auth'
-                      : 'Demo mode (set VITE_SUPABASE_* for real student auth)'}
+                  {AUTH_BYPASS
+                    ? 'Demo mode — credentials not checked (DB temporarily offline)'
+                    : studentNeedsRealAuth
+                      ? 'Student login requires email + password'
+                      : isSupabaseConfigured
+                        ? 'Other roles: demo · Student: real auth'
+                        : 'Demo mode (set VITE_SUPABASE_* for real student auth)'}
                 </div>
               </div>
             </div>
