@@ -221,7 +221,9 @@ export function App() {
       <GlobalThemeButton />
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          {/* Auth disabled (Render DB down): skip landing/login, go straight into the app */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/landing" element={<LandingPage />} />
           <Route path="/u/:username" element={<PublicProfile />} />
           <Route path="/signup" element={<PublicOnlyRoute><Signup /></PublicOnlyRoute>} />
           <Route path="/sign-up" element={<Navigate to="/signup" replace />} />

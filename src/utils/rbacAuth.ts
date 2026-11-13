@@ -11,6 +11,26 @@ export type AuthUser = {
   institutionName?: string;
 };
 
+/**
+ * TEMP: auth gate disabled.
+ * The Render-hosted auth/DB API (https://eduroute-api-nho4.onrender.com) is
+ * unreachable, so real login/signup fail and visitors get stuck on /login.
+ * While AUTH_DISABLED is true, every visitor is treated as the demo student
+ * and routed straight into the app — no DB auth check is performed.
+ * Set AUTH_DISABLED back to false to restore real authentication.
+ */
+export const AUTH_DISABLED = true;
+
+const DEMO_BYPASS_USER: AuthUser = {
+  id: 'demo-student',
+  name: 'Demo Student',
+  email: 'demo.student@eduroute.app',
+  role: 'student',
+  verificationStatus: 'verified',
+};
+
+const DEMO_BYPASS_TOKEN = 'demo-bypass-token';
+
 const TOKEN_KEY = 'eduroute:auth-token';
 const USER_KEY = 'eduroute:auth-user';
 
@@ -56,17 +76,25 @@ export const clearAuthSession = () => {
   removeStorage('eduroute:is-authenticated');
 };
 
-export const getAuthToken = () => readStorage(TOKEN_KEY) || '';
+export const getAuthToken = () => {
+  const token = readStorage(TOKEN_KEY);
+  if (token) return token;
+  return AUTH_DISABLED ? DEMO_BYPASS_TOKEN : '';
+};
 
 export const getAuthUser = (): AuthUser | null => {
   const raw = readStorage(USER_KEY);
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as AuthUser;
-  } catch {
-    return null;
+  if (raw) {
+    try {
+      return JSON.parse(raw) as AuthUser;
+    } catch {
+      // fall through to bypass user when auth is disabled
+    }
   }
+  return AUTH_DISABLED ? DEMO_BYPASS_USER : null;
 };
 
-export const isAuthenticated = () => Boolean(getAuthToken() && getAuthUser());
+export const isAuthenticated = () => {
+  if (AUTH_DISABLED) return true;
+  return Boolean(getAuthToken() && getAuthUser());
+};
