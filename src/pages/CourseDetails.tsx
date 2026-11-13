@@ -48,7 +48,7 @@ export const CourseDetails = () => {
   }
 
   const isLocalCourse = Boolean(localCourse);
-  const isEnrolled = getCurrentUser().enrolledCourses.includes(id);
+  const isEnrolled = (getCurrentUser()?.enrolledCourses ?? []).includes(id);
   const moduleLessons = mockCourse?.modules?.flatMap((module) => module.lessons) || [];
   const chance = computePlacementChance(course);
   const heroImg = courseTypeImage(course);
