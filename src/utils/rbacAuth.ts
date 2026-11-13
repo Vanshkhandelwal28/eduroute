@@ -11,6 +11,16 @@ export type AuthUser = {
   institutionName?: string;
 };
 
+/**
+ * TEMP SWITCH — credential checks are OFF while the Render/Supabase DB is down.
+ * When AUTH_BYPASS is true, Login/Signup skip DB verification and create a
+ * local demo session instead, then route into the app.
+ * NOTHING is deleted — every real auth code path is still in place.
+ * Set AUTH_BYPASS back to false to restore real authentication once the
+ * Supabase + Render DB are connected again.
+ */
+export const AUTH_BYPASS = true;
+
 const TOKEN_KEY = 'eduroute:auth-token';
 const USER_KEY = 'eduroute:auth-user';
 

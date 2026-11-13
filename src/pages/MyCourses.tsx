@@ -6,7 +6,9 @@ import { Course } from '../types';
 import { getCurrentUser } from '../utils/userProfile';
 
 export const MyCourses = () => {
-  const enrolledCourses = COURSES.filter((course) => getCurrentUser().enrolledCourses.includes(course.id));
+  // currentUser may be null when nothing is stored yet (demo/bypass sessions)
+  const enrolledIds = getCurrentUser()?.enrolledCourses ?? [];
+  const enrolledCourses = COURSES.filter((course) => enrolledIds.includes(course.id));
 
   return (
     <div className="flex-1 p-4 md:p-8">

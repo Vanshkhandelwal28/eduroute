@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 
 import { apiRegisterUser } from '../../utils/authApi';
-import { saveAuthSession } from '../../utils/rbacAuth';
+import { saveAuthSession, AUTH_BYPASS } from '../../utils/rbacAuth';
 import { parseGoogleCredential, saveUserProfile } from '../../utils/userProfile';
 import { isAuthDbConfigError, localDemoRegister } from '../../utils/localDemoAuth';
 import { handleSocialAuth } from '../../utils/socialAuth';
@@ -137,6 +137,22 @@ export const Signup = () => {
       password: formData.password,
     };
     try {
+      // 0) AUTH_BYPASS on (Render/Supabase DB down) — no server check, straight to the app.
+      //    The real paths below stay intact; flip AUTH_BYPASS off to restore them.
+      if (AUTH_BYPASS) {
+        saveUserProfile({ name: payload.name, email: payload.email });
+        saveAuthSession(`bypass-${Date.now()}`, {
+          id: `bypass-${Date.now()}`,
+          name: payload.name,
+          email: payload.email,
+          role: 'student',
+          verificationStatus: 'verified',
+        });
+        setDemoHint(true);
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+
       // 1) Supabase (production)
       if (isSupabaseConfigured) {
         await supabaseSignUp(payload);
@@ -222,7 +238,11 @@ export const Signup = () => {
             </div>
             <h2 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Create account</h2>
             <p className={`mt-1 text-sm ${muted}`}>
-              {isSupabaseConfigured ? 'Secure signup (Supabase)' : 'Start your learning journey today'}
+              {AUTH_BYPASS
+                ? 'Demo mode — details not sent to server (DB temporarily offline)'
+                : isSupabaseConfigured
+                  ? 'Secure signup (Supabase)'
+                  : 'Start your learning journey today'}
             </p>
 
             <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>

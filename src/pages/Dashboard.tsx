@@ -76,25 +76,28 @@ export const Dashboard = () => {
     );
   }, [onboarding, earnedSkills]);
 
+  // currentUser may be null (no profile stored yet — demo/bypass sessions)
+  const userEnrolledIds = currentUser?.enrolledCourses;
+
   const isNewLearner =
     !hasSkillProfile &&
-    (currentUser.enrolledCourses?.length || 0) === 0 &&
+    (userEnrolledIds?.length || 0) === 0 &&
     earnedSkills.length === 0;
 
   const enrolledCourses = useMemo(() => {
-    const ids = currentUser.enrolledCourses || [];
+    const ids = userEnrolledIds || [];
     return COURSES.filter((c) => ids.includes(c.id)).slice(0, 4);
-  }, [currentUser.enrolledCourses]);
+  }, [userEnrolledIds]);
 
   const recommendedCourses = useMemo(() => {
-    const enrolled = new Set(currentUser.enrolledCourses || []);
+    const enrolled = new Set(userEnrolledIds || []);
     const scored = COURSES.filter((c) => !enrolled.has(c.id)).map((c) => ({
       course: c,
       boost: computePlacementChance(c, userSkills).boostPercent,
     }));
     scored.sort((a, b) => b.boost - a.boost);
     return scored.slice(0, 4);
-  }, [currentUser.enrolledCourses, userSkills]);
+  }, [userEnrolledIds, userSkills]);
 
   const pathPercent = useMemo(() => {
     if (!enrolledCourses.length) return 0;
